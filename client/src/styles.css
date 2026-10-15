@@ -136,7 +136,7 @@ a { color: #b9d4ff; }
 .map-svg.flying { pointer-events: none; }
 
 .nebula { animation: nebula-drift 70s ease-in-out infinite; }
-.core-glow, .nebula, .link, .streak, .cost, .node-label { pointer-events: none; }
+.core-glow, .nebula, .link, .streak, .cost, .node-label, .bang { pointer-events: none; }
 .speck { fill: #fff; opacity: 0.85; }
 .link { fill: none; stroke: rgba(255, 196, 120, 0.5); stroke-width: 1.15; }
 .link.d10 { stroke: rgba(130, 206, 255, 0.5); }
@@ -164,6 +164,14 @@ a { color: #b9d4ff; }
   paint-order: stroke;
 }
 .node-label { fill: #e7eefc; font-size: 12px; stroke: none; }
+.bang {
+  fill: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  stroke: #070b14;
+  stroke-width: 1.2px;
+  paint-order: stroke;
+}
 .node.ready { cursor: pointer; }
 .hit { fill: transparent; }
 .surface .body { stroke: rgba(255, 255, 255, 0.4); stroke-width: 0.4; }
@@ -197,7 +205,8 @@ a { color: #b9d4ff; }
 .ship .saucer { fill: #f4f7ff; stroke: #9eb6d4; stroke-width: 0.4; }
 .ship .bridge { fill: #d7e8ff; }
 .map-svg .ship {
-  offset-anchor: center;
+  /* Saucer center in the fill box. `center` sits back on the nacelles, off the stroke. */
+  offset-anchor: 85% 50%;
   transform-box: fill-box;
   filter: drop-shadow(0 0 1.4px #140c04) drop-shadow(0 0 2px #140c04);
 }
@@ -209,6 +218,9 @@ a { color: #b9d4ff; }
 .starbase .spine { stroke: rgba(255, 220, 170, 0.95); stroke-width: 1.6; }
 .starbase .core { fill: #fff8e8; filter: drop-shadow(0 0 3px #ffb020); }
 .starbase .bay { fill: #c6e8ff; }
+
+.choices { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.6rem; }
+.choices button { text-align: left; white-space: normal; }
 
 .qhead { display: flex; gap: 1rem; align-items: center; }
 .prompt { font-size: 1.45rem; margin: 1rem 0; }
@@ -456,27 +468,27 @@ a { color: #b9d4ff; }
 
 .beat-boom .vulcan {
   opacity: 0;
-  animation: shatter 3.3s ease-in both;
+  animation: shatter 3.3s linear both;
 }
-.beat-boom .crack { animation: crack 3.3s ease-in both; }
-.beat-boom .chunk { animation: fling 3.3s ease-in both; }
+.beat-boom .crack { animation: crack 3.3s linear both; }
+.beat-boom .chunk { animation: fling 3.3s linear both; }
 .beat-boom .chunk.a { --dx: -46vw; --dy: -16vh; --rot: -28deg; }
 .beat-boom .chunk.b { --dx: 40vw; --dy: -10vh; --rot: 22deg; }
 .beat-boom .chunk.c { --dx: -28vw; --dy: 12vh; --rot: -12deg; }
 .beat-boom .chunk.d { --dx: 22vw; --dy: -22vh; --rot: 36deg; }
 .beat-boom .chunk.e { --dx: 8vw; --dy: 18vh; --rot: 8deg; }
-.beat-boom .debris { animation: grit 3.3s ease-in both; }
+.beat-boom .debris { animation: grit 3.3s linear both; }
 .beat-boom .debris.a { --dx: -30vw; --dy: -24vh; }
 .beat-boom .debris.b { --dx: 34vw; --dy: -18vh; }
 .beat-boom .debris.c { --dx: -18vw; --dy: 8vh; }
 .beat-boom .debris.d { --dx: 16vw; --dy: -28vh; }
 .beat-boom .debris.e { --dx: 26vw; --dy: 6vh; }
 .beat-boom .debris.f { --dx: -8vw; --dy: -32vh; }
-.beat-boom .flash { animation: flare 3.3s ease-out both; }
-.beat-boom .shock { animation: shock 3.3s ease-out both; }
+.beat-boom .flash { animation: flare 3.3s linear both; }
+.beat-boom .shock { animation: shock 3.3s linear both; }
 .beat-boom .ship-actor {
-  transform: translateY(-48vh) rotate(-90deg) scale(0.3);
-  animation: escape 3.3s ease-in both;
+  transform: translate(10vw, -36vh) rotate(-90deg) scale(0.4);
+  animation: escape 3.3s linear both;
 }
 
 .beat-dock .vulcan,
@@ -493,7 +505,7 @@ a { color: #b9d4ff; }
 .beat-dock .bay { animation: bays 3.3s ease-out forwards; }
 .beat-dock .ship-actor {
   transform: translateY(-10vh) rotate(-90deg) scale(0.48);
-  animation: dockship 3.3s ease-out both;
+  animation: dockship 3.3s linear both;
 }
 .beat-dock .plume,
 .beat-dock .exhaust { opacity: 1; fill: #e7f8ff; }
@@ -545,46 +557,50 @@ a { color: #b9d4ff; }
 }
 
 @keyframes crack {
-  0% { opacity: 0; transform: translateX(var(--tx)) rotate(var(--rot)) scaleY(0.05); }
-  18% { opacity: 1; transform: translateX(var(--tx)) rotate(var(--rot)) scaleY(1); }
-  48% { opacity: 1; }
+  0% { opacity: 0; transform: translateX(var(--tx)) rotate(var(--rot)) scaleY(0.04); }
+  36% { opacity: 1; transform: translateX(var(--tx)) rotate(var(--rot)) scaleY(1); }
+  68% { opacity: 0.85; }
   100% { opacity: 0; }
 }
 
 @keyframes fling {
-  0%, 24% { opacity: 0; transform: translate(0, 0) scale(0.8); }
-  34% { opacity: 1; }
-  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.55); }
+  0% { opacity: 0; transform: translate(0, 0) rotate(0deg) scale(0.72); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.5); }
 }
 
 @keyframes grit {
-  0%, 28% { opacity: 0; transform: translate(0, 0); }
-  38% { opacity: 1; }
-  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.4); }
+  0% { opacity: 0; transform: translate(0, 0) scale(0.7); }
+  16% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.35); }
 }
 
 @keyframes flare {
-  0%, 24% { opacity: 0; }
-  34% { opacity: 1; }
-  52%, 100% { opacity: 0; }
+  0% { opacity: 0; }
+  22% { opacity: 0.35; }
+  40% { opacity: 1; }
+  58% { opacity: 0.42; }
+  100% { opacity: 0; }
 }
 
 @keyframes shock {
-  0%, 28% { opacity: 0; transform: scale(0.15); }
-  38% { opacity: 1; }
-  100% { opacity: 0; transform: scale(8); }
+  0% { opacity: 0; transform: scale(0.2); }
+  28% { opacity: 0.55; transform: scale(1.1); }
+  48% { opacity: 0.8; transform: scale(2.4); }
+  100% { opacity: 0; transform: scale(7.5); }
 }
 
 @keyframes shatter {
-  0% { opacity: 1; clip-path: circle(50% at 50% 50%); filter: brightness(1); transform: translateX(-50%) rotate(-5deg) translateY(20%) scale(2.35); }
-  26% { opacity: 1; clip-path: circle(50% at 50% 50%); filter: brightness(2.8); }
-  42% { opacity: 1; clip-path: polygon(8% 0, 48% 0, 42% 18%, 70% 8%, 100% 22%, 100% 100%, 0 100%, 0 30%, 18% 24%); filter: brightness(1.3); }
-  68%, 100% { opacity: 0; clip-path: polygon(0 0, 0 0, 0 0); filter: brightness(1); transform: translateX(-50%) rotate(-5deg) translateY(24%) scale(2.1); }
+  0% { opacity: 1; filter: brightness(1); transform: translateX(-50%) rotate(-5deg) translateY(20%) scale(2.35); }
+  28% { opacity: 1; filter: brightness(1.7); transform: translateX(-50%) rotate(-5deg) translateY(20%) scale(2.4); }
+  52% { opacity: 0.72; filter: brightness(2.4); transform: translateX(-50%) rotate(-6deg) translateY(22%) scale(2.2); }
+  76% { opacity: 0.2; filter: brightness(1.3); transform: translateX(-50%) rotate(-7deg) translateY(25%) scale(1.95); }
+  100% { opacity: 0; filter: brightness(1); transform: translateX(-50%) rotate(-8deg) translateY(28%) scale(1.75); }
 }
 
 @keyframes escape {
-  from { transform: translateY(-48vh) rotate(-90deg) scale(0.32); }
-  to { transform: translateY(-48vh) rotate(-90deg) scale(0.3); }
+  from { transform: translate(0, -48vh) rotate(-90deg) scale(0.32); }
+  to { transform: translate(10vw, -36vh) rotate(-90deg) scale(0.4); }
 }
 
 @keyframes growbase {
@@ -599,8 +615,9 @@ a { color: #b9d4ff; }
 }
 
 @keyframes dockship {
-  0% { transform: translate(18vw, -36vh) rotate(-18deg) scale(0.55); }
-  100% { transform: translateY(-10vh) rotate(-90deg) scale(0.48); }
+  0% { transform: translate(10vw, -36vh) rotate(-90deg) scale(0.4); animation-timing-function: linear; }
+  58% { transform: translate(3vw, -18vh) rotate(-90deg) scale(0.45); animation-timing-function: ease-out; }
+  100% { transform: translate(0, -10vh) rotate(-90deg) scale(0.48); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -613,7 +630,7 @@ a { color: #b9d4ff; }
   .beat-look .vulcan { transform: translateX(-50%) rotate(-5deg) translateY(20%) scale(2.35); }
   .beat-look .ship-actor { transform: translateY(-48vh) rotate(-90deg) scale(0.32); }
   .beat-boom .vulcan { opacity: 0; }
-  .beat-boom .ship-actor { transform: translateY(-48vh) rotate(-90deg) scale(0.3); }
+  .beat-boom .ship-actor { transform: translate(10vw, -36vh) rotate(-90deg) scale(0.4); }
   .beat-dock .vulcan { opacity: 0; }
   .beat-dock .station-actor { opacity: 1; transform: scale(1); }
   .beat-dock .ship-actor { transform: translateY(-10vh) rotate(-90deg) scale(0.48); }

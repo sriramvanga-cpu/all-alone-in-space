@@ -107,19 +107,6 @@ function formatClock(ms) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function norm(s) {
-  return String(s).trim().toLowerCase().replace(/\s+/g, " ").replace(/^the /, "");
-}
-
-function matches(input, answer) {
-  const a = norm(input);
-  const b = norm(answer);
-  if (a === b) return true;
-  const na = Number(a);
-  const nb = Number(b);
-  return a !== "" && Number.isFinite(na) && Number.isFinite(nb) && na === nb;
-}
-
 function shuffle(list) {
   const a = [...list];
   for (let i = a.length - 1; i > 0; i--) {
@@ -697,6 +684,11 @@ function MapView({ snap, shipRef, onLaunch }) {
               <>
                 <circle className="hit" r="14" />
                 <PlanetDot radius={body} kind={face.kind} spin={face.spin} />
+                {n.shell === "inner" || n.shell === "middle" || n.shell === "outer" ? (
+                  <text className="bang" y={-(body + 1)} textAnchor="middle" aria-hidden="true">
+                    !
+                  </text>
+                ) : null}
               </>
             )}
             <text className="node-label" x={label.x - p.x} y={label.y - p.y} textAnchor="middle">
@@ -721,7 +713,7 @@ function MapView({ snap, shipRef, onLaunch }) {
         <g
           ref={shipRef}
           className="ship"
-          style={{ offsetPath: "url(#flight)", offsetRotate: "auto", offsetAnchor: "center" }}
+          style={{ offsetPath: "url(#flight)", offsetRotate: "auto", offsetAnchor: "85% 50%" }}
         >
           <ShipShapes />
         </g>
@@ -810,17 +802,27 @@ function Shop({ credits, fuel, world, onBuy, onLeave }) {
   );
 }
 
+function ChoiceButtons({ choices, onPick }) {
+  return (
+    <div className="choices">
+      {choices.map((choice) => (
+        <button key={choice} type="button" onClick={() => onPick(choice)}>
+          {choice}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function Game() {
   const game = useRef(null);
   if (!game.current) game.current = fresh();
   const [tick, setTick] = useState(0);
   const [now, setNow] = useState(() => Date.now());
-  const [draft, setDraft] = useState("");
   const [flyFuel, setFlyFuel] = useState(null);
   const shipRef = useRef(null);
   const percentRef = useRef({});
   const usedRef = useRef({ general: new Set(), mental: new Set(), technology: new Set() });
-  const inputRef = useRef(null);
 
   function commit(patch) {
     game.current = { ...game.current, ...patch };
@@ -900,7 +902,6 @@ function Game() {
         fuelAnswers: [],
         fuelDeadline: Date.now() + QUESTION_MS,
       });
-      setDraft("");
       return;
     }
     commit({ phase: "pick", here: id, flight: null });
@@ -929,7 +930,6 @@ function Game() {
     }
     const card = takeCard(domain);
     if (!card) return;
-    setDraft("");
     commit({
       phase: "question",
       domain,
@@ -991,7 +991,6 @@ function Game() {
       finish("time");
       return;
     }
-    setDraft("");
     commit({
       fuelAnswers: [...g.fuelAnswers, kind],
       fuelIndex: g.fuelIndex + 1,
@@ -1146,10 +1145,6 @@ function Game() {
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    if (snap.phase === "question" || snap.phase === "fuel") inputRef.current?.focus();
-  }, [snap.phase, snap.card, snap.fuelIndex]);
-
   if (snap.phase === "name") {
     return <NameScreen onStart={(name) => commit({ name, phase: "intro", intro: 0 })} />;
   }
@@ -1231,29 +1226,13 @@ function Game() {
               </div>
             </div>
             <p className="prompt">{snap.card.prompt}</p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (game.current.phase !== "question" || !draft.trim()) return;
-                const correct = matches(draft, game.current.card.answer);
-                setDraft("");
-                resolveQuestion(correct, false);
+            <ChoiceButtons
+              choices={snap.card.choices}
+              onPick={(choice) => {
+                if (game.current.phase !== "question") return;
+                resolveQuestion(choice === game.current.card.answer, false);
               }}
-            >
-              <label htmlFor="answer">Answer</label>
-              <input
-                id="answer"
-                ref={inputRef}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                autoComplete="off"
-                autoCapitalize="off"
-                spellCheck={false}
-              />
-              <div className="row">
-                <button type="submit">Submit</button>
-              </div>
-            </form>
+            />
           </section>
         ) : null}
 
@@ -1268,30 +1247,15 @@ function Game() {
             </div>
             <p>One credit for each right answer. Skip if you want.</p>
             <p className="prompt">{fuelCard.prompt}</p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!draft.trim() || !fuelCard) return;
-                markFuel(matches(draft, fuelCard.answer) ? "right" : "wrong");
-              }}
-            >
-              <label htmlFor="fuel-answer">Answer</label>
-              <input
-                id="fuel-answer"
-                ref={inputRef}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                autoComplete="off"
-                autoCapitalize="off"
-                spellCheck={false}
-              />
-              <div className="row">
-                <button type="submit">Submit</button>
-                <button type="button" onClick={() => markFuel("skip")}>
-                  Skip
-                </button>
-              </div>
-            </form>
+            <ChoiceButtons
+              choices={fuelCard.choices}
+              onPick={(choice) => markFuel(choice === fuelCard.answer ? "right" : "wrong")}
+            />
+            <div className="row">
+              <button type="button" onClick={() => markFuel("skip")}>
+                Skip
+              </button>
+            </div>
           </section>
         ) : null}
 
