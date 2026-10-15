@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+server/scores.sqlite
+*.sqlite
+.DS_Store
+.vercel

@@ -1,0 +1,55 @@
+{
+  "_note": "Replace these starter cards before the fest.",
+  "general": [
+    { "id": "g1", "prompt": "How many planets are in the Solar System? (number)", "answer": "8" },
+    { "id": "g2", "prompt": "What is the capital of Japan?", "answer": "Tokyo" },
+    { "id": "g3", "prompt": "What gas do humans need to breathe?", "answer": "oxygen" },
+    { "id": "g4", "prompt": "How many continents are there? (number)", "answer": "7" },
+    { "id": "g5", "prompt": "Which planet is known as the Red Planet?", "answer": "Mars" },
+    { "id": "g6", "prompt": "Largest ocean on Earth? (one word)", "answer": "Pacific" },
+    { "id": "g7", "prompt": "How many days are in a leap year? (number)", "answer": "366" },
+    { "id": "g8", "prompt": "What is H2O commonly called?", "answer": "water" }
+  ],
+  "mental": [
+    { "id": "m1", "prompt": "What is 12 × 12?", "answer": "144" },
+    { "id": "m2", "prompt": "What comes next: 3, 6, 9, 12, ?", "answer": "15" },
+    { "id": "m3", "prompt": "Which number does not belong: 2, 4, 6, 9?", "answer": "9" },
+    { "id": "m4", "prompt": "What is 100 ÷ 4?", "answer": "25" },
+    { "id": "m5", "prompt": "What comes next: 1, 2, 4, 8, ?", "answer": "16" },
+    { "id": "m6", "prompt": "How many minutes are in an hour? (number)", "answer": "60" },
+    { "id": "m7", "prompt": "What is 9 + 9 + 9?", "answer": "27" },
+    { "id": "m8", "prompt": "What is 10% of 80?", "answer": "8" }
+  ],
+  "technology": [
+    { "id": "t1", "prompt": "What does CPU stand for?", "answer": "central processing unit" },
+    { "id": "t2", "prompt": "How many bits are in a byte? (number)", "answer": "8" },
+    { "id": "t3", "prompt": "What does HTML stand for?", "answer": "hypertext markup language" },
+    { "id": "t4", "prompt": "Binary uses which two digits? Write them as 0 and 1.", "answer": "0 and 1" },
+    { "id": "t5", "prompt": "What does RAM stand for?", "answer": "random access memory" },
+    { "id": "t6", "prompt": "What does WWW stand for?", "answer": "world wide web" },
+    { "id": "t7", "prompt": "Which stores files after power-off: RAM or disk?", "answer": "disk" },
+    { "id": "t8", "prompt": "What language styles web pages? (abbreviation)", "answer": "CSS" }
+  ],
+  "fuel": [
+    { "id": "f1", "prompt": "23 + 89", "answer": "112" },
+    { "id": "f2", "prompt": "46 + 27", "answer": "73" },
+    { "id": "f3", "prompt": "15 × 6", "answer": "90" },
+    { "id": "f4", "prompt": "8 × 7", "answer": "56" },
+    { "id": "f5", "prompt": "100 − 43", "answer": "57" },
+    { "id": "f6", "prompt": "81 ÷ 9", "answer": "9" },
+    { "id": "f7", "prompt": "12 × 12", "answer": "144" },
+    { "id": "f8", "prompt": "64 − 19", "answer": "45" },
+    { "id": "f9", "prompt": "7 × 9", "answer": "63" },
+    { "id": "f10", "prompt": "33 + 58", "answer": "91" },
+    { "id": "f11", "prompt": "120 ÷ 4", "answer": "30" },
+    { "id": "f12", "prompt": "14 × 5", "answer": "70" },
+    { "id": "f13", "prompt": "How many wheels does a bicycle have? (number)", "answer": "2" },
+    { "id": "f14", "prompt": "What do bees make?", "answer": "honey" },
+    { "id": "f15", "prompt": "What color is the sky on a clear day?", "answer": "blue" },
+    { "id": "f16", "prompt": "How many letters are in the English alphabet? (number)", "answer": "26" },
+    { "id": "f17", "prompt": "What is frozen water called?", "answer": "ice" },
+    { "id": "f18", "prompt": "How many sides does a triangle have? (number)", "answer": "3" },
+    { "id": "f19", "prompt": "Which is a star: the Sun or the Moon?", "answer": "Sun" },
+    { "id": "f20", "prompt": "What animal says woof?", "answer": "dog" }
+  ]
+}
