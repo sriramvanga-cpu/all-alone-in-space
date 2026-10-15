@@ -246,64 +246,55 @@ test("shop packs are any affordable multiset", () => {
   assert.equal(negative.fuel, 0);
 });
 
-test("map is the bidirectional three-shell web", () => {
-  assert.deepEqual(INNER, ["Earth", "Andoria", "Tellar", "Denobula"]);
-  assert.deepEqual(MIDDLE, ["Bajor", "Betazed", "Trill", "Orion"]);
-  assert.deepEqual(OUTER, ["Qo'noS", "Romulus", "Cardassia", "Ferenginar"]);
+test("map is a sparse three-shell web", () => {
+  assert.deepEqual(INNER, ["Earth", "Risa", "Andoria", "P'Jem", "Tellar", "Denobula"]);
+  assert.deepEqual(MIDDLE, ["Bajor", "Deneb", "Betazed", "Khitomer", "Trill", "Orion"]);
+  assert.deepEqual(OUTER, ["Qo'noS", "Nimbus", "Romulus", "Remus", "Cardassia", "Ferenginar"]);
+  assert.equal(node("Vulcan"), null);
 
-  function assertDist(a, b, distance) {
-    const hits = LINKS.filter(
-      (edge) =>
-        (edge.a === a && edge.b === b) || (edge.a === b && edge.b === a),
-    );
-    assert.equal(hits.length, 1, `${a}–${b}`);
-    assert.equal(hits[0].distance, distance);
+  const station = linksFrom(STATION);
+  assert.equal(station.length, 3);
+  for (const next of station) {
+    assert.equal(node(next.id).shell, "inner");
+    assert.equal(next.distance, 10);
   }
-
-  function assertUnlinked(a, b) {
-    const hit = LINKS.some(
-      (edge) =>
-        (edge.a === a && edge.b === b) || (edge.a === b && edge.b === a),
-    );
-    assert.equal(hit, false, `${a}–${b}`);
-  }
-
-  for (const planet of INNER) assertDist(STATION, planet, 10);
-  assert.equal(LINKS.filter((edge) => edge.a === STATION || edge.b === STATION).length, 4);
 
   for (const names of [INNER, MIDDLE, OUTER]) {
+    let gaps = 0;
     for (let i = 0; i < names.length; i++) {
-      assertDist(names[i], names[(i + 1) % names.length], 8);
+      const next = linksFrom(names[i]).find((hop) => hop.id === names[(i + 1) % names.length]);
+      if (!next) gaps += 1;
+      else assert.equal(next.distance, 8, `${names[i]} ring`);
     }
+    assert.equal(gaps, 1, names[0]);
   }
 
-  for (const [a, b] of [
-    ["Earth", "Bajor"],
-    ["Earth", "Betazed"],
-    ["Andoria", "Betazed"],
-    ["Andoria", "Trill"],
-    ["Tellar", "Trill"],
-    ["Tellar", "Orion"],
-    ["Denobula", "Orion"],
-    ["Denobula", "Bajor"],
-    ["Bajor", "Qo'noS"],
-    ["Bajor", "Romulus"],
-    ["Betazed", "Romulus"],
-    ["Betazed", "Cardassia"],
-    ["Trill", "Cardassia"],
-    ["Trill", "Ferenginar"],
-    ["Orion", "Ferenginar"],
-    ["Orion", "Qo'noS"],
-  ]) {
-    assertDist(a, b, 12);
+  for (const id of [...INNER, ...MIDDLE, ...OUTER]) {
+    const degree = linksFrom(id).length;
+    assert.ok(degree === 2 || degree === 3, `${id} ${degree}`);
   }
 
-  for (const planet of [...INNER, ...MIDDLE]) assertDist(DELTA_VEGA, planet, 8);
-  for (const planet of [...MIDDLE, ...OUTER]) assertDist(CETI_ALPHA, planet, 8);
-  for (const planet of [...OUTER, STATION, CETI_ALPHA]) assertUnlinked(DELTA_VEGA, planet);
-  for (const planet of [...INNER, STATION]) assertUnlinked(CETI_ALPHA, planet);
+  const delta = linksFrom(DELTA_VEGA);
+  assert.deepEqual(delta.map((next) => next.id).sort(), ["Deneb", "Earth", "Risa"]);
+  for (const next of delta) {
+    assert.ok(node(next.id).shell === "inner" || node(next.id).shell === "middle");
+    assert.equal(next.distance, 8);
+  }
+  const ceti = linksFrom(CETI_ALPHA);
+  assert.deepEqual(ceti.map((next) => next.id).sort(), ["Cardassia", "Ferenginar", "Trill"]);
+  for (const next of ceti) {
+    assert.ok(node(next.id).shell === "middle" || node(next.id).shell === "outer");
+    assert.equal(next.distance, 8);
+  }
 
-  assert.equal(LINKS.length, 48);
+  const crosses = LINKS.filter((edge) => {
+    const shells = [node(edge.a).shell, node(edge.b).shell];
+    return shells.every((shell) => shell === "inner" || shell === "middle" || shell === "outer") && shells[0] !== shells[1];
+  });
+  assert.equal(crosses.length, 5);
+  for (const edge of crosses) assert.equal(edge.distance, 12);
+
+  assert.equal(LINKS.length, 29);
 
   for (const edge of LINKS) {
     const forward = linksFrom(edge.a).find((next) => next.id === edge.b);
@@ -312,31 +303,56 @@ test("map is the bidirectional three-shell web", () => {
     assert.equal(back.distance, edge.distance);
   }
 
+  function walk(steps) {
+    for (let i = 0; i < steps.length - 1; i++) {
+      assert.ok(linksFrom(steps[i]).some((next) => next.id === steps[i + 1]), `${steps[i]}–${steps[i + 1]}`);
+    }
+  }
+  walk([STATION, "Earth", DELTA_VEGA, "Deneb", "Bajor", "Qo'noS"]);
+  walk([STATION, "Denobula", "Orion", "Ferenginar"]);
+  walk([STATION, "Andoria", "P'Jem", "Betazed", "Khitomer", "Remus"]);
+
+  const seen = new Set([STATION]);
+  const queue = [STATION];
+  while (queue.length) {
+    const id = queue.pop();
+    for (const next of linksFrom(id)) {
+      if (seen.has(next.id)) continue;
+      seen.add(next.id);
+      queue.push(next.id);
+    }
+  }
+  for (const place of NODES) assert.ok(seen.has(place.id), place.id);
+
   const open = destinations(STATION, ["Earth"]);
   assert.deepEqual(
     open.map((next) => next.id).sort(),
-    ["Andoria", "Denobula", "Tellar"],
+    ["Andoria", "Denobula"],
   );
 });
 
-test("svg positions share angles across shells", () => {
-  for (const [names, shell, r] of [
-    [INNER, "inner", 1],
-    [MIDDLE, "middle", 2],
-    [OUTER, "outer", 3],
+test("planets keep shells and sit off perfect circles", () => {
+  const radii = (names) => names.map((id) => node(id).r);
+  const avg = (xs) => xs.reduce((sum, n) => sum + n, 0) / xs.length;
+  for (const [names, shell] of [
+    [INNER, "inner"],
+    [MIDDLE, "middle"],
+    [OUTER, "outer"],
   ]) {
-    names.forEach((id, i) => {
-      const placed = node(id);
-      assert.equal(placed.shell, shell);
-      assert.equal(placed.r, r);
-      assert.equal(placed.angle, -Math.PI / 2 + (i * Math.PI) / 2);
-    });
+    for (const id of names) assert.equal(node(id).shell, shell);
+    const rs = radii(names);
+    assert.ok(Math.max(...rs) - Math.min(...rs) > 0.2, shell);
+    const angles = names.map((id) => node(id).angle);
+    assert.ok(
+      angles.some((angle, i) => angle !== -Math.PI / 2 + (i * Math.PI) / 2),
+      shell,
+    );
   }
+  assert.ok(avg(radii(INNER)) < avg(radii(MIDDLE)));
+  assert.ok(avg(radii(MIDDLE)) < avg(radii(OUTER)));
   assert.equal(node(STATION).r, 0);
   assert.equal(node(STATION).shell, "station");
   assert.equal(node(DELTA_VEGA).shell, "fuel");
-  assert.equal(node(DELTA_VEGA).r, 1.5);
   assert.equal(node(CETI_ALPHA).shell, "fuel");
-  assert.equal(node(CETI_ALPHA).r, 2.5);
-  assert.equal(NODES.length, 15);
+  assert.equal(NODES.length, 21);
 });

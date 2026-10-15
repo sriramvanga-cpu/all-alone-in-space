@@ -1,12 +1,29 @@
-// Undirected star web. Angle is radians: slot 0 at the top (-π/2), then
-// clockwise when drawn as x = r*cos(angle), y = r*sin(angle) with SVG y-down.
-// r is a unit shell radius; scale it in the UI. The station sits at the origin.
+// Undirected star web. Each world is hand-placed: x = r*cos(angle),
+// y = r*sin(angle), SVG y-down. Shell is the habitability draw, not a shared orbit.
+// Names in a shell run around the chart; the wrap-around is the one gap.
+// The station sits at the origin.
 
-export const INNER = Object.freeze(["Earth", "Andoria", "Tellar", "Denobula"]);
-export const MIDDLE = Object.freeze(["Bajor", "Betazed", "Trill", "Orion"]);
+export const INNER = Object.freeze([
+  "Earth",
+  "Risa",
+  "Andoria",
+  "P'Jem",
+  "Tellar",
+  "Denobula",
+]);
+export const MIDDLE = Object.freeze([
+  "Bajor",
+  "Deneb",
+  "Betazed",
+  "Khitomer",
+  "Trill",
+  "Orion",
+]);
 export const OUTER = Object.freeze([
   "Qo'noS",
+  "Nimbus",
   "Romulus",
+  "Remus",
   "Cardassia",
   "Ferenginar",
 ]);
@@ -15,90 +32,62 @@ export const STATION = "station";
 export const DELTA_VEGA = "Delta Vega";
 export const CETI_ALPHA = "Ceti Alpha";
 
-export const SHELL_RADIUS = Object.freeze({
-  station: 0,
-  inner: 1,
-  middle: 2,
-  outer: 3,
-});
-
 const links = [];
 
 function link(a, b, distance) {
   links.push(Object.freeze({ a, b, distance }));
 }
 
-function ring(names) {
-  for (let i = 0; i < names.length; i++) {
-    link(names[i], names[(i + 1) % names.length], 8);
-  }
+function brokenRing(names) {
+  for (let i = 0; i < names.length - 1; i++) link(names[i], names[i + 1], 8);
 }
 
-for (const planet of INNER) link(STATION, planet, 10);
-ring(INNER);
-ring(MIDDLE);
-ring(OUTER);
+for (const planet of ["Earth", "Andoria", "Denobula"]) link(STATION, planet, 10);
+brokenRing(INNER);
+brokenRing(MIDDLE);
+brokenRing(OUTER);
 
 for (const [a, b] of [
-  ["Earth", "Bajor"],
-  ["Earth", "Betazed"],
-  ["Andoria", "Betazed"],
-  ["Andoria", "Trill"],
-  ["Tellar", "Trill"],
-  ["Tellar", "Orion"],
+  ["P'Jem", "Betazed"],
   ["Denobula", "Orion"],
-  ["Denobula", "Bajor"],
-]) {
-  link(a, b, 12);
-}
-
-for (const [a, b] of [
   ["Bajor", "Qo'noS"],
-  ["Bajor", "Romulus"],
-  ["Betazed", "Romulus"],
-  ["Betazed", "Cardassia"],
-  ["Trill", "Cardassia"],
-  ["Trill", "Ferenginar"],
+  ["Khitomer", "Remus"],
   ["Orion", "Ferenginar"],
-  ["Orion", "Qo'noS"],
 ]) {
   link(a, b, 12);
 }
 
-for (const planet of [...INNER, ...MIDDLE]) link(DELTA_VEGA, planet, 8);
-for (const planet of [...MIDDLE, ...OUTER]) link(CETI_ALPHA, planet, 8);
+for (const planet of ["Earth", "Risa", "Deneb"]) link(DELTA_VEGA, planet, 8);
+for (const planet of ["Trill", "Cardassia", "Ferenginar"]) link(CETI_ALPHA, planet, 8);
 
 export const LINKS = Object.freeze(links);
 
-function placed(names, shell) {
-  const r = SHELL_RADIUS[shell];
-  return names.map((id, i) =>
-    Object.freeze({
-      id,
-      shell,
-      r,
-      angle: -Math.PI / 2 + (i * Math.PI) / 2,
-    }),
-  );
+function at(id, shell, r, angle) {
+  return Object.freeze({ id, shell, r, angle });
 }
 
 export const NODES = Object.freeze([
-  Object.freeze({
-    id: STATION,
-    shell: "station",
-    r: SHELL_RADIUS.station,
-    angle: 0,
-  }),
-  ...placed(INNER, "inner"),
-  ...placed(MIDDLE, "middle"),
-  ...placed(OUTER, "outer"),
-  Object.freeze({ id: DELTA_VEGA, shell: "fuel", r: 1.5, angle: -Math.PI / 4 }),
-  Object.freeze({
-    id: CETI_ALPHA,
-    shell: "fuel",
-    r: 2.5,
-    angle: (3 * Math.PI) / 4,
-  }),
+  at(STATION, "station", 0, 0),
+  at("Earth", "inner", 0.74, -2.55),
+  at("Risa", "inner", 1.2, -1.5),
+  at("Andoria", "inner", 0.86, -0.45),
+  at("P'Jem", "inner", 1.3, 0.6),
+  at("Tellar", "inner", 0.96, 1.65),
+  at("Denobula", "inner", 1.12, 2.7),
+  at("Bajor", "middle", 1.7, -2.1),
+  at("Deneb", "middle", 2.25, -1.05),
+  at("Betazed", "middle", 1.82, 0),
+  at("Khitomer", "middle", 2.38, 1.05),
+  at("Trill", "middle", 1.9, 2.1),
+  at("Orion", "middle", 2.2, 3.15),
+  at("Qo'noS", "outer", 2.68, -2.33),
+  at("Nimbus", "outer", 3.4, -1.28),
+  at("Romulus", "outer", 2.85, -0.23),
+  at("Remus", "outer", 3.48, 0.82),
+  at("Cardassia", "outer", 2.98, 1.87),
+  at("Ferenginar", "outer", 3.25, 2.92),
+  at(DELTA_VEGA, "fuel", 1.94, -1.39),
+  at(CETI_ALPHA, "fuel", 2.82, 2.51),
 ]);
 
 export function node(id) {

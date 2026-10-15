@@ -29,7 +29,24 @@ import bank from "./data/questions.json";
 const API = (import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://127.0.0.1:8787" : "")).replace(/\/+$/, "");
 const PENDING = "aais-pending-scores";
 const SCALE = 104;
-const FLIGHT_MS = 1200;
+const FLIGHT_MS = 2400;
+const BODY = { inner: 7.2, middle: 9, outer: 11, fuel: 8 };
+const SURFACES = ["rock", "ice", "gas", "dust"];
+const SPECKS = [
+  [-360, -180, 1.1],
+  [-250, 60, 0.7],
+  [-120, -240, 1.3],
+  [60, -300, 0.8],
+  [240, -220, 1.2],
+  [340, -30, 0.7],
+  [300, 160, 1.1],
+  [140, 300, 0.8],
+  [-40, 250, 1.4],
+  [-220, 220, 0.7],
+  [-330, -40, 1],
+  [390, 110, 0.8],
+];
+const BAYS = [0, 60, 120, 180, 240, 300];
 const ROUND_MS = 15 * 60 * 1000;
 const QUESTION_MS = 60_000;
 const FUEL_WORLDS = new Set([DELTA_VEGA, CETI_ALPHA]);
@@ -124,7 +141,9 @@ function bend(a, b) {
     px = -px;
     py = -py;
   }
-  const bulge = Math.min(46, len * 0.2);
+  const approach = Math.abs(a.x * b.y - a.y * b.x) / len;
+  const avoid = Math.max(0, 1 - approach / 140);
+  const bulge = Math.min(160, Math.max(36, len * (0.26 + avoid * 0.4)));
   const cx = round2(mx + px * bulge);
   const cy = round2(my + py * bulge);
   const ax = round2(a.x);
@@ -161,9 +180,15 @@ function routePath(from, to) {
   return edge.a === from ? edge.d : edge.rev;
 }
 
+function heading(id) {
+  const p = POS[id];
+  if (!p || (p.x === 0 && p.y === 0)) return -90;
+  return Math.round((Math.atan2(p.y, p.x) * 180) / Math.PI);
+}
+
 function labelAt(id) {
   const p = POS[id];
-  if (id === STATION) return { x: 0, y: 36 };
+  if (id === STATION) return { x: 0, y: 44 };
   const len = Math.hypot(p.x, p.y) || 1;
   return {
     x: round2(p.x + (p.x / len) * 28),
@@ -408,26 +433,151 @@ function NameScreen({ onStart }) {
   );
 }
 
-function Intro({ step, onNext }) {
-  const beat = BEATS[step];
-  const last = step >= BEATS.length - 1;
+function ShipShapes() {
   return (
-    <main className="screen">
-      <div className="panel">
-        <div className={`sky beat-${beat.k}`} aria-hidden="true">
-          <div className="vulcan" />
-          <div className="station-actor" />
-          <div className="ship-actor" />
+    <>
+      <ellipse className="plume" cx="-18" cy="-6.4" rx="4.6" ry="1.5" />
+      <ellipse className="plume" cx="-18" cy="6.4" rx="4.6" ry="1.5" />
+      <ellipse className="exhaust" cx="-14.6" cy="-6.4" rx="2.6" ry="1.15" />
+      <ellipse className="exhaust" cx="-14.6" cy="6.4" rx="2.6" ry="1.15" />
+      <ellipse className="nacelle" cx="-2" cy="-6.4" rx="9" ry="1.55" />
+      <ellipse className="nacelle" cx="-2" cy="6.4" rx="9" ry="1.55" />
+      <path className="strut" d="M-1 -4.9 V-1.7 M-1 1.7 V4.9" />
+      <ellipse className="hull" cx="-1.5" cy="0" rx="7.4" ry="2.5" />
+      <rect className="neck" x="4.6" y="-0.7" width="3.4" height="1.4" />
+      <ellipse className="saucer" cx="11.4" cy="0" rx="6" ry="3.5" />
+      <ellipse className="bridge" cx="13.6" cy="0" rx="1.5" ry="1" />
+    </>
+  );
+}
+
+function ShipSvg({ className }) {
+  return (
+    <svg className={className} viewBox="-24 -11 46 22" aria-hidden="true">
+      <ShipShapes />
+    </svg>
+  );
+}
+
+function surfaceOf(id) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 33 + id.charCodeAt(i)) >>> 0;
+  // Low bits of these names clump; the high bits spread the four surfaces.
+  return {
+    kind: FUEL_WORLDS.has(id) ? "fuel" : SURFACES[(h >>> 9) % 4],
+    spin: h % 360,
+  };
+}
+
+function PlanetDot({ radius: r, kind, spin }) {
+  return (
+    <g transform={`rotate(${spin})`}>
+      <g className={`surface surface-${kind}`} clipPath="url(#planet-dot)" filter="url(#planet-grain)">
+        <circle className="body" r={r} />
+        {kind === "rock" ? (
+          <>
+            <circle className="mark" cx={-r * 0.22} cy={-r * 0.06} r={r * 0.34} />
+            <circle className="mark" cx={r * 0.26} cy={r * 0.24} r={r * 0.2} />
+            <circle className="speck" cx={r * 0.02} cy={-r * 0.4} r={r * 0.12} />
+          </>
+        ) : null}
+        {kind === "ice" ? (
+          <>
+            <circle className="mark" cy={-r * 0.18} r={r * 0.62} />
+            <circle className="speck" cx={r * 0.16} cy={r * 0.34} r={r * 0.1} />
+            <circle className="speck" cx={-r * 0.28} cy={r * 0.2} r={r * 0.08} />
+          </>
+        ) : null}
+        {kind === "gas" || kind === "fuel" ? (
+          <>
+            <ellipse className="band" cy={-r * 0.12} rx={r} ry={r * 0.24} />
+            <ellipse className="band alt" cy={r * 0.36} rx={r * 0.9} ry={r * 0.16} />
+          </>
+        ) : null}
+        {kind === "dust" ? (
+          <>
+            <circle className="mark" cx={-r * 0.1} cy={r * 0.08} r={r * 0.42} />
+            <circle className="speck" cx={r * 0.28} cy={-r * 0.26} r={r * 0.14} />
+            <circle className="speck" cx={-r * 0.34} cy={-r * 0.18} r={r * 0.1} />
+            <circle className="speck" cx={r * 0.14} cy={r * 0.38} r={r * 0.11} />
+          </>
+        ) : null}
+        {kind === "fuel" ? <circle className="speck" r={r * 0.16} /> : null}
+      </g>
+    </g>
+  );
+}
+
+function Starbase(props) {
+  const { className, ...rest } = props;
+  return (
+    <svg
+      className={className ? `starbase ${className}` : "starbase"}
+      viewBox="-40 -40 80 80"
+      aria-hidden="true"
+      {...rest}
+    >
+      <line className="spine" x1="0" y1="8" x2="0" y2="32" />
+      <circle className="ring outer" r="28" />
+      <circle className="ring inner" r="17" />
+      <circle className="core" r="5" />
+      {BAYS.map((deg) => (
+        <circle key={deg} className="bay" r="1.8" transform={`rotate(${deg}) translate(28 0)`} />
+      ))}
+    </svg>
+  );
+}
+
+function Intro({ step, onSkip }) {
+  const beat = BEATS[step];
+  return (
+    <main className={`opener beat-${beat.k}`}>
+      <div className="opener-scene" aria-hidden="true">
+        <div className="starfield" />
+        <div className="vulcan">
+          <span className="crater a" />
+          <span className="crater b" />
+          <span className="crater c" />
+          <span className="crack a" />
+          <span className="crack b" />
+          <span className="crack c" />
+          <span className="crack d" />
         </div>
+        <span className="chunk a" />
+        <span className="chunk b" />
+        <span className="chunk c" />
+        <span className="chunk d" />
+        <span className="chunk e" />
+        <span className="debris a" />
+        <span className="debris b" />
+        <span className="debris c" />
+        <span className="debris d" />
+        <span className="debris e" />
+        <span className="debris f" />
+        <div className="dust">
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="wash" />
+        <div className="shock" />
+        <div className="flash" />
+        <Starbase className="station-actor" />
+        <ShipSvg className="ship ship-actor" />
+      </div>
+      <div className="opener-copy" aria-live="polite">
         <p className="eyebrow">All Alone in Space</p>
         <h1>{beat.title}</h1>
         <p>{beat.text}</p>
-        <div className="row">
-          <button type="button" onClick={onNext}>
-            {last ? "Dock" : "Continue"}
-          </button>
-        </div>
       </div>
+      <button type="button" className="skip" onClick={onSkip}>
+        Skip
+      </button>
     </main>
   );
 }
@@ -437,40 +587,77 @@ function MapView({ snap, shipRef, onLaunch }) {
   const options = destinations(viewer, snap.closed);
   const byId = new Map(options.map((d) => [d.id, d]));
   const shut = new Set(snap.closed);
+  const flying = snap.phase === "fly" && snap.flight;
   return (
-    <svg
-      className={snap.phase === "fly" ? "map-svg flying" : "map-svg"}
-      viewBox="-430 -450 860 900"
-      role="img"
-      aria-label="Star map"
-    >
-      {[1, 2, 3].map((shell) => (
-        <circle key={shell} className="shell" cx="0" cy="0" r={SCALE * shell} />
-      ))}
-      {snap.flight ? (
+    <svg className={flying ? "map-svg flying" : "map-svg"} viewBox="-430 -450 860 900" role="img" aria-label="Star map">
+      <defs>
+        <radialGradient id="neb-core" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ffe7b8" stopOpacity="0.95" />
+          <stop offset="16%" stopColor="#ff8a1e" stopOpacity="0.78" />
+          <stop offset="42%" stopColor="#c2410c" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="#ff6a00" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="neb-teal" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#1d6e8a" stopOpacity="0.5" />
+          <stop offset="58%" stopColor="#12324a" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#0a1628" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="neb-red" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#9a3412" stopOpacity="0.42" />
+          <stop offset="62%" stopColor="#4a1520" stopOpacity="0.14" />
+          <stop offset="100%" stopColor="#1a0a10" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="neb-blue" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#1e3a8a" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="#020617" stopOpacity="0" />
+        </radialGradient>
+        <filter id="planet-grain" x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="noise" />
+          <feComponentTransfer in="noise" result="soft">
+            <feFuncA type="linear" slope="0.22" />
+          </feComponentTransfer>
+          <feBlend in="SourceGraphic" in2="soft" mode="overlay" />
+        </filter>
+        <clipPath id="planet-dot" clipPathUnits="objectBoundingBox">
+          <circle cx="0.5" cy="0.5" r="0.5" />
+        </clipPath>
+      </defs>
+      <g className="nebula">
+        <rect x="-560" y="-580" width="1120" height="1160" fill="#070b16" />
+        <ellipse cx="-190" cy="20" rx="360" ry="270" fill="url(#neb-teal)" />
+        <ellipse cx="210" cy="-20" rx="320" ry="290" fill="url(#neb-red)" />
+        <ellipse cx="-20" cy="120" rx="280" ry="200" fill="url(#neb-blue)" />
+        {SPECKS.map(([x, y, r], i) => (
+          <circle key={i} className="speck" cx={x} cy={y} r={r} />
+        ))}
+      </g>
+      <circle className="core-glow" cx="0" cy="0" r="210" fill="url(#neb-core)" />
+      {flying ? (
         <path id="flight" d={snap.flight.d} fill="none" stroke="none" pointerEvents="none" />
       ) : null}
       {ROUTES.map((edge) => {
         const open = linkOpen(edge, viewer, snap.closed);
         const hot = open && (edge.a === viewer || edge.b === viewer);
-        const cost = fuelCost(snap.variable, edge.distance);
-        return (
-          <g key={`${edge.a}-${edge.b}`}>
-            <path d={edge.d} className={open ? (hot ? "link hot" : "link") : "link shut"} />
-            {open ? (
-              <text className={hot ? "cost hot" : "cost"} x={edge.mid.x} y={edge.mid.y} textAnchor="middle">
-                {fmtNum(cost)}
-              </text>
-            ) : null}
-          </g>
-        );
+        const onRoute =
+          snap.flight &&
+          ((edge.a === snap.flight.from && edge.b === snap.flight.to) ||
+            (edge.a === snap.flight.to && edge.b === snap.flight.from));
+        const cls = ["link", `d${edge.distance}`, open ? "" : "shut", hot ? "hot" : "", onRoute ? "onroute" : ""]
+          .filter(Boolean)
+          .join(" ");
+        return <path key={`${edge.a}-${edge.b}`} d={edge.d} className={cls} />;
       })}
+      {flying ? (
+        <path className="streak" d={snap.flight.d} pathLength="100" style={{ animationDuration: `${FLIGHT_MS}ms` }} />
+      ) : null}
       {NODES.map((n) => {
         const p = POS[n.id];
         const label = labelAt(n.id);
         const dest = byId.get(n.id);
         const cost = dest ? fuelCost(snap.variable, dest.distance) : null;
         const ready = snap.phase === "map" && cost != null && cost <= snap.fuel + 1e-9;
+        const body = BODY[n.shell] || 4;
+        const face = n.id === STATION ? null : surfaceOf(n.id);
         const classes = [
           "node",
           `node-${n.shell}`,
@@ -484,6 +671,7 @@ function MapView({ snap, shipRef, onLaunch }) {
           <g
             key={n.id}
             className={classes}
+            transform={`translate(${p.x} ${p.y})`}
             role={ready ? "button" : undefined}
             tabIndex={ready ? 0 : undefined}
             aria-label={
@@ -500,25 +688,49 @@ function MapView({ snap, shipRef, onLaunch }) {
               {n.id === STATION ? "Station" : n.id}
               {cost != null ? `, ${fmtNum(cost)} fuel${ready ? "" : ", not enough fuel"}` : ""}
             </title>
-            <circle cx={p.x} cy={p.y} r={n.id === STATION ? 16 : 18} />
-            <text className="node-label" x={label.x} y={label.y} textAnchor="middle">
+            {n.id === STATION ? (
+              <>
+                <circle className="hit" r="30" />
+                <Starbase x="-32" y="-32" width="64" height="64" />
+              </>
+            ) : (
+              <>
+                <circle className="hit" r="14" />
+                <PlanetDot radius={body} kind={face.kind} spin={face.spin} />
+              </>
+            )}
+            <text className="node-label" x={label.x - p.x} y={label.y - p.y} textAnchor="middle">
               {n.id === STATION ? "Station" : n.id}
             </text>
           </g>
         );
       })}
-      {snap.phase === "fly" && snap.flight ? (
-        <polygon
+      {snap.phase === "map"
+        ? ROUTES.map((edge) => {
+            const open = linkOpen(edge, snap.here, snap.closed);
+            if (!open || (edge.a !== snap.here && edge.b !== snap.here)) return null;
+            const cost = fuelCost(snap.variable, edge.distance);
+            return (
+              <text key={`cost-${edge.a}-${edge.b}`} className="cost hot" x={edge.mid.x} y={edge.mid.y} textAnchor="middle">
+                {fmtNum(cost)}
+              </text>
+            );
+          })
+        : null}
+      {flying ? (
+        <g
           ref={shipRef}
           className="ship"
-          points="16,0 -10,8 -10,-8"
-          style={{ offsetPath: "url(#flight)", offsetRotate: "auto" }}
-        />
+          style={{ offsetPath: "url(#flight)", offsetRotate: "auto", offsetAnchor: "center" }}
+        >
+          <ShipShapes />
+        </g>
       ) : (
-        <polygon
-          className="ship"
-          points={`${POS[snap.here].x},${POS[snap.here].y - 14} ${POS[snap.here].x + 9},${POS[snap.here].y + 10} ${POS[snap.here].x - 9},${POS[snap.here].y + 10}`}
-        />
+        <g transform={`translate(${POS[snap.here].x} ${POS[snap.here].y}) rotate(${heading(snap.here)})`}>
+          <svg className="ship" viewBox="-24 -11 46 22" x="-22" y="-11" width="44" height="22" overflow="visible">
+            <ShipShapes />
+          </svg>
+        </g>
       )}
     </svg>
   );
@@ -636,12 +848,6 @@ function Game() {
     }
     percentRef.current = percents;
     commit({ phase: "map", deadline: Date.now() + ROUND_MS });
-  }
-
-  function nextBeat() {
-    if (game.current.phase !== "intro") return;
-    if (game.current.intro >= BEATS.length - 1) dock();
-    else commit({ intro: game.current.intro + 1 });
   }
 
   function launch(dest) {
@@ -947,7 +1153,7 @@ function Game() {
   if (snap.phase === "name") {
     return <NameScreen onStart={(name) => commit({ name, phase: "intro", intro: 0 })} />;
   }
-  if (snap.phase === "intro") return <Intro step={snap.intro} onNext={nextBeat} />;
+  if (snap.phase === "intro") return <Intro step={snap.intro} onSkip={dock} />;
 
   const clockMs =
     snap.phase === "end"
@@ -994,7 +1200,7 @@ function Game() {
                 {snap.note}
               </p>
             ) : (
-              <p className="hint">Open routes show the fuel they cost right now.</p>
+              <p className="hint">Routes from here show the fuel they cost.</p>
             )}
             <MapView snap={snap} shipRef={shipRef} onLaunch={launch} />
           </>
