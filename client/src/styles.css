@@ -267,7 +267,7 @@ a { color: #b9d4ff; }
 
 .opener-scene { position: absolute; inset: 0; }
 
-.starfield {
+.opener-scene .starfield {
   position: absolute;
   inset: 0;
   background-image:

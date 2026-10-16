@@ -7,9 +7,9 @@ import {
   drawPercent,
   fuelCost,
   idealCost,
-  score,
   compareRuns,
   habitability,
+  affordableVariable,
   fuelMinute,
   buyPacks,
 } from "./game/rules.js";
@@ -228,6 +228,8 @@ function fresh() {
     fuelIndex: 0,
     fuelAnswers: [],
     fuelDeadline: 0,
+    creditFloor: 0,
+    visited: [],
     note: "",
     postState: "",
     sent: false,
@@ -244,14 +246,16 @@ function payloadOk(p) {
 }
 
 function runFacts(snap) {
-  const ids = new Set(snap.closed);
-  if (snap.here !== STATION && !FUEL_WORLDS.has(snap.here)) ids.add(snap.here);
   return {
     settled: snap.endReason === "win",
     timeLeft: Math.floor(Math.max(0, snap.deadline - (snap.stoppedAt || snap.deadline)) / 1000),
-    worlds: ids.size,
-    fuel: score(snap.path),
+    worlds: snap.visited.length,
+    fuel: snap.fuel,
   };
+}
+
+function dealFuel(cards) {
+  return shuffle(cards).map((card) => ({ ...card, choices: shuffle(card.choices) }));
 }
 
 function readPending() {
@@ -399,7 +403,7 @@ function Board() {
     <main className="board">
       <p className="eyebrow">All Alone in Space</p>
       <h1>Leaderboard</h1>
-      <p className="hint">Wins rank above every loss. Wins: more time left, then fuel score. Losses: more worlds, then the longer run.</p>
+      <p className="hint">Wins rank above every loss. Then more worlds, then more fuel left. Wins with those tied rank by time left; losses by who lasted longer.</p>
       <BoardTable rows={rows} err={err} />
     </main>
   );
@@ -1039,23 +1043,31 @@ function Game() {
       return;
     }
     const id = g.flight.to;
+    const visited = id === STATION || g.visited.includes(id) ? g.visited : [...g.visited, id];
     if (id === STATION) {
       commit({ phase: "map", flight: null });
       return;
     }
     if (FUEL_WORLDS.has(id)) {
+      if (g.closed.includes(id)) {
+        commit({ phase: "map", here: id, flight: null, visited });
+        return;
+      }
       commit({
         phase: "fuel",
         here: id,
         flight: null,
-        fuelDeck: shuffle(bank.fuel),
+        visited,
+        closed: [...g.closed, id],
+        creditFloor: g.credits,
+        fuelDeck: dealFuel(bank.fuel),
         fuelIndex: 0,
         fuelAnswers: [],
         fuelDeadline: Date.now() + QUESTION_MS,
       });
       return;
     }
-    commit({ phase: "pick", here: id, flight: null });
+    commit({ phase: "pick", here: id, flight: null, visited });
   }
 
   function takeCard(domain) {
@@ -1101,15 +1113,18 @@ function Game() {
       correct,
     );
     percentRef.current[g.here] = result.percent;
+    const closed = [...g.closed, g.here];
+    const exits = destinations(g.here, closed).map((hop) => hop.distance);
+    const variable = result.won ? result.variable : affordableVariable(result.variable, g.fuel, exits);
     if (result.won) {
-      game.current = { ...g, credits: result.credits, variable: result.variable };
+      game.current = { ...g, credits: result.credits, variable };
       finish("win");
       return;
     }
     commit({
       credits: result.credits,
-      variable: result.variable,
-      closed: [...g.closed, g.here],
+      variable,
+      closed,
       phase: "map",
       card: null,
       note: timedOut
@@ -1128,10 +1143,11 @@ function Game() {
       return;
     }
     const result = fuelMinute(g.variable, g.fuelAnswers);
+    const exits = destinations(g.here, g.closed).map((hop) => hop.distance);
     commit({
       phase: "shop",
-      variable: result.variable,
-      credits: g.credits + result.credits,
+      variable: affordableVariable(result.variable, g.fuel, exits),
+      closed: g.closed.includes(g.here) ? g.closed : [...g.closed, g.here],
     });
   }
 
@@ -1142,9 +1158,13 @@ function Game() {
       finish("time");
       return;
     }
+    const answers = [...g.fuelAnswers, kind];
+    const wrapped = g.fuelIndex + 1 >= g.fuelDeck.length;
     commit({
-      fuelAnswers: [...g.fuelAnswers, kind],
-      fuelIndex: g.fuelIndex + 1,
+      fuelAnswers: answers,
+      fuelIndex: wrapped ? 0 : g.fuelIndex + 1,
+      fuelDeck: wrapped ? dealFuel(bank.fuel) : g.fuelDeck,
+      credits: g.creditFloor + answers.filter((answer) => answer === "right").length,
     });
   }
 
@@ -1276,10 +1296,7 @@ function Game() {
     serial(async () => {
       const list = readPending();
       const seen = list.some(
-        (item) =>
-          item.name === payload.name &&
-          item.score === payload.score &&
-          item.finishedAt === payload.finishedAt,
+        (item) => item.name === payload.name && item.finishedAt === payload.finishedAt,
       );
       if (!seen) writePending([...list, payload]);
       const left = await flushPendingBody();
@@ -1317,9 +1334,7 @@ function Game() {
         ? "Station"
         : snap.here;
   const domainLabel = DOMAINS.find((d) => d[0] === snap.domain)?.[1] || "";
-  const fuelCard = snap.fuelDeck.length
-    ? snap.fuelDeck[snap.fuelIndex % snap.fuelDeck.length]
-    : null;
+  const fuelCard = snap.fuelDeck[snap.fuelIndex] ?? null;
   const qMs = Math.max(0, snap.qDeadline - now);
   const fuelMs = Math.max(0, snap.fuelDeadline - now);
 
@@ -1400,7 +1415,7 @@ function Game() {
                 <h1>Fuel minute</h1>
               </div>
             </div>
-            <p>One credit for each right answer. Skip if you want.</p>
+            <p>One credit for each right answer. You have {snap.credits}. Skip if you want.</p>
             <p className="prompt">{fuelCard.prompt}</p>
             <ChoiceButtons
               choices={fuelCard.choices}

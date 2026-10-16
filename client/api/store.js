@@ -55,7 +55,7 @@ export function parseScore(body) {
     return { name: name.trim(), fuel: body.score, settled: false, timeLeft: 0, worlds: 0, finishedAt: when };
   }
   const whole = (n, max) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= max;
-  if (!whole(body.timeLeft, 24 * 60 * 60) || !whole(body.worlds, 18)) {
+  if (!whole(body.timeLeft, 24 * 60 * 60) || !whole(body.worlds, 55)) {
     return { error: "timeLeft and worlds must be whole numbers" };
   }
   if (typeof body.fuel !== "number" || !Number.isFinite(body.fuel)) return { error: "fuel must be a finite number" };

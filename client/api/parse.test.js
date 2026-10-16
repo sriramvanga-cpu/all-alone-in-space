@@ -29,6 +29,13 @@ test("a score post without settled is an old loss", () => {
   );
 });
 
+test("a long run with leftover fuel is accepted", () => {
+  const parsed = parseScore({ name: "Scott", settled: false, timeLeft: 10, worlds: 40, fuel: 50, finishedAt: when });
+  assert.equal(parsed.error, undefined);
+  assert.equal(parsed.fuel, 50);
+  assert.equal(parsed.worlds, 40);
+});
+
 test("a score post rejects a bad clock", () => {
   const parsed = parseScore({ name: "Uhura", settled: false, timeLeft: 1.5, worlds: 0, fuel: 0, finishedAt: when });
   assert.equal(parsed.error, "timeLeft and worlds must be whole numbers");

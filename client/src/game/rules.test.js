@@ -10,6 +10,7 @@ import {
   idealCost,
   score,
   compareRuns,
+  affordableVariable,
   drawMultiplier,
   applyMultiplier,
   habitability,
@@ -68,26 +69,37 @@ test("fuel cost, ideal cost, and the worked score", () => {
   assert.equal(score([{ actual: fuelCost(1, 12), ideal: idealCost(12) }]), 0);
 });
 
-test("a settled run outranks every loss, then time, worlds, and fuel", () => {
+test("settled runs rank above losses, then worlds, fuel left, and time", () => {
   const win = { settled: true, timeLeft: 100, fuel: 0, worlds: 1, id: 1 };
   const luckyLoss = { settled: false, timeLeft: 0, fuel: 40, worlds: 8, id: 2 };
   assert.ok(compareRuns(win, luckyLoss) < 0);
 
-  const sooner = { settled: true, timeLeft: 200, fuel: -3, worlds: 1, id: 3 };
-  const later = { settled: true, timeLeft: 100, fuel: 9, worlds: 4, id: 4 };
+  const explorer = { settled: true, timeLeft: 100, fuel: 1, worlds: 3, id: 3 };
+  const sprinter = { settled: true, timeLeft: 800, fuel: 50, worlds: 1, id: 4 };
+  assert.ok(compareRuns(explorer, sprinter) < 0);
+
+  const rich = { settled: true, timeLeft: 100, fuel: 13.4, worlds: 2, id: 5 };
+  const poor = { settled: true, timeLeft: 400, fuel: 5, worlds: 2, id: 6 };
+  assert.ok(compareRuns(rich, poor) < 0);
+
+  const sooner = { settled: true, timeLeft: 200, fuel: 5, worlds: 2, id: 7 };
+  const later = { settled: true, timeLeft: 100, fuel: 5, worlds: 2, id: 8 };
   assert.ok(compareRuns(sooner, later) < 0);
 
-  const tidy = { settled: true, timeLeft: 100, fuel: 1, worlds: 1, id: 5 };
-  const waste = { settled: true, timeLeft: 100, fuel: -1, worlds: 1, id: 6 };
-  assert.ok(compareRuns(tidy, waste) < 0);
-
-  const far = { settled: false, timeLeft: 400, fuel: 0, worlds: 3, id: 7 };
-  const near = { settled: false, timeLeft: 10, fuel: 20, worlds: 1, id: 8 };
+  const far = { settled: false, timeLeft: 400, fuel: 1, worlds: 3, id: 9 };
+  const near = { settled: false, timeLeft: 10, fuel: 20, worlds: 1, id: 10 };
   assert.ok(compareRuns(far, near) < 0);
 
-  const lasted = { settled: false, timeLeft: 30, fuel: 0, worlds: 2, id: 9 };
-  const quit = { settled: false, timeLeft: 800, fuel: 5, worlds: 2, id: 10 };
+  const lasted = { settled: false, timeLeft: 30, fuel: 5, worlds: 2, id: 11 };
+  const quit = { settled: false, timeLeft: 800, fuel: 5, worlds: 2, id: 12 };
   assert.ok(compareRuns(lasted, quit) < 0);
+});
+
+test("a penalty cannot price out the cheapest exit", () => {
+  assert.equal(affordableVariable(2, 5, [8]), 1.25);
+  assert.equal(affordableVariable(0.4, 5, [8]), 0.4);
+  assert.equal(affordableVariable(2, 0, [8]), 2);
+  assert.equal(affordableVariable(2, 5, []), 2);
 });
 
 test("shell percents stay in a fair band and keep max, min, and average", () => {
@@ -237,13 +249,13 @@ test("wrong answer applies one multiplier and pays nothing", () => {
   const result = habitability(
     { percent: 40, credits: 20, variable: 1 },
     false,
-    scripted([unit(0, 10), 0.5, unit(50, 101)]),
+    scripted([unit(0, 10), 0.5, unit(100, 101)]),
   );
   assert.equal(result.percent, 65);
   assert.equal(result.credits, 20);
   assert.equal(result.multiplier, 0.5);
   assert.equal(result.variable, 0.5);
-  assert.equal(result.roll, 50);
+  assert.equal(result.roll, 100);
   assert.equal(result.won, false);
   assert.equal(result.closed, true);
 });

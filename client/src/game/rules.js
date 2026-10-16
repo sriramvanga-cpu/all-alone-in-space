@@ -47,25 +47,29 @@ export function score(path) {
   return Math.round(raw * 1e10) / 1e10;
 }
 
-/** Wins first. Then time left, then fuel score. Losses: worlds, then who lasted longer. */
+/** Settled first. Then more worlds, then more fuel left. Wins break remaining ties on time left; losses on who lasted longer. */
 export function compareRuns(a, b) {
   const as = a.settled ? 1 : 0;
   const bs = b.settled ? 1 : 0;
   if (as !== bs) return bs - as;
-  const at = Number.isFinite(a.timeLeft) ? a.timeLeft : 0;
-  const bt = Number.isFinite(b.timeLeft) ? b.timeLeft : 0;
+  const aw = Number.isFinite(a.worlds) ? a.worlds : 0;
+  const bw = Number.isFinite(b.worlds) ? b.worlds : 0;
+  if (aw !== bw) return bw - aw;
   const af = Number.isFinite(a.fuel) ? a.fuel : Number(a.score) || 0;
   const bf = Number.isFinite(b.fuel) ? b.fuel : Number(b.score) || 0;
-  if (as) {
-    if (at !== bt) return bt - at;
-    if (af !== bf) return bf - af;
-  } else {
-    const aw = Number.isFinite(a.worlds) ? a.worlds : 0;
-    const bw = Number.isFinite(b.worlds) ? b.worlds : 0;
-    if (aw !== bw) return bw - aw;
-    if (at !== bt) return at - bt;
-  }
+  if (af !== bf) return bf - af;
+  const at = Number.isFinite(a.timeLeft) ? a.timeLeft : 0;
+  const bt = Number.isFinite(b.timeLeft) ? b.timeLeft : 0;
+  if (at !== bt) return as ? bt - at : at - bt;
   return (a.id ?? 0) - (b.id ?? 0);
+}
+
+/** Keep at least the cheapest exit affordable. A lower variable is left alone. */
+export function affordableVariable(variable, fuel, distances) {
+  if (!(fuel > 0) || !distances.length) return variable;
+  const cheapest = Math.min(...distances);
+  const cap = (2 * fuel) / cheapest;
+  return Math.min(variable, Math.max(0.1, cap));
 }
 
 /**
@@ -88,9 +92,9 @@ export function applyMultiplier(variable, multiplier) {
 
 /**
  * After a habitability answer. Right: percent −25, +15 credits, variable
- * unchanged. Wrong: percent +25, no credits, one multiplier. Then a secret
- * int 0–100. Win only when roll > percent (equal loses and closes the planet).
- * Percent is not capped.
+ * unchanged. Wrong: percent +25, no credits, one multiplier, and the world
+ * never settles. Then a secret int 0–100. A right answer settles only when
+ * roll > percent (equal loses and closes the planet). Percent is not capped.
  * Wrong consumes two rng() samples for the multiplier, then one for the roll.
  * Right consumes only the roll sample.
  */
@@ -106,7 +110,7 @@ export function habitability(state, correct, rng = Math.random) {
     variable = applyMultiplier(variable, multiplier);
   }
   const roll = rollInt(rng, 0, 100);
-  const won = roll > percent;
+  const won = correct && roll > percent;
   return { percent, credits, variable, roll, multiplier, won, closed: !won };
 }
 
