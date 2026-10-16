@@ -9,6 +9,7 @@ import {
   fuelCost,
   idealCost,
   score,
+  compareRuns,
   drawMultiplier,
   applyMultiplier,
   habitability,
@@ -67,15 +68,82 @@ test("fuel cost, ideal cost, and the worked score", () => {
   assert.equal(score([{ actual: fuelCost(1, 12), ideal: idealCost(12) }]), 0);
 });
 
-test("shell percents: max, min, and half-up average", () => {
-  const rolls = (x, y) => scripted([unit(x, 101), unit(y, 101)]);
-  assert.equal(drawPercent("inner", rolls(55, 80)), 80);
-  assert.equal(drawPercent("outer", rolls(55, 80)), 55);
-  assert.equal(drawPercent("middle", rolls(20, 80)), 50);
-  assert.equal(drawPercent("middle", rolls(2, 3)), 3);
-  assert.equal(drawPercent("middle", rolls(0, 1)), 1);
-  assert.equal(drawPercent("inner", rolls(0, 100)), 100);
-  assert.equal(drawPercent("outer", rolls(0, 100)), 0);
+test("a settled run outranks every loss, then time, worlds, and fuel", () => {
+  const win = { settled: true, timeLeft: 100, fuel: 0, worlds: 1, id: 1 };
+  const luckyLoss = { settled: false, timeLeft: 0, fuel: 40, worlds: 8, id: 2 };
+  assert.ok(compareRuns(win, luckyLoss) < 0);
+
+  const sooner = { settled: true, timeLeft: 200, fuel: -3, worlds: 1, id: 3 };
+  const later = { settled: true, timeLeft: 100, fuel: 9, worlds: 4, id: 4 };
+  assert.ok(compareRuns(sooner, later) < 0);
+
+  const tidy = { settled: true, timeLeft: 100, fuel: 1, worlds: 1, id: 5 };
+  const waste = { settled: true, timeLeft: 100, fuel: -1, worlds: 1, id: 6 };
+  assert.ok(compareRuns(tidy, waste) < 0);
+
+  const far = { settled: false, timeLeft: 400, fuel: 0, worlds: 3, id: 7 };
+  const near = { settled: false, timeLeft: 10, fuel: 20, worlds: 1, id: 8 };
+  assert.ok(compareRuns(far, near) < 0);
+
+  const lasted = { settled: false, timeLeft: 30, fuel: 0, worlds: 2, id: 9 };
+  const quit = { settled: false, timeLeft: 800, fuel: 5, worlds: 2, id: 10 };
+  assert.ok(compareRuns(lasted, quit) < 0);
+});
+
+test("shell percents stay in a fair band and keep max, min, and average", () => {
+  const span = 75 - 30 + 1;
+  const rolls = (x, y) => scripted([unit(x - 30, span), unit(y - 30, span)]);
+  assert.equal(drawPercent("inner", rolls(55, 70)), 70);
+  assert.equal(drawPercent("outer", rolls(55, 70)), 55);
+  assert.equal(drawPercent("middle", rolls(40, 60)), 50);
+  assert.equal(drawPercent("middle", rolls(32, 33)), 33);
+  assert.equal(drawPercent("middle", rolls(30, 31)), 31);
+  assert.equal(drawPercent("inner", rolls(30, 75)), 75);
+  assert.equal(drawPercent("outer", rolls(30, 75)), 30);
+});
+
+test("a careful player settles more often than a guesser", () => {
+  function mulberry(seed) {
+    let s = seed >>> 0;
+    return () => {
+      s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+      return s / 4294967296;
+    };
+  }
+  function settleRate(skill, seed) {
+    const rng = mulberry(seed);
+    const shells = ["outer", "outer", "outer", "middle", "middle", "inner"];
+    let wins = 0;
+    const games = 800;
+    for (let i = 0; i < games; i++) {
+      let fuel = START_FUEL;
+      let variable = 1;
+      let settled = false;
+      for (const shell of shells) {
+        const cost = fuelCost(variable, 10);
+        if (fuel + 1e-9 < cost) break;
+        fuel -= cost;
+        const correct = rng() < skill;
+        const result = habitability(
+          { percent: drawPercent(shell, rng), credits: 0, variable },
+          correct,
+          rng,
+        );
+        variable = result.variable;
+        if (result.won) {
+          settled = true;
+          break;
+        }
+      }
+      if (settled) wins++;
+    }
+    return wins / games;
+  }
+  const skilled = settleRate(0.85, 7);
+  const guesser = settleRate(0.25, 7);
+  assert.ok(skilled > 0.75, `skilled ${skilled}`);
+  assert.ok(guesser < 0.5, `guesser ${guesser}`);
+  assert.ok(skilled - guesser > 0.3, `${skilled} vs ${guesser}`);
 });
 
 test("multiplier band is 0–1 only on roll 1", () => {
@@ -104,10 +172,10 @@ test("applyMultiplier floors at 0.1", () => {
 
 test("roll equal to percent does not win", () => {
   const state = { percent: 50, credits: 0, variable: 2 };
-  const lost = habitability(state, true, scripted([unit(40, 101)]));
+  const lost = habitability(state, true, scripted([unit(25, 101)]));
   assert.equal(state.percent, 50);
-  assert.equal(lost.percent, 40);
-  assert.equal(lost.roll, 40);
+  assert.equal(lost.percent, 25);
+  assert.equal(lost.roll, 25);
   assert.equal(lost.won, false);
   assert.equal(lost.closed, true);
   assert.equal(lost.credits, 15);
@@ -117,9 +185,9 @@ test("roll equal to percent does not win", () => {
   const won = habitability(
     { percent: 50, credits: 3, variable: 2 },
     true,
-    scripted([unit(41, 101)]),
+    scripted([unit(26, 101)]),
   );
-  assert.equal(won.roll, 41);
+  assert.equal(won.roll, 26);
   assert.equal(won.won, true);
   assert.equal(won.closed, false);
   assert.equal(won.credits, 18);
@@ -131,7 +199,7 @@ test("percent is not capped", () => {
     false,
     scripted([unit(5, 10), 0, unit(100, 101)]),
   );
-  assert.equal(alwaysLose.percent, 105);
+  assert.equal(alwaysLose.percent, 120);
   assert.equal(alwaysLose.roll, 100);
   assert.equal(alwaysLose.won, false);
   assert.equal(alwaysLose.credits, 5);
@@ -142,13 +210,13 @@ test("percent is not capped", () => {
     true,
     scripted([unit(0, 101)]),
   );
-  assert.equal(alwaysWin.percent, -5);
+  assert.equal(alwaysWin.percent, -20);
   assert.equal(alwaysWin.roll, 0);
   assert.equal(alwaysWin.won, true);
   assert.equal(alwaysWin.variable, 3);
 
   const zeroLoses = habitability(
-    { percent: 10, credits: 0, variable: 1 },
+    { percent: 25, credits: 0, variable: 1 },
     true,
     scripted([unit(0, 101)]),
   );
@@ -157,7 +225,7 @@ test("percent is not capped", () => {
   assert.equal(zeroLoses.won, false);
 
   const zeroWins = habitability(
-    { percent: 10, credits: 0, variable: 1 },
+    { percent: 25, credits: 0, variable: 1 },
     true,
     scripted([unit(1, 101)]),
   );
@@ -171,7 +239,7 @@ test("wrong answer applies one multiplier and pays nothing", () => {
     false,
     scripted([unit(0, 10), 0.5, unit(50, 101)]),
   );
-  assert.equal(result.percent, 50);
+  assert.equal(result.percent, 65);
   assert.equal(result.credits, 20);
   assert.equal(result.multiplier, 0.5);
   assert.equal(result.variable, 0.5);
@@ -222,7 +290,7 @@ test("shop packs are any affordable multiset", () => {
     { credits: 18, fuel: 10 },
     { credits: 25, fuel: 15 },
   ]);
-  assert.equal(START_FUEL, 30);
+  assert.equal(START_FUEL, 10);
   assert.equal(START_CREDITS, 0);
   assert.equal(START_VARIABLE, 1);
 
@@ -253,11 +321,12 @@ test("map is a sparse three-shell web", () => {
   assert.equal(node("Vulcan"), null);
 
   const station = linksFrom(STATION);
-  assert.equal(station.length, 3);
-  for (const next of station) {
-    assert.equal(node(next.id).shell, "inner");
-    assert.equal(next.distance, 10);
-  }
+  const homes = station.filter((next) => node(next.id).shell === "inner");
+  const pumps = station.filter((next) => node(next.id).shell === "fuel");
+  assert.deepEqual(homes.map((next) => next.id).sort(), ["Andoria", "Denobula", "Earth"]);
+  for (const next of homes) assert.equal(next.distance, 10);
+  assert.equal(pumps.length, 3);
+  for (const next of pumps) assert.equal(next.distance, 8);
 
   for (const names of [INNER, MIDDLE, OUTER]) {
     let gaps = 0;
@@ -271,20 +340,15 @@ test("map is a sparse three-shell web", () => {
 
   for (const id of [...INNER, ...MIDDLE, ...OUTER]) {
     const degree = linksFrom(id).length;
-    assert.ok(degree === 2 || degree === 3, `${id} ${degree}`);
+    assert.ok(degree >= 2 && degree <= 4, `${id} ${degree}`);
+    const fuels = linksFrom(id).filter((next) => node(next.id).shell === "fuel");
+    assert.equal(fuels.length, 1, id);
+    assert.equal(fuels[0].distance, 8);
   }
 
-  const delta = linksFrom(DELTA_VEGA);
-  assert.deepEqual(delta.map((next) => next.id).sort(), ["Deneb", "Earth", "Risa"]);
-  for (const next of delta) {
-    assert.ok(node(next.id).shell === "inner" || node(next.id).shell === "middle");
-    assert.equal(next.distance, 8);
-  }
-  const ceti = linksFrom(CETI_ALPHA);
-  assert.deepEqual(ceti.map((next) => next.id).sort(), ["Cardassia", "Ferenginar", "Trill"]);
-  for (const next of ceti) {
-    assert.ok(node(next.id).shell === "middle" || node(next.id).shell === "outer");
-    assert.equal(next.distance, 8);
+  for (const id of [DELTA_VEGA, CETI_ALPHA]) {
+    assert.equal(node(id).shell, "fuel");
+    assert.ok(node(id).r > 1 && node(id).r < 3.25, id);
   }
 
   const crosses = LINKS.filter((edge) => {
@@ -294,7 +358,47 @@ test("map is a sparse three-shell web", () => {
   assert.equal(crosses.length, 5);
   for (const edge of crosses) assert.equal(edge.distance, 12);
 
-  assert.equal(LINKS.length, 29);
+  const fuels = NODES.filter((n) => n.shell === "fuel");
+  assert.equal(fuels.length, 36);
+  assert.equal(INNER.length + MIDDLE.length + OUTER.length, 18);
+  for (const fuel of fuels) {
+    const hops = linksFrom(fuel.id);
+    assert.ok(hops.length >= 2 && hops.length <= 4, `${fuel.id} ${hops.length}`);
+    for (const hop of hops) assert.equal(hop.distance, 8);
+  }
+
+  const radii = new Set(fuels.map((n) => n.r.toFixed(2)));
+  assert.ok(radii.size > 8, "fuel worlds sit on a pattern");
+  for (const fuel of fuels) {
+    assert.ok(fuel.r > 1 && fuel.r < 3.25, fuel.id);
+    const nearest = Math.min(
+      ...[...INNER, ...MIDDLE, ...OUTER].map((id) => {
+        const home = node(id);
+        const dx = fuel.r * Math.cos(fuel.angle) - home.r * Math.cos(home.angle);
+        const dy = fuel.r * Math.sin(fuel.angle) - home.r * Math.sin(home.angle);
+        return Math.hypot(dx, dy);
+      }),
+    );
+    assert.ok(nearest < 0.96, `${fuel.id} is outside the habitable gaps`);
+  }
+
+  const tank = new Map([[STATION, START_FUEL]]);
+  const fuelQueue = [STATION];
+  while (fuelQueue.length) {
+    const id = fuelQueue.pop();
+    let have = tank.get(id);
+    if (node(id).shell === "fuel") have = Math.max(have, START_FUEL);
+    for (const hop of linksFrom(id)) {
+      const cost = fuelCost(1, hop.distance);
+      if (have + 1e-9 < cost) continue;
+      let arrive = have - cost;
+      if (node(hop.id).shell === "fuel") arrive = Math.max(arrive, START_FUEL);
+      if ((tank.get(hop.id) ?? -1) >= arrive) continue;
+      tank.set(hop.id, arrive);
+      fuelQueue.push(hop.id);
+    }
+  }
+  for (const place of NODES) assert.ok(tank.has(place.id), `${place.id} is not visitable`);
 
   for (const edge of LINKS) {
     const forward = linksFrom(edge.a).find((next) => next.id === edge.b);
@@ -308,7 +412,6 @@ test("map is a sparse three-shell web", () => {
       assert.ok(linksFrom(steps[i]).some((next) => next.id === steps[i + 1]), `${steps[i]}–${steps[i + 1]}`);
     }
   }
-  walk([STATION, "Earth", DELTA_VEGA, "Deneb", "Bajor", "Qo'noS"]);
   walk([STATION, "Denobula", "Orion", "Ferenginar"]);
   walk([STATION, "Andoria", "P'Jem", "Betazed", "Khitomer", "Remus"]);
 
@@ -325,10 +428,10 @@ test("map is a sparse three-shell web", () => {
   for (const place of NODES) assert.ok(seen.has(place.id), place.id);
 
   const open = destinations(STATION, ["Earth"]);
-  assert.deepEqual(
-    open.map((next) => next.id).sort(),
-    ["Andoria", "Denobula"],
-  );
+  const openIds = open.map((next) => next.id);
+  assert.ok(openIds.includes("Andoria") && openIds.includes("Denobula"));
+  assert.equal(openIds.filter((id) => node(id).shell === "fuel").length, 3);
+  assert.equal(openIds.includes("Earth"), false);
 });
 
 test("planets keep shells and sit off perfect circles", () => {
@@ -354,5 +457,5 @@ test("planets keep shells and sit off perfect circles", () => {
   assert.equal(node(STATION).shell, "station");
   assert.equal(node(DELTA_VEGA).shell, "fuel");
   assert.equal(node(CETI_ALPHA).shell, "fuel");
-  assert.equal(NODES.length, 21);
+  assert.equal(NODES.length, 55);
 });

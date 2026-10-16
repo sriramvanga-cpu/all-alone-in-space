@@ -5,3 +5,5 @@ server/scores.sqlite
 *.sqlite
 .DS_Store
 .vercel
+.neon
+.env.local

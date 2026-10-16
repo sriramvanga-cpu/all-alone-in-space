@@ -1,6 +1,6 @@
 // Pure rules. rng() is uniform on [0, 1), same contract as Math.random.
 
-export const START_FUEL = 30;
+export const START_FUEL = 10;
 export const START_CREDITS = 0;
 export const START_VARIABLE = 1;
 
@@ -16,10 +16,16 @@ function rollInt(rng, lo, hi) {
   return lo + Math.min(span - 1, Math.max(0, pick));
 }
 
-/** Two ints 0–100. Inner keeps max, outer keeps min, middle keeps half-up average. */
+// Narrow band so a right answer is usually enough and a wrong one usually is not.
+// Outer stays easier than inner. The old 0–100 draw made the shell a coin flip.
+const PERCENT_LO = 30;
+const PERCENT_HI = 75;
+const ANSWER_SHIFT = 25;
+
+/** Two ints in the band. Inner keeps max, outer keeps min, middle keeps half-up average. */
 export function drawPercent(shell, rng = Math.random) {
-  const a = rollInt(rng, 0, 100);
-  const b = rollInt(rng, 0, 100);
+  const a = rollInt(rng, PERCENT_LO, PERCENT_HI);
+  const b = rollInt(rng, PERCENT_LO, PERCENT_HI);
   if (shell === "inner") return Math.max(a, b);
   if (shell === "outer") return Math.min(a, b);
   if (shell === "middle") return Math.round((a + b) / 2);
@@ -41,6 +47,27 @@ export function score(path) {
   return Math.round(raw * 1e10) / 1e10;
 }
 
+/** Wins first. Then time left, then fuel score. Losses: worlds, then who lasted longer. */
+export function compareRuns(a, b) {
+  const as = a.settled ? 1 : 0;
+  const bs = b.settled ? 1 : 0;
+  if (as !== bs) return bs - as;
+  const at = Number.isFinite(a.timeLeft) ? a.timeLeft : 0;
+  const bt = Number.isFinite(b.timeLeft) ? b.timeLeft : 0;
+  const af = Number.isFinite(a.fuel) ? a.fuel : Number(a.score) || 0;
+  const bf = Number.isFinite(b.fuel) ? b.fuel : Number(b.score) || 0;
+  if (as) {
+    if (at !== bt) return bt - at;
+    if (af !== bf) return bf - af;
+  } else {
+    const aw = Number.isFinite(a.worlds) ? a.worlds : 0;
+    const bw = Number.isFinite(b.worlds) ? b.worlds : 0;
+    if (aw !== bw) return bw - aw;
+    if (at !== bt) return at - bt;
+  }
+  return (a.id ?? 0) - (b.id ?? 0);
+}
+
 /**
  * Roll an int 1–10, then a continuous uniform multiplier.
  * The first rng() sample selects the roll: 1 + floor(rng() * 10).
@@ -60,8 +87,8 @@ export function applyMultiplier(variable, multiplier) {
 }
 
 /**
- * After a habitability answer. Right: percent −10, +15 credits, variable
- * unchanged. Wrong: percent +10, no credits, one multiplier. Then a secret
+ * After a habitability answer. Right: percent −25, +15 credits, variable
+ * unchanged. Wrong: percent +25, no credits, one multiplier. Then a secret
  * int 0–100. Win only when roll > percent (equal loses and closes the planet).
  * Percent is not capped.
  * Wrong consumes two rng() samples for the multiplier, then one for the roll.
@@ -71,10 +98,10 @@ export function habitability(state, correct, rng = Math.random) {
   let { percent, credits, variable } = state;
   let multiplier = null;
   if (correct) {
-    percent -= 10;
+    percent -= ANSWER_SHIFT;
     credits += 15;
   } else {
-    percent += 10;
+    percent += ANSWER_SHIFT;
     multiplier = drawMultiplier(rng);
     variable = applyMultiplier(variable, multiplier);
   }

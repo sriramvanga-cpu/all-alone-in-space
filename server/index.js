@@ -9,11 +9,28 @@ db.exec(`CREATE TABLE IF NOT EXISTS scores (
   score REAL NOT NULL,
   finished_at TEXT NOT NULL
 )`);
+const have = new Set(db.prepare("PRAGMA table_info(scores)").all().map((col) => col.name));
+for (const [name, def] of [
+  ["settled", "INTEGER NOT NULL DEFAULT 0"],
+  ["time_left", "INTEGER NOT NULL DEFAULT 0"],
+  ["worlds", "INTEGER NOT NULL DEFAULT 0"],
+  ["fuel", "REAL NOT NULL DEFAULT 0"],
+]) {
+  if (!have.has(name)) {
+    db.exec(`ALTER TABLE scores ADD COLUMN ${name} ${def}`);
+    if (name === "fuel") db.exec("UPDATE scores SET fuel = score");
+  }
+}
 
-const insert = db.prepare("INSERT INTO scores (name, score, finished_at) VALUES (?, ?, ?)");
-const list = db.prepare(
-  "SELECT id, name, score, finished_at FROM scores ORDER BY score DESC, finished_at ASC, id ASC"
+const insert = db.prepare(
+  "INSERT INTO scores (name, score, finished_at, settled, time_left, worlds, fuel) VALUES (?, ?, ?, ?, ?, ?, ?)"
 );
+// Same order as compareRuns: wins, time left, fuel score; losses, worlds, then who lasted.
+const list = db.prepare(`SELECT id, name, score, finished_at, settled, time_left, worlds, fuel FROM scores
+  ORDER BY settled DESC,
+    CASE WHEN settled = 1 THEN time_left ELSE worlds END DESC,
+    CASE WHEN settled = 1 THEN fuel ELSE -time_left END DESC,
+    id ASC`);
 
 // Canonical UTC so TEXT order is time order across offsets.
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -22,21 +39,48 @@ function parseScore(body) {
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
     return { error: "body must be a JSON object" };
   }
-  const { name, score, finishedAt } = body;
+  const { name, finishedAt } = body;
   if (typeof name !== "string" || name.trim() === "") {
     return { error: "name must be a non-empty string" };
-  }
-  if (typeof score !== "number" || !Number.isFinite(score)) {
-    return { error: "score must be a finite number" };
   }
   if (typeof finishedAt !== "string" || !ISO.test(finishedAt) || Number.isNaN(Date.parse(finishedAt))) {
     return { error: "finishedAt must be an ISO-8601 string" };
   }
-  return { name: name.trim(), score, finishedAt: new Date(finishedAt).toISOString() };
+  const when = new Date(finishedAt).toISOString();
+  if (typeof body.settled !== "boolean") {
+    if (typeof body.score !== "number" || !Number.isFinite(body.score)) {
+      return { error: "score must be a finite number" };
+    }
+    return { name: name.trim(), fuel: body.score, settled: false, timeLeft: 0, worlds: 0, finishedAt: when };
+  }
+  const whole = (n, max) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= max;
+  if (!whole(body.timeLeft, 24 * 60 * 60) || !whole(body.worlds, 18)) {
+    return { error: "timeLeft and worlds must be whole numbers" };
+  }
+  if (typeof body.fuel !== "number" || !Number.isFinite(body.fuel)) {
+    return { error: "fuel must be a finite number" };
+  }
+  return {
+    name: name.trim(),
+    fuel: body.fuel,
+    settled: body.settled,
+    timeLeft: body.timeLeft,
+    worlds: body.worlds,
+    finishedAt: when,
+  };
 }
 
 function toJson(row) {
-  return { id: row.id, name: row.name, score: row.score, finishedAt: row.finished_at };
+  return {
+    id: row.id,
+    name: row.name,
+    score: row.score,
+    fuel: row.fuel,
+    settled: row.settled === 1,
+    timeLeft: row.time_left,
+    worlds: row.worlds,
+    finishedAt: row.finished_at,
+  };
 }
 
 const app = express();
@@ -52,11 +96,22 @@ app.use(express.json());
 app.post("/api/scores", (req, res) => {
   const parsed = parseScore(req.body);
   if (parsed.error) return res.status(400).json(parsed);
-  const info = insert.run(parsed.name, parsed.score, parsed.finishedAt);
+  const info = insert.run(
+    parsed.name,
+    parsed.fuel,
+    parsed.finishedAt,
+    parsed.settled ? 1 : 0,
+    parsed.timeLeft,
+    parsed.worlds,
+    parsed.fuel,
+  );
   res.status(201).json({
     id: Number(info.lastInsertRowid),
     name: parsed.name,
-    score: parsed.score,
+    fuel: parsed.fuel,
+    settled: parsed.settled,
+    timeLeft: parsed.timeLeft,
+    worlds: parsed.worlds,
     finishedAt: parsed.finishedAt,
   });
 });

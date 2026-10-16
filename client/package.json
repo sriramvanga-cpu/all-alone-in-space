@@ -3,12 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test src/game/rules.test.js",
+    "test": "node --test src/game/rules.test.js api/parse.test.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
