@@ -11,6 +11,7 @@ import {
   habitability,
   affordableVariable,
   fuelMinute,
+  makeFuelCard,
   buyPacks,
 } from "./game/rules.js";
 import {
@@ -227,6 +228,7 @@ function fresh() {
     fuelDeck: [],
     fuelIndex: 0,
     fuelAnswers: [],
+    fuelSeen: [],
     fuelDeadline: 0,
     creditFloor: 0,
     visited: [],
@@ -254,8 +256,10 @@ function runFacts(snap) {
   };
 }
 
-function dealFuel(cards) {
-  return shuffle(cards).map((card) => ({ ...card, choices: shuffle(card.choices) }));
+function drawFuelCard(seen) {
+  let card = makeFuelCard();
+  for (let i = 0; i < 12 && seen.includes(card.prompt); i++) card = makeFuelCard();
+  return card;
 }
 
 function readPending() {
@@ -1053,6 +1057,7 @@ function Game() {
         commit({ phase: "map", here: id, flight: null, visited });
         return;
       }
+      const card = drawFuelCard(g.fuelSeen);
       commit({
         phase: "fuel",
         here: id,
@@ -1060,9 +1065,10 @@ function Game() {
         visited,
         closed: [...g.closed, id],
         creditFloor: g.credits,
-        fuelDeck: dealFuel(bank.fuel),
+        fuelDeck: [card],
         fuelIndex: 0,
         fuelAnswers: [],
+        fuelSeen: [...g.fuelSeen, card.prompt],
         fuelDeadline: Date.now() + QUESTION_MS,
       });
       return;
@@ -1159,11 +1165,12 @@ function Game() {
       return;
     }
     const answers = [...g.fuelAnswers, kind];
-    const wrapped = g.fuelIndex + 1 >= g.fuelDeck.length;
+    const card = drawFuelCard(g.fuelSeen);
     commit({
       fuelAnswers: answers,
-      fuelIndex: wrapped ? 0 : g.fuelIndex + 1,
-      fuelDeck: wrapped ? dealFuel(bank.fuel) : g.fuelDeck,
+      fuelIndex: 0,
+      fuelDeck: [card],
+      fuelSeen: [...g.fuelSeen, card.prompt],
       credits: g.creditFloor + answers.filter((answer) => answer === "right").length,
     });
   }

@@ -15,6 +15,7 @@ import {
   applyMultiplier,
   habitability,
   fuelMinute,
+  makeFuelCard,
   buyPacks,
 } from "./rules.js";
 import {
@@ -258,6 +259,22 @@ test("wrong answer applies one multiplier and pays nothing", () => {
   assert.equal(result.roll, 100);
   assert.equal(result.won, false);
   assert.equal(result.closed, true);
+});
+
+test("fuel cards are fresh arithmetic, not one fixed list", () => {
+  const prompts = new Set();
+  for (let i = 0; i < 40; i++) {
+    const card = makeFuelCard();
+    prompts.add(card.prompt);
+    const [left, op, right] = card.prompt.split(" ");
+    const a = Number(left);
+    const b = Number(right);
+    const expect = op === "+" ? a + b : op === "−" ? a - b : a * b;
+    assert.equal(card.answer, String(expect));
+    assert.equal(new Set(card.choices).size, 4);
+    assert.ok(card.choices.includes(card.answer));
+  }
+  assert.ok(prompts.size >= 30, `only ${prompts.size} distinct prompts`);
 });
 
 test("fuel minute: 1 of 8 updates, exactly 10% does not", () => {
