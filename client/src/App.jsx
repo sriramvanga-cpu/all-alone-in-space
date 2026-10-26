@@ -27,7 +27,7 @@ import {
 import bank from "./data/questions.json";
 import SpaceBackdrop from "./art/SpaceBackdrop.jsx";
 import { SAUCER_X, ShipShapes, ShipSvg } from "./art/Ship.jsx";
-import { Rocket } from "./art/Rocket.jsx";
+import Intro from "./intro/Intro.jsx";
 import { Starbase } from "./art/Station.jsx";
 import { PlanetDot, faceOf } from "./art/Planet.jsx";
 import { MapDefs, MapBackdrop } from "./art/MapArt.jsx";
@@ -51,24 +51,6 @@ const DOMAINS = [
   ["general", "General knowledge"],
   ["mental", "Mental ability"],
   ["technology", "Technology"],
-];
-
-const BEATS = [
-  {
-    k: "launch",
-    title: "Departure",
-    text: "A rocket lifts off Vulcan. The ground falls away.",
-  },
-  {
-    k: "dock",
-    title: "Docking",
-    text: "The rocket locks onto the ship.",
-  },
-  {
-    k: "window",
-    title: "Look back",
-    text: "Through the window, Vulcan blows apart. The clock starts with the chart.",
-  },
 ];
 
 const END_COPY = {
@@ -175,7 +157,6 @@ function fresh() {
     name: "",
     roll: "",
     phone: "",
-    intro: 0,
     here: STATION,
     fuel: START_FUEL,
     credits: START_CREDITS,
@@ -499,54 +480,6 @@ function NameScreen({ onStart }) {
           <button type="submit">Launch</button>
         </div>
       </form>
-    </main>
-  );
-}
-
-function Intro({ step, onSkip }) {
-  const beat = BEATS[step];
-  return (
-    <main className={`opener beat-${beat.k}`}>
-      <div className="opener-scene" aria-hidden="true">
-        <div className="launch-ground">
-          <div className="ball" />
-          <Rocket />
-        </div>
-        <div className="meet">
-          <ShipSvg className="ship ship-actor" />
-          <Rocket />
-        </div>
-        <div className="porthole-frame" />
-        <div className="porthole">
-          <div className="window-view">
-            <div className="ball" />
-            <span className="fireball" />
-            <span className="shock" />
-            <span className="shock two" />
-            <span className="shock three" />
-            <span className="chunk a" />
-            <span className="chunk b" />
-            <span className="chunk c" />
-            <span className="chunk d" />
-            <span className="chunk e" />
-            <span className="ember a" />
-            <span className="ember b" />
-            <span className="ember c" />
-            <span className="ember d" />
-            <span className="ember e" />
-            <span className="ember f" />
-            <span className="flash" />
-          </div>
-        </div>
-      </div>
-      <div className="opener-copy" aria-live="polite">
-        <p className="eyebrow">All Alone in Space</p>
-        <h1>{beat.title}</h1>
-        <p>{beat.text}</p>
-      </div>
-      <button type="button" className="skip" onClick={onSkip}>
-        Skip
-      </button>
     </main>
   );
 }
@@ -1102,16 +1035,6 @@ function Game() {
   }, []);
 
   useEffect(() => {
-    if (snap.phase !== "intro") return;
-    const id = setTimeout(() => {
-      if (game.current.phase !== "intro") return;
-      if (game.current.intro >= BEATS.length - 1) dock();
-      else commit({ intro: game.current.intro + 1 });
-    }, 3600);
-    return () => clearTimeout(id);
-  }, [snap.phase, snap.intro]);
-
-  useEffect(() => {
     const g = game.current;
     if (!g.deadline || g.phase === "end" || g.phase === "name" || g.phase === "intro") return;
     const left = g.deadline - Date.now();
@@ -1230,9 +1153,9 @@ function Game() {
   }, []);
 
   if (snap.phase === "name") {
-    return <NameScreen onStart={(who) => commit({ ...who, phase: "intro", intro: 0 })} />;
+    return <NameScreen onStart={(who) => commit({ ...who, phase: "intro" })} />;
   }
-  if (snap.phase === "intro") return <Intro step={snap.intro} onSkip={dock} />;
+  if (snap.phase === "intro") return <Intro onDone={dock} />;
 
   const clockMs =
     snap.phase === "end"

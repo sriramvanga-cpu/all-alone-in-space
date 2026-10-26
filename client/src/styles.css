@@ -842,258 +842,91 @@ input:focus {
 .pod-meta { margin: 0.3rem 0 0; color: var(--dim); font-size: clamp(0.9rem, 1.5vw, 1.15rem); font-variant-numeric: tabular-nums; }
 
 /* ============================================================
-   Intro cinematic (beats: launch, dock, window)
+   Intro cinematic (drawn on two canvases, see src/intro)
    ============================================================ */
 .opener {
   position: fixed;
   inset: 0;
   z-index: 3;
   overflow: hidden;
-  background: transparent;
+  background: #020307;
 }
 
-.launch-ground, .meet { position: absolute; inset: 0; }
-
-.porthole {
+.intro-stage { position: absolute; inset: 0; will-change: transform; }
+.intro-gl, .intro-fx {
   position: absolute;
-  left: 50%;
-  top: 40%;
-  width: min(68vh, 520px);
-  height: min(68vh, 520px);
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  overflow: hidden;
-  z-index: 2;
-  background: radial-gradient(circle at 50% 50%, #05080f, #02040a);
-  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.9), 0 0 100px rgba(120, 170, 255, 0.22);
-}
-/* Curved glass: a soft reflection plus a dark edge vignette. */
-.porthole::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 8;
-  border-radius: 50%;
-  pointer-events: none;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.16), transparent 34%),
-    radial-gradient(circle at 50% 50%, transparent 58%, rgba(0, 0, 0, 0.6) 100%);
-}
-.window-view { position: absolute; inset: 0; }
-
-/* Riveted metal bezel around the glass. */
-.porthole-frame {
-  position: absolute;
-  left: 50%;
-  top: 40%;
-  z-index: 1;
-  width: calc(min(68vh, 520px) + 76px);
-  height: calc(min(68vh, 520px) + 76px);
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: conic-gradient(from 200deg, #738399, #1b2536 16%, #98abc6 30%, #212d42 48%, #758aa6 64%, #18212f 82%, #738399);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 39px), #000 calc(100% - 38px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 39px), #000 calc(100% - 38px));
-  filter: drop-shadow(0 0 16px rgba(0, 0, 0, 0.8));
-}
-.porthole-frame::after {
-  content: "";
-  position: absolute;
-  inset: 15px;
-  border-radius: 50%;
-  background: repeating-conic-gradient(from 0deg, #dfe8f6 0 1.1deg, transparent 1.1deg 15deg);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
-  opacity: 0.8;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
 }
 
-.beat-launch .meet, .beat-launch .porthole, .beat-launch .porthole-frame,
-.beat-dock .launch-ground, .beat-dock .porthole, .beat-dock .porthole-frame,
-.beat-window .launch-ground, .beat-window .meet { display: none; }
+.letterbox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  height: 0;
+  background: #000;
+  animation: bars 1.2s var(--ease) 0.15s forwards;
+}
+.letterbox.top { top: 0; }
+.letterbox.bottom { bottom: 0; }
 
-.opener-scene { position: absolute; inset: 0; }
-
-/* Vulcan: a lit limb, a mottled surface, a terminator, and an atmosphere glow. */
-.ball {
-  --tex-light: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='900' height='900'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.01 0.018' numOctaves='5' seed='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 .72  0 0 0 0 .45  0 0 0 1.5 -.78'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/></svg>");
-  --tex-dark: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='640' height='640'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.006 0.011' numOctaves='5' seed='11' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .16  0 0 0 0 .05  0 0 0 0 .03  0 0 0 1.7 -.55'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/></svg>");
-  position: absolute;
-  left: 50%;
-  border-radius: 50%;
-  background-color: #7a2c14;
-  background-image:
-    radial-gradient(circle at 72% 3%, rgba(255, 230, 190, 0.6), transparent 32%),
-    var(--tex-light),
-    var(--tex-dark),
-    radial-gradient(circle at 32% 30%, #f6c898 0%, #d0653a 26%, #8a3418 54%, #3a150a 82%, #14080a 100%);
-  background-size: auto, 900px 900px, 640px 640px, auto;
-  box-shadow:
-    inset 0 8px 18px -4px rgba(255, 224, 180, 0.85),
-    inset -16px -14px 40px rgba(0, 0, 0, 0.45),
-    0 -8px 46px 6px rgba(255, 130, 70, 0.45),
-    0 0 140px 30px rgba(255, 90, 50, 0.14);
-}
-.ball::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 26%, transparent 38%, rgba(8, 4, 8, 0.5) 72%, rgba(4, 2, 6, 0.9) 100%);
-}
-.launch-ground .ball {
-  top: 64%;
-  width: 180vmax;
-  height: 180vmax;
-  margin-left: -90vmax;
-}
-/* Warm haze hanging over the horizon. */
-.launch-ground::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 80% 30% at 50% 66%, rgba(255, 120, 70, 0.3), transparent 72%);
-}
-
-.rocket {
-  position: absolute;
-  left: 50%;
-  width: 48px;
-  height: 110px;
-  margin-left: -24px;
-  overflow: visible;
-}
-.launch-ground .rocket { top: 60%; }
-.rocket .flame { opacity: 0; }
-.beat-launch .rocket { animation: rocket-up 3.3s ease-in both; }
-.beat-launch .rocket .flame { opacity: 1; animation: burn 0.14s ease-in-out infinite alternate; }
-
-.ship-actor {
-  position: absolute;
-  overflow: visible;
-  filter: drop-shadow(0 0 10px rgba(140, 200, 255, 0.75));
-}
 .opener-copy {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: 8vh;
   z-index: 6;
-  padding: 2.4rem 1.5rem 1.2rem;
-  background: linear-gradient(transparent, rgba(3, 6, 12, 0.82));
+  pointer-events: none;
 }
-.opener-copy p:last-child { max-width: 36rem; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8); }
+/* Soft dark backing so captions stay legible over bright frames. */
+.opener-copy::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 11rem;
+  background: linear-gradient(to top, rgba(2, 3, 7, 0.75), rgba(2, 3, 7, 0));
+}
+.cap {
+  position: absolute;
+  left: 6vw;
+  right: 6vw;
+  bottom: 1.6rem;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+}
+.cap.show { opacity: 1; transform: none; }
+.cap .eyebrow { color: rgba(90, 209, 255, 0.85); }
+.cap h1 {
+  margin: 0 0 0.3rem;
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 28px rgba(90, 209, 255, 0.45), 0 2px 12px rgba(0, 0, 0, 0.9);
+}
+.cap p:last-child {
+  max-width: 34rem;
+  margin: 0;
+  color: #d8e2f6;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.9);
+}
+
 .skip {
   position: absolute;
-  top: 1rem;
+  top: calc(8vh + 1rem);
   right: 1rem;
   z-index: 6;
   background: rgba(10, 16, 34, 0.5);
   border-color: rgba(255, 255, 255, 0.4);
   backdrop-filter: blur(6px);
 }
-.meet .ship-actor {
-  left: 50%;
-  top: 42%;
-  width: min(46vh, 340px);
-  height: min(22vh, 160px);
-  margin: 0;
-  transform: translate(-50%, -50%) rotate(-18deg);
-}
-.meet .rocket {
-  left: 16%;
-  top: 72%;
-  animation: rocket-dock 3.3s ease-in-out both;
-}
-.beat-dock .rocket .flame { opacity: 1; animation: burn 0.14s ease-in-out infinite alternate; }
 
-.porthole .ball {
-  top: 22%;
-  left: 22%;
-  width: 56%;
-  height: 56%;
-  margin: 0;
-  transform-origin: center center;
-  background-image:
-    radial-gradient(circle at 34% 30%, rgba(255, 228, 192, 0.6), transparent 44%),
-    var(--tex-light),
-    var(--tex-dark),
-    radial-gradient(circle at 32% 30%, #f8cc9c 0%, #d8693c 30%, #98381a 58%, #45190c 84%, #1a0a0a 100%);
-  background-size: auto, 420px 420px, 480px 480px, auto;
-  box-shadow:
-    inset 0 6px 14px -4px rgba(255, 224, 180, 0.8),
-    inset -14px -12px 34px rgba(0, 0, 0, 0.4),
-    0 0 38px 4px rgba(255, 130, 70, 0.4);
-}
-.porthole .ball::after {
-  background: radial-gradient(circle at 30% 26%, transparent 46%, rgba(8, 4, 8, 0.42) 78%, rgba(4, 2, 6, 0.78) 100%);
-}
-.fireball {
-  position: absolute;
-  left: 50%;
-  top: 62%;
-  width: 46%;
-  height: 46%;
-  margin: -23% 0 0 -23%;
-  border-radius: 50%;
-  background: radial-gradient(circle, #fff 0%, #ffd0a0 28%, #ff6a1a 58%, transparent 72%);
-  opacity: 0;
-}
-.porthole .shock {
-  position: absolute;
-  left: 50%;
-  top: 62%;
-  width: 20%;
-  height: 20%;
-  margin: -10% 0 0 -10%;
-  border-radius: 50%;
-  border: 3px solid rgba(255, 226, 190, 0.95);
-  opacity: 0;
-}
-.porthole .shock.two { border-width: 2px; border-color: rgba(255, 170, 110, 0.8); }
-.porthole .shock.three { border-width: 1.5px; border-color: rgba(255, 120, 80, 0.6); }
-.porthole .chunk {
-  position: absolute;
-  opacity: 0;
-  border-radius: 46% 54% 48% 52%;
-  background: radial-gradient(circle at 35% 35%, #ffd7b0, #a84820 55%, #2a100c);
-  box-shadow: 0 0 10px rgba(255, 140, 70, 0.55);
-}
-.porthole .chunk.a { left: 42%; top: 58%; width: 16%; height: 12%; --dx: -38%; --dy: -22%; --rot: -24deg; }
-.porthole .chunk.b { left: 54%; top: 60%; width: 12%; height: 10%; --dx: 34%; --dy: -16%; --rot: 20deg; }
-.porthole .chunk.c { left: 36%; top: 66%; width: 14%; height: 11%; --dx: -28%; --dy: 18%; --rot: -12deg; }
-.porthole .chunk.d { left: 58%; top: 68%; width: 10%; height: 8%; --dx: 22%; --dy: 14%; --rot: 30deg; }
-.porthole .chunk.e { left: 46%; top: 70%; width: 11%; height: 9%; --dx: 6%; --dy: 24%; --rot: 8deg; }
-.porthole .ember {
-  position: absolute;
-  left: 50%;
-  top: 62%;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: radial-gradient(circle, #fff, #ffb060 55%, transparent 75%);
-  opacity: 0;
-}
-.porthole .ember.a { --dx: -22vmin; --dy: -17vmin; }
-.porthole .ember.b { --dx: 20vmin; --dy: -20vmin; }
-.porthole .ember.c { --dx: -26vmin; --dy: 9vmin; }
-.porthole .ember.d { --dx: 24vmin; --dy: 12vmin; }
-.porthole .ember.e { --dx: -6vmin; --dy: -26vmin; }
-.porthole .ember.f { --dx: 8vmin; --dy: 22vmin; }
-.porthole .flash {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 62%, #fff 0%, #ffd0a0 20%, transparent 62%);
-  opacity: 0;
-}
-.beat-window .ball { animation: swell 3.3s linear both; }
-.beat-window .fireball { animation: burst 3.3s linear both; }
-.beat-window .chunk { animation: fling 3.3s linear both; }
-.beat-window .shock { animation: shock 3.3s linear both; }
-.beat-window .shock.two { animation-delay: 0.18s; }
-.beat-window .shock.three { animation-delay: 0.38s; }
-.beat-window .ember { animation: spark 3.3s linear both; animation-delay: 0.7s; }
-.beat-window .flash { animation: flare 3.3s linear both; }
-.beat-window .porthole, .beat-window .porthole-frame { animation: shake 3.3s linear both; }
+@keyframes bars { to { height: 8vh; } }
 
 @keyframes streak {
   from { stroke-dashoffset: 8; }
@@ -1105,75 +938,11 @@ input:focus {
   to { opacity: 1; }
 }
 
-@keyframes rocket-up {
-  0% { transform: translateY(2vh); }
-  100% { transform: translateY(-72vh); }
-}
-
-@keyframes rocket-dock {
-  0% { transform: translate(0, 0) rotate(-24deg) scale(1); opacity: 1; }
-  70% { opacity: 1; }
-  100% { transform: translate(26vw, -30vh) rotate(8deg) scale(0.28); opacity: 0; }
-}
-
-@keyframes swell {
-  0% { transform: scale(1); filter: brightness(1); opacity: 1; }
-  32% { transform: scale(1.22); filter: brightness(1.6); opacity: 1; }
-  48% { transform: scale(1.4); filter: brightness(2.8); opacity: 1; }
-  100% { transform: scale(1.65); filter: brightness(1.2); opacity: 0; }
-}
-
-@keyframes fling {
-  0% { opacity: 0; transform: translate(0, 0) scale(0.7); }
-  22% { opacity: 1; }
-  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.45); }
-}
-
-@keyframes spark {
-  0% { opacity: 0; transform: translate(0, 0) scale(1); }
-  8% { opacity: 1; }
-  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.3); }
-}
-
-@keyframes flare {
-  0% { opacity: 0; }
-  24% { opacity: 0.35; }
-  42% { opacity: 1; }
-  60% { opacity: 0.4; }
-  100% { opacity: 0; }
-}
-
-@keyframes shock {
-  0% { opacity: 0; transform: scale(0.2); }
-  30% { opacity: 0.6; transform: scale(1.2); }
-  100% { opacity: 0; transform: scale(6); }
-}
-
-@keyframes burst {
-  0%, 28% { opacity: 0; transform: scale(0.15); }
-  46% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(2.5); }
-}
-
-@keyframes shake {
-  0%, 38%, 66%, 100% { transform: translate(-50%, -50%); }
-  41% { transform: translate(calc(-50% + 6px), calc(-50% - 4px)); }
-  45% { transform: translate(calc(-50% - 5px), calc(-50% + 5px)); }
-  49% { transform: translate(calc(-50% + 4px), calc(-50% - 3px)); }
-  55% { transform: translate(calc(-50% - 3px), calc(-50% + 2px)); }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .streak, .link-flow, .ready-ring, .beacon-pulse, .navlight, .plume, .exhaust, .rocket, .ball, .fireball,
-  .chunk, .ember, .flash, .shock, .ship-actor, .porthole, .porthole-frame, .end-orb, .live::before,
+  .streak, .link-flow, .ready-ring, .beacon-pulse, .navlight, .plume, .exhaust, .end-orb, .live::before,
   .starbase .spin, .starbase .core {
     animation: none !important;
   }
-  .beat-launch .rocket { transform: translateY(-72vh); }
-  .beat-launch .rocket .flame, .beat-dock .rocket .flame { opacity: 1; }
-  .beat-dock .rocket { opacity: 0; transform: translate(26vw, -30vh) rotate(8deg) scale(0.28); }
-  .beat-window .ball { opacity: 0; transform: scale(1.65); }
-  .beat-window .fireball { opacity: 0; transform: scale(2.5); }
 }
 
 /* ============================================================
