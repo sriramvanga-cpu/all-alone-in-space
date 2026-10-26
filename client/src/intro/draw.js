@@ -1,6 +1,6 @@
-// 2D layer for the intro, drawn over the WebGL space pass: the rocket, the
+// 2D layer for the intro, drawn over the WebGL space pass: the shuttle, the
 // ship, smoke and sparks, debris, the docking reticle, lens flares, and the
-// cockpit window. Ship and rocket geometry match art/Ship.jsx and the old rocket.
+// cockpit window. Ship geometry matches art/Ship.jsx.
 
 export const clamp = (v, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -45,7 +45,7 @@ export function blit(ctx, img, x, y, r, alpha, additive = false) {
   ctx.globalCompositeOperation = "source-over";
 }
 
-// A tiny particle system. `shiftY` moves everything with the ground, so smoke
+// A tiny particle system. `shiftX`/`shiftY` move everything with the ground, so smoke
 // left behind by the rocket falls away with the planet as the camera climbs.
 export class Particles {
   constructor() {
@@ -57,7 +57,7 @@ export class Particles {
   clear() {
     this.list.length = 0;
   }
-  step(dt, shiftY = 0) {
+  step(dt, shiftY = 0, shiftX = 0) {
     const out = [];
     for (const p of this.list) {
       p.age += dt;
@@ -65,7 +65,7 @@ export class Particles {
       const k = Math.exp(-p.drag * dt);
       p.vx *= k;
       p.vy *= k;
-      p.x += p.vx * dt;
+      p.x += p.vx * dt + shiftX;
       p.y += p.vy * dt + shiftY;
       p.r += p.grow * dt;
       p.rot += p.spin * dt;
@@ -73,13 +73,14 @@ export class Particles {
     }
     this.list = out;
   }
-  draw(ctx) {
+  draw(ctx, fadeAll = 1) {
+    if (fadeAll <= 0) return;
     for (const p of this.list) {
       const k = p.age / p.life;
       const fade = k < 0.12 ? k / 0.12 : 1 - (k - 0.12) / 0.88;
       if (p.chunk) drawChunk(ctx, p, fade);
       else if (p.ember) drawEmber(ctx, p, k, fade);
-      else blit(ctx, p.img, p.x, p.y, p.r, p.alpha * fade, p.additive);
+      else blit(ctx, p.img, p.x, p.y, p.r, p.alpha * fade * fadeAll, p.additive);
     }
   }
 }
@@ -138,15 +139,18 @@ export function chunkPoints() {
   return pts;
 }
 
-// --- Rocket (nose at y = -26, nozzle exit at y = 17.5) -----------------------
+// --- Shuttlecraft (top view, nose at y = -26, engines at y = 18) --------------
+// A Starfleet-style shuttle: a tapered hull with a wraparound cockpit window,
+// two warp nacelles on short pylons, red-orange collectors at the nacelle
+// fronts, blue warp strips, and an impulse strip across the stern.
 
-const RK = {
-  hull: new Path2D("M0 -26 C5.2 -20 8 -7 8 14 L-8 14 C-8 -7 -5.2 -20 0 -26Z"),
-  nose: new Path2D("M0 -26 C2.6 -23.4 4.4 -19.6 5.4 -14.4 L-5.4 -14.4 C-4.4 -19.6 -2.6 -23.4 0 -26Z"),
-  finL: new Path2D("M-6.6 4 L-15.5 21 L-7 16.4 Z"),
-  finR: new Path2D("M6.6 4 L15.5 21 L7 16.4 Z"),
-  finC: new Path2D("M-2.2 8 L0 20 L2.2 8Z"),
-  nozzle: new Path2D("M-4 14 L-3 17.5 L3 17.5 L4 14Z"),
+const SH = {
+  hull: new Path2D("M-4.6 -20 Q0 -27 4.6 -20 L6.8 12 Q6.8 16.6 4.5 17.2 L-4.5 17.2 Q-6.8 16.6 -6.8 12 Z"),
+  deck: new Path2D("M-3 -9 L3 -9 L4.1 11 L-4.1 11 Z"),
+  window: new Path2D("M-3.9 -18.4 Q0 -22.6 3.9 -18.4 L4.3 -15.2 Q0 -16.6 -4.3 -15.2 Z"),
+  pylonL: new Path2D("M-6.6 1.5 L-8.8 3.5 L-8.8 9.5 L-6.7 9.5 Z"),
+  pylonR: new Path2D("M6.6 1.5 L8.8 3.5 L8.8 9.5 L6.7 9.5 Z"),
+  lines: new Path2D("M0 -14 V15 M-5.6 -2 H5.6 M-6.1 6 H6.1 M-3 -9 L-4.1 11 M3 -9 L4.1 11"),
 };
 
 export function rocketPoint(x, y, rot, s, lx, ly) {
@@ -155,102 +159,145 @@ export function rocketPoint(x, y, rot, s, lx, ly) {
   return [x + (lx * c - ly * n) * s, y + (lx * n + ly * c) * s];
 }
 
-export function drawRocket(ctx, x, y, rot, s, thrust, t) {
+function plume(ctx, x, y, w, len, inner, outer) {
+  const g = ctx.createLinearGradient(0, y, 0, y + len);
+  g.addColorStop(0, inner);
+  g.addColorStop(1, outer);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(x - w / 2, y);
+  ctx.quadraticCurveTo(x - w * 0.45, y + len * 0.5, x, y + len);
+  ctx.quadraticCurveTo(x + w * 0.45, y + len * 0.5, x + w / 2, y);
+  ctx.fill();
+}
+
+export function drawShuttle(ctx, x, y, rot, s, thrust, t) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(rot);
   ctx.scale(s, s);
   if (thrust > 0.01) {
-    const flick = 0.86 + 0.1 * Math.sin(t * 71) + 0.06 * Math.sin(t * 133);
-    const len = (12 + 30 * thrust) * flick;
+    const flick = 0.9 + 0.07 * Math.sin(t * 61) + 0.05 * Math.sin(t * 127);
+    const len = (8 + 26 * thrust) * flick;
     ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = 0.85 * thrust;
-    ctx.drawImage(SPRITES.glow, -16, 4, 32, 26 + len);
+    ctx.globalAlpha = thrust;
+    for (const nx of [-10.6, 10.6]) {
+      ctx.drawImage(SPRITES.blue, nx - 6, 12, 12, 12 + len * 0.6);
+      plume(ctx, nx, 18, 3.4, len, "rgba(235,248,255,0.95)", "rgba(90,160,255,0)");
+    }
+    ctx.drawImage(SPRITES.glow, -9, 11, 18, 12 + len * 0.5);
+    plume(ctx, 0, 17.4, 7, len * 0.7, "rgba(255,214,170,0.9)", "rgba(255,90,40,0)");
     ctx.globalAlpha = 1;
-    let g = ctx.createLinearGradient(0, 17, 0, 17 + len);
-    g.addColorStop(0, "rgba(255,224,170,0.95)");
-    g.addColorStop(0.45, "rgba(255,138,60,0.7)");
-    g.addColorStop(1, "rgba(255,60,20,0)");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.moveTo(-5, 17);
-    ctx.quadraticCurveTo(-5.5, 17 + len * 0.45, 0, 17 + len);
-    ctx.quadraticCurveTo(5.5, 17 + len * 0.45, 5, 17);
-    ctx.fill();
-    g = ctx.createLinearGradient(0, 17, 0, 17 + len * 0.6);
-    g.addColorStop(0, "rgba(255,255,255,1)");
-    g.addColorStop(0.4, "rgba(190,230,255,0.85)");
-    g.addColorStop(1, "rgba(90,150,255,0)");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.moveTo(-2.6, 17);
-    ctx.quadraticCurveTo(-2.4, 17 + len * 0.3, 0, 17 + len * 0.6);
-    ctx.quadraticCurveTo(2.4, 17 + len * 0.3, 2.6, 17);
-    ctx.fill();
     ctx.globalCompositeOperation = "source-over";
   }
-  const fin = ctx.createLinearGradient(-15, 4, 15, 21);
-  fin.addColorStop(0, "#e86a40");
-  fin.addColorStop(1, "#7a2414");
-  ctx.fillStyle = fin;
-  ctx.fill(RK.finL);
-  ctx.fill(RK.finR);
-  ctx.fill(RK.finC);
-  ctx.fillStyle = "#3e4860";
-  ctx.fill(RK.nozzle);
-  const hull = ctx.createLinearGradient(-8, 0, 8, 0);
-  hull.addColorStop(0, "#7d90b0");
-  hull.addColorStop(0.32, "#ffffff");
-  hull.addColorStop(0.68, "#d6e0f0");
-  hull.addColorStop(1, "#5d6f8f");
+
+  // Nacelles and pylons.
+  ctx.fillStyle = "#8d9bb2";
+  ctx.fill(SH.pylonL);
+  ctx.fill(SH.pylonR);
+  for (const sgn of [-1, 1]) {
+    const x0 = sgn < 0 ? -12.6 : 8.6;
+    const g = ctx.createLinearGradient(x0, 0, x0 + 4, 0);
+    g.addColorStop(0, sgn < 0 ? "#f2f6fc" : "#c2cede");
+    g.addColorStop(0.5, "#b8c5d8");
+    g.addColorStop(1, sgn < 0 ? "#6d7f9c" : "#55657f");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.roundRect(x0, -9.5, 4, 27.5, 2);
+    ctx.fill();
+    ctx.lineWidth = 0.18;
+    ctx.strokeStyle = "#5e7090";
+    ctx.stroke();
+    const glow = 0.55 + 0.45 * Math.max(thrust, 0.4);
+    const w = ctx.createLinearGradient(0, -5, 0, 16);
+    w.addColorStop(0, `rgba(255,255,255,${glow})`);
+    w.addColorStop(0.3, `rgba(143,220,255,${glow})`);
+    w.addColorStop(1, `rgba(63,150,255,${0.3 * glow})`);
+    ctx.fillStyle = w;
+    ctx.beginPath();
+    ctx.roundRect(x0 + 1.4, -5, 1.2, 20, 0.6);
+    ctx.fill();
+    const bx = x0 + 2;
+    const b = ctx.createRadialGradient(bx - 0.5, -8.9, 0.2, bx, -8.2, 2.1);
+    b.addColorStop(0, "#ffe6d2");
+    b.addColorStop(0.5, "#ff6a46");
+    b.addColorStop(1, "#7a1a10");
+    ctx.fillStyle = b;
+    ctx.beginPath();
+    ctx.ellipse(bx, -8.2, 2, 1.7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    blit(ctx, SPRITES.glow, bx, -8.2, 3.6, 0.55, true);
+  }
+
+  // Hull, raised deck, details.
+  const hull = ctx.createLinearGradient(-7, 0, 7, 0);
+  hull.addColorStop(0, "#f6f9fd");
+  hull.addColorStop(0.45, "#dbe3ef");
+  hull.addColorStop(1, "#7c8ca8");
   ctx.fillStyle = hull;
-  ctx.fill(RK.hull);
-  const nose = ctx.createLinearGradient(-5.4, 0, 5.4, 0);
-  nose.addColorStop(0, "#9a2418");
-  nose.addColorStop(0.4, "#ff7a5a");
-  nose.addColorStop(1, "#7a160e");
-  ctx.fillStyle = nose;
-  ctx.fill(RK.nose);
-  ctx.fillStyle = "rgba(194,65,42,0.9)";
-  ctx.fillRect(-8, 6.2, 16, 2.2);
-  const port = ctx.createRadialGradient(-1, -5, 0.2, 0, -4, 3.2);
-  port.addColorStop(0, "#eaf9ff");
-  port.addColorStop(0.45, "#5ec0ff");
-  port.addColorStop(1, "#0f3a78");
-  ctx.fillStyle = port;
+  ctx.fill(SH.hull);
+  ctx.lineWidth = 0.22;
+  ctx.strokeStyle = "#6a7c99";
+  ctx.stroke(SH.hull);
+  const deck = ctx.createLinearGradient(-4, 0, 4, 0);
+  deck.addColorStop(0, "#e6ecf5");
+  deck.addColorStop(1, "#97a6bd");
+  ctx.fillStyle = deck;
+  ctx.fill(SH.deck);
+  ctx.lineWidth = 0.12;
+  ctx.strokeStyle = "rgba(90,108,138,0.8)";
+  ctx.stroke(SH.lines);
+  ctx.fillStyle = "#b8452c";
+  ctx.fillRect(-5.3, -12.6, 10.6, 0.9);
+  ctx.fillRect(-5.1, -11.3, 10.2, 0.35);
+  const win = ctx.createLinearGradient(0, -22, 0, -15);
+  win.addColorStop(0, "#9fdcff");
+  win.addColorStop(0.4, "#1e5a96");
+  win.addColorStop(1, "#0a1d3a");
+  ctx.fillStyle = win;
+  ctx.fill(SH.window);
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
   ctx.beginPath();
-  ctx.arc(0, -4, 3.1, 0, Math.PI * 2);
+  ctx.ellipse(-1.6, -19.2, 1.3, 0.4, -0.35, 0, Math.PI * 2);
   ctx.fill();
-  ctx.lineWidth = 0.8;
-  ctx.strokeStyle = "#5d6f8d";
-  ctx.stroke();
+  const imp = ctx.createLinearGradient(-4, 0, 4, 0);
+  imp.addColorStop(0, "#7a1c10");
+  imp.addColorStop(0.5, `rgb(255,${Math.round(110 + 90 * thrust)},70)`);
+  imp.addColorStop(1, "#7a1c10");
+  ctx.fillStyle = imp;
+  ctx.fillRect(-4, 16.1, 8, 1.2);
+  if (Math.sin(t * 6) > 0.6) {
+    blit(ctx, SPRITES.glow, -6.6, 11, 1.6, 1, true);
+    blit(ctx, SPRITES.blue, 6.6, 11, 1.6, 1, true);
+  }
   ctx.restore();
 }
 
-// --- Launch tower -------------------------------------------------------------
+// --- Landing pad ----------------------------------------------------------------
 
-export function drawTower(ctx, x, base, h, s, t) {
-  const w = 7 * s;
+export function drawPad(ctx, x, y, s, t) {
   ctx.save();
-  ctx.strokeStyle = "rgba(20,14,16,0.95)";
-  ctx.lineWidth = Math.max(1, 1.1 * s);
+  const w = 30 * s;
+  const h = 4.5 * s;
+  const g = ctx.createLinearGradient(0, y - h, 0, y + h);
+  g.addColorStop(0, "#5b5560");
+  g.addColorStop(0.5, "#2a2328");
+  g.addColorStop(1, "#120d10");
+  ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.moveTo(x, base);
-  ctx.lineTo(x, base - h);
-  ctx.moveTo(x + w, base);
-  ctx.lineTo(x + w, base - h);
-  const step = w * 1.2;
-  for (let y = base; y > base - h + step; y -= step) {
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + w, y - step);
-    ctx.moveTo(x + w, y);
-    ctx.lineTo(x, y - step);
-  }
-  ctx.moveTo(x, base - h * 0.72);
-  ctx.lineTo(x - 9 * s, base - h * 0.72);
+  ctx.ellipse(x, y, w, h, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(90,209,255,0.45)";
+  ctx.lineWidth = Math.max(1, 0.5 * s);
+  ctx.beginPath();
+  ctx.ellipse(x, y - 0.4 * s, w * 0.7, h * 0.6, 0, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
-  if (Math.sin(t * 5) > 0) blit(ctx, SPRITES.glow, x + w / 2, base - h, 6 * s, 0.9, true);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const on = Math.sin(t * 4 - i * 0.8) > 0.2;
+    if (on) blit(ctx, SPRITES.glow, x + Math.cos(a) * w * 0.92, y + Math.sin(a) * h * 0.92, 3 * s, 0.9, true);
+  }
 }
 
 // --- Ship (art/Ship.jsx geometry, saucer centre at x = 11.4) -------------------

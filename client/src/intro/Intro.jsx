@@ -1,34 +1,37 @@
 import { useEffect, useRef, useState } from "react";
 import { createSpaceRenderer } from "./space.js";
 import {
-  Particles, SPRITES, blit, buildCockpit, chunkPoints, clamp, drawCockpit, drawFlare, drawReticle,
-  drawRocket, drawShip, drawStreak, drawTower, easeIn, easeInOut, easeOut, lerp, rand, rocketPoint,
-  shipPoint, smooth,
+  Particles, SPRITES, blit, buildCockpit, chunkPoints, clamp, drawCockpit, drawFlare, drawPad, drawReticle,
+  drawShip, drawShuttle, drawStreak, easeIn, easeInOut, easeOut, lerp, rand, rocketPoint, shipPoint, smooth,
 } from "./draw.js";
 
-// One continuous cinematic in three scenes:
-//   A. Departure  the rocket lifts off Vulcan and the ground falls away.
-//   B. Docking    the rocket closes on the ship and locks on; the ship powers up.
-//   C. Look back  through the cockpit window Vulcan cracks, flashes, and breaks apart.
+// One continuous shot, no cuts:
+//   Launch     the shuttle lifts off Vulcan and the camera climbs with it.
+//   Docking    the planet sweeps away, the ship glides into frame, the shuttle docks.
+//   Push in    the camera dives into the ship's bridge window until the glass fills the screen.
+//   Look back  it pulls back inside the cockpit; through the window Vulcan cracks and breaks apart.
+const LIFT = 1.0;
 const A_END = 5.4;
-const B_END = 10.2;
-const C_END = 16.6;
+const DOCK = 8.4;
+const ZOOM0 = 9.6;
+const INSIDE = 10.6;
+const BOOM = INSIDE + 2.6;
+const END = INSIDE + 6.4;
+const BRIDGE_X = 13.5;
 
 const CAPTIONS = [
-  { from: 0.7, to: A_END - 0.4, title: "Departure", text: "A rocket lifts off Vulcan. The ground falls away." },
-  { from: A_END + 0.5, to: B_END - 0.4, title: "Docking", text: "The rocket locks onto the ship." },
-  { from: B_END + 0.5, to: C_END - 0.7, title: "Look back", text: "Through the window, Vulcan blows apart. The clock starts with the chart." },
+  { from: 0.7, to: 5.0, title: "Departure", text: "A shuttle lifts off Vulcan. The ground falls away." },
+  { from: 5.6, to: 9.4, title: "Docking", text: "The shuttle locks onto the ship." },
+  { from: INSIDE + 0.4, to: END - 0.7, title: "Look back", text: "Through the window, Vulcan blows apart. The clock starts with the chart." },
 ];
 
 function captionAt(T) {
   return CAPTIONS.findIndex((c) => T >= c.from && T < c.to);
 }
 
-// Black-out between scenes and at the very start and end.
+// Black only at the very start and the very end; everything between is one shot.
 function blackAt(T) {
-  if (T < A_END) return 1 - smooth(0, 1, T) * (1 - smooth(A_END - 0.35, A_END, T));
-  if (T < B_END) return 1 - smooth(A_END, A_END + 0.35, T) * (1 - smooth(B_END - 0.35, B_END, T));
-  return 1 - smooth(B_END, B_END + 0.45, T) * (1 - smooth(C_END - 0.8, C_END, T));
+  return 1 - smooth(0, 1, T) * (1 - smooth(END - 0.8, END, T));
 }
 
 function bezier(p0, p1, p2, p3, u) {
@@ -53,6 +56,67 @@ function norm(v) {
   return [v[0] / l, v[1] / l, v[2] / l];
 }
 
+const mixv = (a, b, k) => a.map((v, i) => lerp(v, b[i], k));
+
+// The launch, as a pure function of time: where the ground is and where the shuttle is.
+function launchAt(T, W, H) {
+  const S = Math.max(W, H);
+  const a = clamp(T / A_END);
+  const fall = easeInOut(smooth(0.2, 1, a));
+  const hy = H * (0.64 + 0.17 * fall);
+  const R = S * Math.exp(lerp(Math.log(5), Math.log(1.05), fall));
+  const cx = W * (0.52 - 0.05 * a);
+  const rs0 = H * 0.003;
+  const rs = rs0 * (1 - 0.35 * fall);
+  const padX = W * 0.36;
+  const climb = easeInOut(clamp((T - LIFT) / 2.8));
+  const turn = easeIn(clamp((T - LIFT) / 4.4));
+  const y = lerp(H * 0.64 - 17.5 * rs0, H * 0.5, climb) - smooth(3.6, A_END, T) * H * 0.04;
+  const x = padX + W * 0.05 * turn;
+  const rot = 0.24 * turn + 0.5 * smooth(3.8, A_END, T);
+  const thrust = clamp((T - (LIFT - 0.45)) / 0.45);
+  return { S, hy, R, cx, rs, rs0, padX, x, y, rot, thrust, fall };
+}
+
+// Where the ship sits: it glides in from the upper right as the camera reaches orbit.
+function shipAt(T, W, H) {
+  const portrait = W < H;
+  const enter = easeOut(smooth(4.6, 7.0, T));
+  const ss = ((portrait ? W * 0.62 : Math.min(W * 0.42, H * 0.62)) / 34) * (1 + 0.05 * smooth(A_END, ZOOM0, T));
+  return {
+    x: lerp(W * 1.35, W * (portrait ? 0.6 : 0.66), enter) + Math.sin(T * 0.6) * W * 0.006,
+    y: lerp(-H * 0.15, H * 0.34, enter) + Math.sin(T * 0.45) * H * 0.006,
+    rot: -0.12,
+    ss,
+  };
+}
+
+// Space-pass settings for the launch and for orbit; the shot blends between them.
+function spaceLaunch(T, W, H) {
+  const L = launchAt(T, W, H);
+  return {
+    planet: [L.cx, L.hy + L.R, L.R],
+    light: [0.55, 0.5, 0.35],
+    atm: clamp(L.R * 0.07, 10, 150),
+    sun: [W * 0.84, L.hy - H * 0.05 - L.fall * H * 0.1, 1 - L.fall * 0.35],
+    cam: [0, (L.hy - H * 0.64) * 0.3],
+    neb: 0.6 + 0.4 * L.fall,
+  };
+}
+
+function spaceOrbit(T, W, H) {
+  const S = Math.max(W, H);
+  const end = spaceLaunch(A_END, W, H);
+  return {
+    planet: [W * 0.08, H * 0.62 + S, S],
+    light: [0.75, 0.55, 0.35],
+    atm: clamp(S * 0.05, 10, 90),
+    sun: [W * 1.02, -H * 0.08, 0.7],
+    cam: [Math.max(0, T - A_END) * 8, end.cam[1]],
+    neb: 1,
+  };
+}
+
 // Used only when WebGL is missing: a flat lit disc, so the story still reads.
 function drawFallbackSpace(ctx, W, H, u) {
   ctx.fillStyle = "#03050b";
@@ -71,6 +135,18 @@ function drawFallbackSpace(ctx, W, H, u) {
     ctx.globalAlpha = 1;
   }
   if (u.flash > 0) blit(ctx, SPRITES.glow, x, y, r * 4, u.flash, true);
+}
+
+// Bright glass that fills the screen as the camera passes through the bridge window.
+function drawGlass(ctx, W, H, alpha) {
+  if (alpha <= 0.005) return;
+  const g = ctx.createRadialGradient(W * 0.45, H * 0.4, 0, W / 2, H / 2, Math.hypot(W, H) * 0.6);
+  g.addColorStop(0, `rgba(236,248,255,${alpha})`);
+  g.addColorStop(0.55, `rgba(176,218,250,${alpha})`);
+  g.addColorStop(1, `rgba(96,150,210,${alpha})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  drawStreak(ctx, W * 0.5, H * 0.42, W * 1.6, alpha * 0.6, "255,255,255");
 }
 
 export default function Intro({ onDone }) {
@@ -117,10 +193,11 @@ export default function Intro({ onDone }) {
     const smoke = new Particles();
     const sparks = new Particles();
     const debris = new Particles();
-    let scene = -1;
-    let prevHy = null;
+    let prevGround = null;
     let docked = false;
     let boomed = false;
+    let wentInside = false;
+    let trailCleared = false;
     let lastRcs = 0;
     let shown = -1;
     const start = performance.now();
@@ -144,7 +221,7 @@ export default function Intro({ onDone }) {
           slowN = 0;
         }
       }
-      if (T >= C_END) {
+      if (T >= END) {
         finish();
         return;
       }
@@ -153,20 +230,12 @@ export default function Intro({ onDone }) {
         shown = cap;
         setCaption(cap);
       }
-      const nextScene = T < A_END ? 0 : T < B_END ? 1 : 2;
-      if (nextScene !== scene) {
-        scene = nextScene;
-        smoke.clear();
-        sparks.clear();
-        debris.clear();
-      }
 
-      const S = Math.max(W, H);
       const u = {
         time: T,
         planet: [W / 2, H / 2, 100],
         light: [0, 0, 1],
-        rot: 0,
+        rot: 0.6 + T * 0.012,
         atm: 20,
         crack: 0,
         boom: 0,
@@ -179,118 +248,90 @@ export default function Intro({ onDone }) {
       const draws = [];
       let shake = 0;
 
-      if (scene === 0) {
-        // --- A. Departure -----------------------------------------------------
-        const a = T / A_END;
-        const fall = easeInOut(smooth(0.2, 1, a));
-        const hy = H * (0.64 + 0.17 * fall);
-        const R = S * Math.exp(lerp(Math.log(5), Math.log(1.05), fall));
-        const cx = W * (0.52 - 0.05 * a);
-        u.planet = [cx, hy + R, R];
-        u.light = norm([0.62, 0.3, 0.3]);
-        u.rot = 0.6 + T * 0.01;
-        u.atm = clamp(R * 0.07, 10, 150);
-        u.sun = [W * 0.84, hy - H * 0.05 - fall * H * 0.1, 1 - fall * 0.35];
-        u.cam = [0, (hy - H * 0.64) * 0.3];
-        u.neb = 0.6 + 0.4 * fall;
-        const shift = prevHy == null ? 0 : hy - prevHy;
-        prevHy = hy;
+      if (T < INSIDE) {
+        // --- Outside: launch, climb to orbit, docking, push into the bridge ---
+        const blend = easeInOut(smooth(4.4, 6.6, T));
+        const sa = spaceLaunch(Math.min(T, A_END), W, H);
+        const sb = spaceOrbit(T, W, H);
+        u.planet = mixv(sa.planet, sb.planet, blend);
+        u.light = norm(mixv(norm(sa.light), norm(sb.light), blend));
+        u.atm = lerp(sa.atm, sb.atm, blend);
+        u.sun = mixv(sa.sun, sb.sun, blend);
+        u.cam = mixv(sa.cam, sb.cam, blend);
+        u.neb = lerp(sa.neb, sb.neb, blend);
 
-        const tL = 1.0;
-        const rs0 = H * 0.0021;
-        const rs = rs0 * (1 - 0.35 * fall);
-        const padX = W * 0.46;
-        const climb = easeInOut(clamp((T - tL) / 2.8));
-        const ry = lerp(H * 0.64 - 17.5 * rs0, H * 0.36, climb) - smooth(3.6, A_END, T) * H * 0.07;
-        const turn = easeIn(clamp((T - tL) / 4.4));
-        const rx = padX + W * 0.07 * turn;
-        const rrot = 0.24 * turn;
-        const thrust = clamp((T - (tL - 0.45)) / 0.45);
-        const [nx, ny] = rocketPoint(rx, ry, rrot, rs, 0, 19);
+        // The pad stays bolted to the planet surface as the planet slides away.
+        const LA = launchAt(Math.min(T, A_END), W, H);
+        const padAngle = Math.atan2(LA.hy - (LA.hy + LA.R), LA.padX - LA.cx);
+        const ground = [u.planet[0] + Math.cos(padAngle) * u.planet[2], u.planet[1] + Math.sin(padAngle) * u.planet[2]];
+        const shift = prevGround ? [ground[0] - prevGround[0], ground[1] - prevGround[1]] : [0, 0];
+        prevGround = ground;
 
-        if (thrust > 0 && T < tL + 1.5) {
-          for (let i = 0; i < 4; i++) {
-            const dir = Math.random() < 0.5 ? -1 : 1;
-            smoke.add({
-              img: SPRITES.smoke, x: padX + rand(-6, 6) * rs, y: hy - rand(0, 5) * rs,
-              vx: dir * rand(0.04, 0.32) * H, vy: -rand(0, 0.05) * H, r: rand(6, 12) * rs,
-              grow: rand(10, 24) * rs, life: rand(1.8, 3), drag: 1.2, alpha: 0.5,
-            });
-          }
-        }
-        if (T > tL) {
-          for (let i = 0; i < 3; i++) {
-            smoke.add({
-              img: SPRITES.smoke, x: nx + rand(-2, 2) * rs, y: ny + rand(0, 4) * rs,
-              vx: rand(-0.012, 0.012) * H, vy: rand(0.005, 0.03) * H, r: rand(4, 7) * rs,
-              grow: rand(7, 15) * rs, life: rand(1.8, 3.2), drag: 0.6, alpha: 0.5,
-            });
-          }
-          smoke.add({ img: SPRITES.glow, x: nx, y: ny + 6 * rs, vx: 0, vy: 0.04 * H, r: 7 * rs, grow: 10 * rs, life: 0.3, alpha: 0.7, additive: true });
-        }
-        smoke.step(dt, shift);
+        const ship = shipAt(T, W, H);
+        const fwd = [Math.cos(ship.rot), Math.sin(ship.rot)];
+        const D = shipPoint(ship.x, ship.y, ship.rot, ship.ss, -10.4, 0);
 
-        draws.push(() => {
-          if (thrust > 0 && T < tL + 1.6) {
-            const g = clamp(1 - (T - tL) / 1.6) * thrust;
-            blit(ctx, SPRITES.glow, padX, hy, 60 * rs * (0.9 + 0.1 * Math.sin(T * 40)), g * 0.9, true);
-          }
-          drawTower(ctx, padX + 13 * rs0, hy, 52 * rs0, rs0, T);
-          smoke.draw(ctx);
-          drawRocket(ctx, rx, ry, rrot, rs, thrust, T);
-          drawFlare(ctx, u.sun[0], u.sun[1], W, H, u.sun[2] * 0.9);
-        });
-      } else if (scene === 1) {
-        // --- B. Docking -------------------------------------------------------
-        const t = T - A_END;
-        const dur = B_END - A_END;
-        const portrait = W < H;
-        const R = S;
-        u.planet = [W * 0.08, H * 0.62 + R, R];
-        u.light = norm([0.75, 0.55, 0.35]);
-        u.rot = 2.0 + t * 0.015;
-        u.atm = clamp(R * 0.05, 10, 90);
-        u.sun = [W * 1.02, -H * 0.08, 0.7];
-        u.cam = [t * 8, 0];
-
-        const ss = ((portrait ? W * 0.62 : Math.min(W * 0.42, H * 0.62)) / 34) * (1 + 0.05 * (t / dur));
-        const shipX = W * (portrait ? 0.55 : 0.6) + Math.sin(t * 0.6) * W * 0.006;
-        const shipY = H * 0.4 + Math.sin(t * 0.45) * H * 0.006;
-        const shipRot = -0.12;
-        const fwd = [Math.cos(shipRot), Math.sin(shipRot)];
-        const D = shipPoint(shipX, shipY, shipRot, ss, -10.9, 0);
-        const rs = ss * 0.16;
-        const tS = 0.15;
-        const tD = 3.0;
-        const k = easeOut((t - tS) / (tD - tS));
-        const P0 = [-W * 0.06, H * 1.06];
-        const C1 = [W * 0.16, H * 0.6];
-        const C2 = [D[0] - fwd[0] * W * 0.24, D[1] - fwd[1] * W * 0.24];
-        let nose;
-        let dir;
-        if (t >= tD) {
-          nose = D;
-          dir = fwd;
+        // The shuttle: launch path until A_END, then one smooth curve to the port.
+        let sx;
+        let sy;
+        let srot;
+        let srs;
+        let thrust;
+        if (T < A_END) {
+          sx = LA.x;
+          sy = LA.y;
+          srot = LA.rot;
+          srs = LA.rs;
+          thrust = LA.thrust;
         } else {
-          nose = bezier(P0, C1, C2, D, k);
-          dir = k > 0.999 ? fwd : bezierTangent(P0, C1, C2, D, k);
-        }
-        const rrot = Math.atan2(dir[1], dir[0]) + Math.PI / 2;
-        const rx = nose[0] - dir[0] * 26 * rs;
-        const ry = nose[1] - dir[1] * 26 * rs;
-        const thrust = t < tD - 0.9 ? 1 : clamp((tD - 0.6 - t) / 0.3);
-        const [nx, ny] = rocketPoint(rx, ry, rrot, rs, 0, 19);
-        if (thrust > 0) {
-          sparks.add({ img: SPRITES.glow, x: nx, y: ny, vx: -dir[0] * 0.05 * H, vy: -dir[1] * 0.05 * H, r: 6 * rs, grow: 8 * rs, life: 0.35, alpha: 0.6 * thrust, additive: true });
-        }
-        if (t > tD - 1.1 && t < tD - 0.1 && t - lastRcs > 0.12) {
-          lastRcs = t;
-          for (const side of [-1, 1]) {
-            const [px, py] = rocketPoint(rx, ry, rrot, rs, side * 6, -18);
-            smoke.add({ img: SPRITES.smoke, x: px, y: py, vx: dir[0] * 0.08 * H + side * 0.02 * H, vy: dir[1] * 0.08 * H, r: 2 * rs, grow: 9 * rs, life: 0.55, alpha: 0.7 });
+          const L0 = launchAt(A_END, W, H);
+          const P0 = rocketPoint(L0.x, L0.y, L0.rot, L0.rs, 0, -26);
+          const dir0 = [Math.sin(L0.rot), -Math.cos(L0.rot)];
+          const C1 = [P0[0] + dir0[0] * W * 0.12, P0[1] + dir0[1] * W * 0.12];
+          const C2 = [D[0] - fwd[0] * W * 0.16, D[1] - fwd[1] * W * 0.16];
+          const k = smooth(A_END, DOCK, T);
+          const nose = T >= DOCK ? D : bezier(P0, C1, C2, D, k);
+          const dir = T >= DOCK || k > 0.999 ? fwd : bezierTangent(P0, C1, C2, D, k);
+          srs = lerp(L0.rs, ship.ss * 0.16, smooth(A_END, DOCK - 0.5, T));
+          srot = Math.atan2(dir[1], dir[0]) + Math.PI / 2;
+          sx = nose[0] - dir[0] * 26 * srs;
+          sy = nose[1] - dir[1] * 26 * srs;
+          thrust = T < DOCK - 0.9 ? 1 : clamp((DOCK - 0.6 - T) / 0.3);
+          if (T > DOCK - 1.1 && T < DOCK - 0.1 && T - lastRcs > 0.12) {
+            lastRcs = T;
+            for (const side of [-1, 1]) {
+              const [px, py] = rocketPoint(sx, sy, srot, srs, side * 6, -18);
+              smoke.add({ img: SPRITES.smoke, x: px, y: py, vx: dir[0] * 0.08 * H + side * 0.02 * H, vy: dir[1] * 0.08 * H, r: 2 * srs, grow: 9 * srs, life: 0.55, alpha: 0.7 });
+            }
           }
         }
-        if (t >= tD && !docked) {
+        const [nx, ny] = rocketPoint(sx, sy, srot, srs, 0, 19);
+
+        // Lift-off dust, then a vapour trail while still in the air.
+        if (thrust > 0 && T < LIFT + 1.5) {
+          for (let i = 0; i < 4; i++) {
+            const side = Math.random() < 0.5 ? -1 : 1;
+            smoke.add({
+              img: SPRITES.smoke, x: LA.padX + rand(-6, 6) * LA.rs, y: LA.hy - rand(0, 5) * LA.rs,
+              vx: side * rand(0.04, 0.32) * H, vy: -rand(0, 0.05) * H, r: rand(6, 12) * LA.rs,
+              grow: rand(10, 24) * LA.rs, life: rand(1.8, 3), drag: 1.2, alpha: 0.5,
+            });
+          }
+        }
+        if (T > LIFT && T < 6.4) {
+          const thin = 1 - smooth(4.2, 6.4, T);
+          for (let i = 0; i < 2; i++) {
+            smoke.add({
+              img: SPRITES.smoke, x: nx + rand(-2, 2) * srs, y: ny + rand(0, 4) * srs,
+              vx: rand(-0.012, 0.012) * H, vy: rand(0.005, 0.03) * H, r: rand(3, 6) * srs,
+              grow: rand(6, 12) * srs, life: rand(1.6, 2.8), drag: 0.6, alpha: 0.42 * thin,
+            });
+          }
+        }
+        if (thrust > 0 && T > LIFT) {
+          sparks.add({ img: SPRITES.blue, x: nx, y: ny, vx: 0, vy: 0, r: 6 * srs, grow: 8 * srs, life: 0.3, alpha: 0.5 * thrust, additive: true });
+        }
+        if (T >= DOCK && !docked) {
           docked = true;
           for (let i = 0; i < 28; i++) {
             const a = rand(0, Math.PI * 2);
@@ -298,46 +339,85 @@ export default function Intro({ onDone }) {
             sparks.add({ img: SPRITES.spark, x: D[0], y: D[1], vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: rand(1.5, 3.5), life: rand(0.3, 0.8), drag: 2, alpha: 1, additive: true });
           }
         }
-        smoke.step(dt);
+        // The faded launch trail is dropped before the docking thruster puffs start.
+        if (T >= DOCK - 1.2 && !trailCleared) {
+          trailCleared = true;
+          smoke.clear();
+        }
+        smoke.step(dt, T < A_END ? shift[1] : 0, T < A_END ? shift[0] : 0);
         sparks.step(dt);
-        const power = smooth(tD + 0.2, tD + 1.3, t);
-        const contact = t >= tD ? Math.exp(-(t - tD) * 5) : 0;
-        const ret = smooth(tD - 1.7, tD - 1.2, t) * (1 - smooth(tD + 0.3, tD + 0.8, t));
-        const retSize = lerp(ss * 14, ss * 3.4, easeOut((t - (tD - 1.7)) / 1.7));
+
+        const power = smooth(DOCK + 0.2, DOCK + 1.3, T);
+        const contact = T >= DOCK ? Math.exp(-(T - DOCK) * 5) : 0;
+        const ret = smooth(DOCK - 1.7, DOCK - 1.2, T) * (1 - smooth(DOCK + 0.3, DOCK + 0.8, T));
+        const retSize = lerp(ship.ss * 14, ship.ss * 3.4, easeOut((T - (DOCK - 1.7)) / 1.7));
+
+        // Push in: everything scales around the bridge window.
+        const z = clamp((T - ZOOM0) / (INSIDE - ZOOM0));
+        const Z = Math.exp(Math.log(80) * easeIn(z));
+        const F = shipPoint(ship.x, ship.y, ship.rot, ship.ss, BRIDGE_X, 0);
+        if (Z > 1.0001) {
+          u.planet = [F[0] + (u.planet[0] - F[0]) * Z, F[1] + (u.planet[1] - F[1]) * Z, u.planet[2] * Z];
+          u.atm *= Z;
+        }
+        const padFade = 1 - smooth(4.6, 5.6, T);
+        const sunFade = 1 - blend;
 
         draws.push(() => {
-          drawShip(ctx, shipX, shipY, shipRot, ss, power, T);
-          smoke.draw(ctx);
-          sparks.draw(ctx);
-          drawRocket(ctx, rx, ry, rrot, rs, thrust, T);
-          if (contact > 0) {
-            blit(ctx, SPRITES.blue, D[0], D[1], ss * 9 * (1.2 - contact * 0.4), contact, true);
-            blit(ctx, SPRITES.spark, D[0], D[1], ss * 3, contact, true);
+          ctx.save();
+          if (Z > 1.0001) {
+            ctx.translate(F[0], F[1]);
+            ctx.scale(Z, Z);
+            ctx.translate(-F[0], -F[1]);
           }
-          drawReticle(ctx, D[0], D[1], retSize, t < tD ? "#5ad1ff" : "#7ddec0", ret * 0.9);
+          if (padFade > 0) {
+            ctx.globalAlpha = padFade;
+            if (thrust > 0 && T < LIFT + 1.6) {
+              const g = clamp(1 - (T - LIFT) / 1.6) * thrust;
+              blit(ctx, SPRITES.blue, ground[0], ground[1], 60 * LA.rs, g * 0.7, true);
+            }
+            drawPad(ctx, ground[0], ground[1], LA.rs0 * (1 - 0.35 * LA.fall), T);
+            ctx.globalAlpha = 1;
+          }
+          smoke.draw(ctx, 1 - smooth(A_END, A_END + 1.2, T) * (T < DOCK - 1.2 ? 1 : 0));
+          if (T > 4.5) drawShip(ctx, ship.x, ship.y, ship.rot, ship.ss, power, T);
+          sparks.draw(ctx);
+          drawShuttle(ctx, sx, sy, srot, srs, thrust, T);
+          if (contact > 0) {
+            blit(ctx, SPRITES.blue, D[0], D[1], ship.ss * 9 * (1.2 - contact * 0.4), contact, true);
+            blit(ctx, SPRITES.spark, D[0], D[1], ship.ss * 3, contact, true);
+          }
+          drawReticle(ctx, D[0], D[1], retSize, T < DOCK ? "#5ad1ff" : "#7ddec0", ret * 0.9);
+          ctx.restore();
+          if (sunFade > 0) drawFlare(ctx, u.sun[0], u.sun[1], W, H, u.sun[2] * 0.9 * sunFade);
+          drawGlass(ctx, W, H, smooth(0.55, 1, z));
         });
       } else {
-        // --- C. Look back -----------------------------------------------------
-        const t = T - B_END;
-        const dur = C_END - B_END;
+        // --- Inside: pull back from the glass, then Vulcan breaks apart -------
+        if (!wentInside) {
+          wentInside = true;
+          smoke.clear();
+          sparks.clear();
+        }
+        const t = T - INSIDE;
         const win = cockpit.win;
-        const R = Math.min(W, H) * 0.15 * (1 + 0.035 * (t / dur));
         const pc = [W * 0.5, win.y + win.h * 0.48];
-        const tBoom = 2.4;
-        const since = t - tBoom;
+        const sc = lerp(1.8, 1, easeOut(t / 0.9));
+        const R = Math.min(W, H) * 0.15 * (1 + 0.035 * (t / (END - INSIDE))) * sc;
+        const since = T - BOOM;
         u.planet = [pc[0], pc[1], R];
         u.light = norm([-0.65, 0.35, 0.68]);
         u.rot = 4.0 + t * 0.02;
         u.atm = clamp(R * 0.1, 8, 30);
         u.cam = [t * 3, 0];
-        u.crack = smooth(1.3, tBoom, t);
+        u.crack = smooth(INSIDE + 1.4, BOOM, T);
         u.flash = since >= 0 ? Math.exp(-since * 3) * (reduce ? 0.4 : 1) : 0;
         u.boom = since >= 0 ? easeOut(since / 2.8) : 0;
         if (since >= 0) {
           const grow = 1 - Math.pow(1 - clamp(since / 2.8), 4);
           u.ring = [R * (1 + grow * ((W * 1.5) / R)), (1 - clamp(since / 3)) * 1.3, 0.2, -0.12];
         }
-        const tremor = t > 1.2 && since < 0 ? 2.5 * smooth(1.2, tBoom, t) : 0;
+        const tremor = T > INSIDE + 1.6 && since < 0 ? 2.5 * smooth(INSIDE + 1.6, BOOM, T) : 0;
         const blast = since >= 0 ? 16 * Math.exp(-since * 2.2) : 0;
         shake = reduce ? 0 : tremor + blast;
 
@@ -365,13 +445,22 @@ export default function Intro({ onDone }) {
         debris.step(dt);
         const remnant = since >= 0 ? Math.exp(-since * 0.9) : 0;
         const light = Math.min(1, u.flash * 1.1 + u.crack * 0.12 + remnant * 0.25);
+        const glass = 1 - smooth(INSIDE, INSIDE + 0.6, T);
 
         draws.push(() => {
           if (u.crack > 0 && since < 0) blit(ctx, SPRITES.glow, pc[0], pc[1], R * 1.5, u.crack * 0.35, true);
           debris.draw(ctx);
           if (remnant > 0) blit(ctx, SPRITES.glow, pc[0], pc[1], R * (1.4 + since * 0.7), remnant * 0.85, true);
+          ctx.save();
+          if (sc > 1.0001) {
+            ctx.translate(pc[0], pc[1]);
+            ctx.scale(sc, sc);
+            ctx.translate(-pc[0], -pc[1]);
+          }
           drawCockpit(ctx, cockpit, W, H, light, T);
+          ctx.restore();
           drawStreak(ctx, pc[0], pc[1], W * 1.4, u.flash, "255,200,150");
+          drawGlass(ctx, W, H, glass);
         });
       }
 
