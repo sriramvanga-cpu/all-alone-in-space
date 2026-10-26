@@ -31,6 +31,7 @@ import Intro from "./intro/Intro.jsx";
 import { Starbase } from "./art/Station.jsx";
 import { PlanetDot, faceOf } from "./art/Planet.jsx";
 import { MapDefs, MapBackdrop } from "./art/MapArt.jsx";
+import { webglAvailable } from "./three/artStore.js";
 import { FuelIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipIcon } from "./art/icons.jsx";
 
 const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
@@ -44,6 +45,12 @@ const ROUND_MS = 15 * 60 * 1000;
 const QUESTION_MS = 60_000;
 const FUEL_WORLDS = new Set(NODES.filter((n) => n.shell === "fuel").map((n) => n.id));
 const FACES = new Map(NODES.filter((n) => n.id !== STATION).map((n) => [n.id, faceOf(n)]));
+// Realistic map art renders in the background; the map shows vector art until it lands.
+if (webglAvailable()) {
+  import("./three/sprites.js")
+    .then((m) => m.renderMapArt(FACES.values()))
+    .catch((err) => console.warn("Realistic map art unavailable, keeping vector art:", err));
+}
 // Zoomed out past this width, planets drop to simple lit discs so panning stays smooth.
 const DETAIL_W = 1100;
 
@@ -465,6 +472,13 @@ function NameScreen({ onStart }) {
           <button type="submit">Launch</button>
         </div>
       </form>
+      <p className="credits">
+        Planet and star imagery:{" "}
+        <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noreferrer">
+          Solar System Scope
+        </a>
+        , CC BY 4.0
+      </p>
     </main>
   );
 }

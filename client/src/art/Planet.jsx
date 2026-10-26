@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { useArt } from "../three/artStore.js";
 
 // Planets are drawn in unit space (radius 1) and scaled by face.radius.
 // One key light sits at the upper left of the whole chart, so every world shares
@@ -243,8 +244,41 @@ function Surface({ face }) {
   );
 }
 
+function Scorch({ face }) {
+  return (
+    <g className="scorch">
+      <rect x="-1" y="-1" width="2" height="2" fill="#190907" opacity="0.62" />
+      {face.cracks.map((d, i) => (
+        <path key={i} d={d} fill="none" stroke="#ff7a3a" strokeWidth="0.05" strokeLinecap="round" opacity="0.85" />
+      ))}
+    </g>
+  );
+}
+
 function PlanetDotImpl({ face, detail, shut }) {
   const { uid, kind, colors, radius: r } = face;
+  // Once the realistic render of this world is ready, show it instead of the vector art.
+  const sprite = useArt().planets.get(uid);
+  if (sprite) {
+    const e = sprite.ext;
+    return (
+      <g className={`planet-art surface-${kind}`}>
+        <image href={sprite.url} x={-r * e} y={-r * e} width={2 * r * e} height={2 * r * e} />
+        {shut ? (
+          <g transform={`scale(${r})`}>
+            <defs>
+              <clipPath id={`${uid}c`}>
+                <circle r="1" />
+              </clipPath>
+            </defs>
+            <g clipPath={`url(#${uid}c)`}>
+              <Scorch face={face} />
+            </g>
+          </g>
+        ) : null}
+      </g>
+    );
+  }
   const [base, dark, light] = colors;
   const banded = kind === "gas" || kind === "fuel";
   const atmo = ATMO[kind];
@@ -304,14 +338,7 @@ function PlanetDotImpl({ face, detail, shut }) {
           {detail ? <circle r="1" fill="url(#pl-grain)" /> : null}
           <circle r="1" fill="url(#pl-night)" />
           <circle r="1" fill="url(#pl-shine)" opacity={SHINE[kind]} />
-          {shut ? (
-            <g className="scorch">
-              <rect x="-1" y="-1" width="2" height="2" fill="#190907" opacity="0.62" />
-              {face.cracks.map((d, i) => (
-                <path key={i} d={d} fill="none" stroke="#ff7a3a" strokeWidth="0.05" strokeLinecap="round" opacity="0.85" />
-              ))}
-            </g>
-          ) : null}
+          {shut ? <Scorch face={face} /> : null}
         </g>
         <circle className="limb" r="0.985" fill="none" stroke="url(#pl-rim)" strokeWidth="0.05" />
         {ringed ? <RingArc face={face} d={RING_FRONT} /> : null}

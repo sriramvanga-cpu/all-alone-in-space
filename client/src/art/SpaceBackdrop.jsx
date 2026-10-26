@@ -1,6 +1,6 @@
-// Fixed deep-space backdrop shared by every screen. Pure CSS: a nebula wash,
-// a faint galactic band, and three star layers that drift at different speeds.
-// Stars are seeded box-shadows, so the field is identical on every load.
+// Fixed deep-space backdrop shared by every screen: a real photo of the Milky
+// Way core, with three layers of sharp, slowly drifting stars over it. Stars are
+// seeded box-shadows, so the field is identical on every load.
 
 function lcg(seed) {
   let s = seed >>> 0;
@@ -27,14 +27,14 @@ function starShadows(seed, count, palette, glow) {
 const COOL = ["rgba(255,255,255,.9)", "rgba(207,224,255,.8)", "rgba(170,200,255,.7)"];
 const WARM = ["rgba(255,227,194,.85)", "rgba(255,255,255,.9)", "rgba(190,215,255,.85)"];
 
-const FAR = starShadows(0x5eed, 90, COOL, "0");
-const MID = starShadows(0xa11c, 38, WARM, "0");
+const FAR = starShadows(0x5eed, 50, COOL, "0");
+const MID = starShadows(0xa11c, 24, WARM, "0");
 const NEAR = starShadows(0x7c0d, 14, WARM, "0 0 5px 1px");
 
 export default function SpaceBackdrop() {
   return (
     <div className="backdrop" aria-hidden="true">
-      <div className="band" />
+      <div className="sky" />
       <div className="stars far" style={{ boxShadow: FAR }} />
       <div className="stars mid" style={{ boxShadow: MID }} />
       <div className="stars near" style={{ boxShadow: NEAR }} />

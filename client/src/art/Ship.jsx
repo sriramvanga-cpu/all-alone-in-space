@@ -1,6 +1,9 @@
 // The player's ship. Geometry is in ship units; the saucer centre sits at SAUCER_X
 // so a flight path can be followed from the saucer, not the ship's origin.
 // Gradients live in ShipDefs: render it once wherever the ship is drawn.
+// Once the realistic top-down render is ready, it replaces the vector hull.
+
+import { useArt } from "../three/artStore.js";
 
 export const SAUCER_X = 11.4;
 
@@ -49,7 +52,31 @@ export function ShipDefs() {
   );
 }
 
+// Engine glow and trails stay vector so they can animate in flight.
+function Engines() {
+  return (
+    <>
+      <ellipse className="aura" cx="2" cy="0" rx="19" ry="10.6" />
+      <ellipse className="trail" cx="-20" cy="-8.16" rx="8.5" ry="0.7" />
+      <ellipse className="trail" cx="-20" cy="8.16" rx="8.5" ry="0.7" />
+      <ellipse className="plume" cx="-13.8" cy="-8.16" rx="3.2" ry="0.8" />
+      <ellipse className="plume" cx="-13.8" cy="8.16" rx="3.2" ry="0.8" />
+      <ellipse className="exhaust" cx="-11.9" cy="-8.16" rx="1.25" ry="0.62" />
+      <ellipse className="exhaust" cx="-11.9" cy="8.16" rx="1.25" ry="0.62" />
+    </>
+  );
+}
+
 export function ShipShapes() {
+  const render = useArt().ship;
+  if (render) {
+    return (
+      <>
+        <Engines />
+        <image href={render} x="-24" y="-11" width="46" height="22" />
+      </>
+    );
+  }
   const cx = SAUCER_X;
   const grid = [-150, -120, -90, -60, -30, 30, 60, 90, 120, 150, 180]
     .map((deg) => {
@@ -61,13 +88,7 @@ export function ShipShapes() {
     .join("");
   return (
     <>
-      <ellipse className="aura" cx="2" cy="0" rx="19" ry="10.6" />
-      <ellipse className="trail" cx="-20" cy="-8.16" rx="8.5" ry="0.7" />
-      <ellipse className="trail" cx="-20" cy="8.16" rx="8.5" ry="0.7" />
-      <ellipse className="plume" cx="-13.8" cy="-8.16" rx="3.2" ry="0.8" />
-      <ellipse className="plume" cx="-13.8" cy="8.16" rx="3.2" ry="0.8" />
-      <ellipse className="exhaust" cx="-11.9" cy="-8.16" rx="1.25" ry="0.62" />
-      <ellipse className="exhaust" cx="-11.9" cy="8.16" rx="1.25" ry="0.62" />
+      <Engines />
       <rect className="nacelle" x="-11.4" y="-9.18" width="16" height="2.05" rx="1.02" />
       <rect className="nacelle" x="-11.4" y="7.13" width="16" height="2.05" rx="1.02" />
       <rect className="warp" x="-9.6" y="-8.5" width="12.4" height="0.7" rx="0.35" />

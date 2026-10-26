@@ -1,3 +1,5 @@
+import { useArt } from "../three/artStore.js";
+
 // The orbital station at the centre of the chart. Gradients are in StationDefs,
 // rendered once with the map's other defs.
 
@@ -32,6 +34,16 @@ export function StationDefs() {
 
 export function Starbase(props) {
   const { className, ...rest } = props;
+  // Once the realistic top-down render is ready, it replaces the vector station.
+  const render = useArt().station;
+  if (render) {
+    return (
+      <svg className={className ? `starbase ${className}` : "starbase"} viewBox="-40 -40 80 80" aria-hidden="true" {...rest}>
+        <circle className="halo" r="39" />
+        <image href={render} x="-40" y="-40" width="80" height="80" />
+      </svg>
+    );
+  }
   return (
     <svg
       className={className ? `starbase ${className}` : "starbase"}
