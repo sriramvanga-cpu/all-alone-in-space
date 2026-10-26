@@ -47,9 +47,10 @@ export async function db() {
 function identity(body) {
   const sent = body.roll != null || body.phone != null;
   if (!sent) return { roll: null, phone: null };
-  const roll = typeof body.roll === "string" ? body.roll.trim() : "";
+  // Roll number is optional (the start screen no longer asks for it); phone is required.
+  const roll = typeof body.roll === "string" && body.roll.trim() ? body.roll.trim() : null;
   const phone = typeof body.phone === "string" ? body.phone.replace(/\D/g, "") : "";
-  if (!roll || roll.length > 32) return { error: "roll must be a non-empty string" };
+  if (roll && roll.length > 32) return { error: "roll must be at most 32 characters" };
   if (phone.length < 10 || phone.length > 15) return { error: "phone must be a phone number" };
   return { roll, phone };
 }

@@ -62,6 +62,13 @@ test("a score post keeps roll and phone off the board", () => {
   assert.equal("phone" in json, false);
 });
 
+test("a score post works with a phone and no roll number", () => {
+  const parsed = parseScore({ name: "Kirk", phone: "98765 43210", settled: false, timeLeft: 1, worlds: 1, fuel: 0, finishedAt: when });
+  assert.equal(parsed.error, undefined);
+  assert.equal(parsed.roll, null);
+  assert.equal(parsed.phone, "9876543210");
+});
+
 test("a score post rejects a bad phone", () => {
   const parsed = parseScore({
     name: "Kirk",

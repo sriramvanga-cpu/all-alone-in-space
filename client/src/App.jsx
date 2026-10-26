@@ -155,7 +155,6 @@ function fresh() {
   return {
     phase: "name",
     name: "",
-    roll: "",
     phone: "",
     here: STATION,
     fuel: START_FUEL,
@@ -410,7 +409,6 @@ function Board() {
 }
 
 function NameScreen({ onStart }) {
-  const [roll, setRoll] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
@@ -429,13 +427,8 @@ function NameScreen({ onStart }) {
         className="panel"
         onSubmit={(e) => {
           e.preventDefault();
-          const nextRoll = roll.trim();
           const nextName = name.trim();
           const nextPhone = phone.replace(/\D/g, "");
-          if (!nextRoll) {
-            setError("Enter a roll number.");
-            return;
-          }
           if (!nextName) {
             setError("Enter a name.");
             return;
@@ -444,25 +437,17 @@ function NameScreen({ onStart }) {
             setError("Enter a phone number.");
             return;
           }
-          onStart({ roll: nextRoll.slice(0, 32), name: nextName.slice(0, 40), phone: nextPhone });
+          onStart({ name: nextName.slice(0, 40), phone: nextPhone });
         }}
       >
         <p className="eyebrow">Pilot registration</p>
         <h1>Who is flying?</h1>
-        <label htmlFor="roll">Roll number</label>
-        <input
-          id="roll"
-          value={roll}
-          onChange={(e) => setRoll(e.target.value)}
-          autoFocus
-          maxLength={32}
-          autoComplete="off"
-        />
         <label htmlFor="pilot">Name</label>
         <input
           id="pilot"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          autoFocus
           maxLength={40}
           autoComplete="name"
         />
@@ -1122,7 +1107,6 @@ function Game() {
     const facts = runFacts(game.current);
     const payload = {
       name: game.current.name,
-      roll: game.current.roll,
       phone: game.current.phone,
       ...facts,
       finishedAt: new Date().toISOString(),
