@@ -16,20 +16,26 @@ function rollInt(rng, lo, hi) {
   return lo + Math.min(span - 1, Math.max(0, pick));
 }
 
-// Narrow band so a right answer is usually enough and a wrong one usually is not.
-// Outer stays easier than inner. The old 0–100 draw made the shell a coin flip.
-const PERCENT_LO = 30;
-const PERCENT_HI = 75;
+// Each shell draws from its own band, so even a right answer rarely settles an
+// inner world and usually settles an outer one. With the 25-point answer shift
+// and a 0–100 roll, a right answer settles about: inner 5%, middle 25%,
+// outer 55%. Percent can exceed 100; the roll still has to beat it.
+const SHELL_BANDS = Object.freeze({
+  inner: [108, 125],
+  middle: [85, 115],
+  outer: [58, 95],
+});
 const ANSWER_SHIFT = 25;
 
-/** Two ints in the band. Inner keeps max, outer keeps min, middle keeps half-up average. */
+/** Two ints in the shell's band. Inner keeps max, outer keeps min, middle keeps half-up average. */
 export function drawPercent(shell, rng = Math.random) {
-  const a = rollInt(rng, PERCENT_LO, PERCENT_HI);
-  const b = rollInt(rng, PERCENT_LO, PERCENT_HI);
+  const band = SHELL_BANDS[shell];
+  if (!band) throw new Error(`unknown shell: ${shell}`);
+  const a = rollInt(rng, band[0], band[1]);
+  const b = rollInt(rng, band[0], band[1]);
   if (shell === "inner") return Math.max(a, b);
   if (shell === "outer") return Math.min(a, b);
-  if (shell === "middle") return Math.round((a + b) / 2);
-  throw new Error(`unknown shell: ${shell}`);
+  return Math.round((a + b) / 2);
 }
 
 export function fuelCost(variable, distance) {

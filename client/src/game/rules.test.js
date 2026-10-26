@@ -104,16 +104,37 @@ test("a penalty discounts to the cheapest exit but not below 1", () => {
   assert.equal(affordableVariable(2, 2, [8]), 1);
 });
 
-test("shell percents stay in a fair band and keep max, min, and average", () => {
-  const span = 75 - 30 + 1;
-  const rolls = (x, y) => scripted([unit(x - 30, span), unit(y - 30, span)]);
-  assert.equal(drawPercent("inner", rolls(55, 70)), 70);
-  assert.equal(drawPercent("outer", rolls(55, 70)), 55);
-  assert.equal(drawPercent("middle", rolls(40, 60)), 50);
-  assert.equal(drawPercent("middle", rolls(32, 33)), 33);
-  assert.equal(drawPercent("middle", rolls(30, 31)), 31);
-  assert.equal(drawPercent("inner", rolls(30, 75)), 75);
-  assert.equal(drawPercent("outer", rolls(30, 75)), 30);
+test("each shell draws from its own band and keeps max, min, or average", () => {
+  // +0.5 keeps each value inside its slot so float error cannot floor it down.
+  const rolls = (lo, hi, x, y) => scripted([unit(x - lo + 0.5, hi - lo + 1), unit(y - lo + 0.5, hi - lo + 1)]);
+  assert.equal(drawPercent("inner", rolls(108, 125, 110, 120)), 120);
+  assert.equal(drawPercent("inner", rolls(108, 125, 108, 125)), 125);
+  assert.equal(drawPercent("middle", rolls(85, 115, 85, 96)), 91);
+  assert.equal(drawPercent("middle", rolls(85, 115, 90, 110)), 100);
+  assert.equal(drawPercent("outer", rolls(58, 95, 70, 60)), 60);
+  assert.equal(drawPercent("outer", rolls(58, 95, 58, 95)), 58);
+  assert.throws(() => drawPercent("fuel"));
+});
+
+test("a right answer settles rarely near the station and often far out", () => {
+  let s = 99;
+  const rng = () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  const rate = (shell) => {
+    let wins = 0;
+    for (let i = 0; i < 4000; i++) {
+      if (habitability({ percent: drawPercent(shell, rng), credits: 0, variable: 1 }, true, rng).won) wins++;
+    }
+    return wins / 4000;
+  };
+  const inner = rate("inner");
+  const middle = rate("middle");
+  const outer = rate("outer");
+  assert.ok(inner < 0.1, `inner ${inner}`);
+  assert.ok(middle > inner + 0.15 && middle < outer - 0.15, `middle ${middle}`);
+  assert.ok(outer > 0.45, `outer ${outer}`);
 });
 
 test("a careful player settles more often than a guesser", () => {
@@ -155,8 +176,8 @@ test("a careful player settles more often than a guesser", () => {
   }
   const skilled = settleRate(0.85, 7);
   const guesser = settleRate(0.25, 7);
-  assert.ok(skilled > 0.75, `skilled ${skilled}`);
-  assert.ok(guesser < 0.5, `guesser ${guesser}`);
+  assert.ok(skilled > 0.55, `skilled ${skilled}`);
+  assert.ok(guesser < 0.3, `guesser ${guesser}`);
   assert.ok(skilled - guesser > 0.3, `${skilled} vs ${guesser}`);
 });
 
