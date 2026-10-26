@@ -32,31 +32,6 @@ export const STATION = "station";
 export const DELTA_VEGA = "Delta Vega";
 export const CETI_ALPHA = "Ceti Alpha";
 
-const links = [];
-
-function link(a, b, distance) {
-  links.push(Object.freeze({ a, b, distance }));
-}
-
-function brokenRing(names) {
-  for (let i = 0; i < names.length - 1; i++) link(names[i], names[i + 1], 8);
-}
-
-for (const planet of ["Earth", "Andoria", "Denobula"]) link(STATION, planet, 10);
-brokenRing(INNER);
-brokenRing(MIDDLE);
-brokenRing(OUTER);
-
-for (const [a, b] of [
-  ["P'Jem", "Betazed"],
-  ["Denobula", "Orion"],
-  ["Bajor", "Qo'noS"],
-  ["Khitomer", "Remus"],
-  ["Orion", "Ferenginar"],
-]) {
-  link(a, b, 12);
-}
-
 const MORE_FUEL = Object.freeze([
   DELTA_VEGA, CETI_ALPHA,
   "Talos", "Organia", "Cestus", "Regula", "Deneva", "Tarsus", "Janus", "Sherman", "Mudd",
@@ -82,19 +57,26 @@ const HABITABLE = [
   ["P'Jem", "inner", 1.3, 0.6],
   ["Tellar", "inner", 0.96, 1.65],
   ["Denobula", "inner", 1.12, 2.7],
-  ["Bajor", "middle", 1.7, -2.1],
-  ["Deneb", "middle", 2.25, -1.05],
-  ["Betazed", "middle", 1.82, 0],
-  ["Khitomer", "middle", 2.38, 1.05],
-  ["Trill", "middle", 1.9, 2.1],
-  ["Orion", "middle", 2.2, 3.15],
-  ["Qo'noS", "outer", 2.68, -2.33],
-  ["Nimbus", "outer", 3.4, -1.28],
-  ["Romulus", "outer", 2.85, -0.23],
-  ["Remus", "outer", 3.48, 0.82],
-  ["Cardassia", "outer", 2.98, 1.87],
-  ["Ferenginar", "outer", 3.25, 2.92],
+  ["Bajor", "middle", 1.95, -2.1],
+  ["Deneb", "middle", 2.5, -1.05],
+  ["Betazed", "middle", 2.07, 0],
+  ["Khitomer", "middle", 2.63, 1.05],
+  ["Trill", "middle", 2.15, 2.1],
+  ["Orion", "middle", 2.45, 3.15],
+  ["Qo'noS", "outer", 3.48, -2.33],
+  ["Nimbus", "outer", 4.2, -1.28],
+  ["Romulus", "outer", 3.65, -0.23],
+  ["Remus", "outer", 4.28, 0.82],
+  ["Cardassia", "outer", 3.78, 1.87],
+  ["Ferenginar", "outer", 4.05, 2.92],
 ].map(([id, shell, r, angle]) => at(id, shell, r, angle));
+
+const meanR = (shell) => {
+  const worlds = HABITABLE.filter((world) => world.shell === shell);
+  return worlds.reduce((sum, world) => sum + world.r, 0) / worlds.length;
+};
+const nearMiddle = (meanR("inner") + meanR("middle")) / 2;
+const nearOuter = (meanR("middle") + meanR("outer")) / 2;
 
 function scatterFuel() {
   const placed = [];
@@ -116,7 +98,7 @@ function scatterFuel() {
     const x = ax + dx * t + (-dy / len) * j;
     const y = ay + dy * t + (dx / len) * j;
     const spot = { r: Math.hypot(x, y), angle: Math.atan2(y, x) };
-    if (spot.r < 1.02 || spot.r > 3.22) continue;
+    if (spot.r < 1.02 || spot.r > 4.02) continue;
     const near = Math.min(...HABITABLE.map((h) => dist2(spot, h)));
     if (near < 0.26 * 0.26 || near > 0.95 * 0.95) continue;
     if (placed.some((p) => dist2(spot, p) < 0.42 * 0.42)) continue;
@@ -130,8 +112,51 @@ const extraFuel = scatterFuel();
 
 export const NODES = Object.freeze([at(STATION, "station", 0, 0), ...HABITABLE, ...extraFuel]);
 
-const fuelDegree = new Map(extraFuel.map((n) => [n.id, 0]));
 const atNode = new Map(NODES.map((n) => [n.id, n]));
+
+const STATION_HOMES = ["Earth", "Andoria", "Denobula"];
+const links = [];
+
+function band(id) {
+  if (INNER.includes(id)) return 8;
+  if (MIDDLE.includes(id)) return 12;
+  if (OUTER.includes(id)) return 16;
+  const r = atNode.get(id).r;
+  if (r < nearMiddle) return 8;
+  if (r < nearOuter) return 12;
+  return 16;
+}
+
+function hopDistance(a, b) {
+  const spoke = a === STATION ? b : b === STATION ? a : null;
+  if (spoke) return STATION_HOMES.includes(spoke) ? 10 : band(spoke);
+  const farther = atNode.get(a).r >= atNode.get(b).r ? a : b;
+  return band(farther);
+}
+
+function link(a, b) {
+  links.push(Object.freeze({ a, b, distance: hopDistance(a, b) }));
+}
+
+function brokenRing(names) {
+  for (let i = 0; i < names.length - 1; i++) link(names[i], names[i + 1]);
+}
+
+for (const planet of STATION_HOMES) link(STATION, planet);
+brokenRing(INNER);
+brokenRing(MIDDLE);
+brokenRing(OUTER);
+for (const [a, b] of [
+  ["P'Jem", "Betazed"],
+  ["Denobula", "Orion"],
+  ["Bajor", "Qo'noS"],
+  ["Khitomer", "Remus"],
+  ["Orion", "Ferenginar"],
+]) {
+  link(a, b);
+}
+
+const fuelDegree = new Map(extraFuel.map((n) => [n.id, 0]));
 function xy(id) {
   const n = atNode.get(id);
   return { x: n.r * Math.cos(n.angle), y: n.r * Math.sin(n.angle) };
@@ -151,7 +176,7 @@ function blocks(aId, bId) {
   });
 }
 function join(a, b) {
-  link(a, b, 8);
+  link(a, b);
   if (fuelDegree.has(a)) fuelDegree.set(a, fuelDegree.get(a) + 1);
   if (fuelDegree.has(b)) fuelDegree.set(b, fuelDegree.get(b) + 1);
 }
@@ -264,7 +289,7 @@ for (const fuel of gates) {
   if (firstFuel.includes(fuel)) continue;
   firstFuel.push(fuel);
 }
-for (const fuel of firstFuel) link(STATION, fuel.id, 8);
+for (const fuel of firstFuel) link(STATION, fuel.id);
 
 export const LINKS = Object.freeze(links);
 

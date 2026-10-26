@@ -96,11 +96,12 @@ test("settled runs rank above losses, then worlds, fuel left, and time", () => {
   assert.ok(compareRuns(lasted, quit) < 0);
 });
 
-test("a penalty cannot price out the cheapest exit", () => {
+test("a penalty discounts to the cheapest exit but not below 1", () => {
   assert.equal(affordableVariable(2, 5, [8]), 1.25);
   assert.equal(affordableVariable(0.4, 5, [8]), 0.4);
   assert.equal(affordableVariable(2, 0, [8]), 2);
   assert.equal(affordableVariable(2, 5, []), 2);
+  assert.equal(affordableVariable(2, 2, [8]), 1);
 });
 
 test("shell percents stay in a fair band and keep max, min, and average", () => {
@@ -178,9 +179,9 @@ test("multiplier band is 0–1 only on roll 1", () => {
   assert.equal(drawMultiplier(scripted([unit(9, 10), 1])), 2);
 });
 
-test("applyMultiplier floors at 0.1", () => {
+test("applyMultiplier floors at 1", () => {
   assert.equal(applyMultiplier(2, 1.5), 3);
-  assert.equal(applyMultiplier(0.4, 0.2), 0.1);
+  assert.equal(applyMultiplier(0.4, 0.2), 1);
 });
 
 test("roll equal to percent does not win", () => {
@@ -255,7 +256,7 @@ test("wrong answer applies one multiplier and pays nothing", () => {
   assert.equal(result.percent, 65);
   assert.equal(result.credits, 20);
   assert.equal(result.multiplier, 0.5);
-  assert.equal(result.variable, 0.5);
+  assert.equal(result.variable, 1);
   assert.equal(result.roll, 100);
   assert.equal(result.won, false);
   assert.equal(result.closed, true);
@@ -349,20 +350,47 @@ test("map is a sparse three-shell web", () => {
   assert.deepEqual(OUTER, ["Qo'noS", "Nimbus", "Romulus", "Remus", "Cardassia", "Ferenginar"]);
   assert.equal(node("Vulcan"), null);
 
+  const meanR = (shell) => {
+    const rs = NODES.filter((n) => n.shell === shell);
+    return rs.reduce((sum, n) => sum + n.r, 0) / rs.length;
+  };
+  const nearMiddle = (meanR("inner") + meanR("middle")) / 2;
+  const nearOuter = (meanR("middle") + meanR("outer")) / 2;
+  const bandOf = (id) => {
+    const n = node(id);
+    if (n.shell === "inner") return 8;
+    if (n.shell === "middle") return 12;
+    if (n.shell === "outer") return 16;
+    if (n.r < nearMiddle) return 8;
+    if (n.r < nearOuter) return 12;
+    return 16;
+  };
+  const hopOf = (a, b) => {
+    if (a === STATION || b === STATION) {
+      const other = a === STATION ? b : a;
+      return other === "Earth" || other === "Andoria" || other === "Denobula" ? 10 : bandOf(other);
+    }
+    return node(a).r >= node(b).r ? bandOf(a) : bandOf(b);
+  };
+
   const station = linksFrom(STATION);
   const homes = station.filter((next) => node(next.id).shell === "inner");
   const pumps = station.filter((next) => node(next.id).shell === "fuel");
   assert.deepEqual(homes.map((next) => next.id).sort(), ["Andoria", "Denobula", "Earth"]);
   for (const next of homes) assert.equal(next.distance, 10);
   assert.equal(pumps.length, 3);
-  for (const next of pumps) assert.equal(next.distance, 8);
+  for (const next of pumps) assert.equal(next.distance, hopOf(STATION, next.id), next.id);
 
-  for (const names of [INNER, MIDDLE, OUTER]) {
+  for (const [names, distance] of [
+    [INNER, 8],
+    [MIDDLE, 12],
+    [OUTER, 16],
+  ]) {
     let gaps = 0;
     for (let i = 0; i < names.length; i++) {
       const next = linksFrom(names[i]).find((hop) => hop.id === names[(i + 1) % names.length]);
       if (!next) gaps += 1;
-      else assert.equal(next.distance, 8, `${names[i]} ring`);
+      else assert.equal(next.distance, distance, `${names[i]} ring`);
     }
     assert.equal(gaps, 1, names[0]);
   }
@@ -372,12 +400,12 @@ test("map is a sparse three-shell web", () => {
     assert.ok(degree >= 2 && degree <= 4, `${id} ${degree}`);
     const fuels = linksFrom(id).filter((next) => node(next.id).shell === "fuel");
     assert.equal(fuels.length, 1, id);
-    assert.equal(fuels[0].distance, 8);
+    assert.equal(fuels[0].distance, hopOf(id, fuels[0].id), id);
   }
 
   for (const id of [DELTA_VEGA, CETI_ALPHA]) {
     assert.equal(node(id).shell, "fuel");
-    assert.ok(node(id).r > 1 && node(id).r < 3.25, id);
+    assert.ok(node(id).r > 1 && node(id).r < 4.05, id);
   }
 
   const crosses = LINKS.filter((edge) => {
@@ -385,7 +413,11 @@ test("map is a sparse three-shell web", () => {
     return shells.every((shell) => shell === "inner" || shell === "middle" || shell === "outer") && shells[0] !== shells[1];
   });
   assert.equal(crosses.length, 5);
-  for (const edge of crosses) assert.equal(edge.distance, 12);
+  for (const edge of crosses) {
+    const shells = [node(edge.a).shell, node(edge.b).shell].sort();
+    assert.equal(edge.distance, shells[1] === "outer" ? 16 : 12, `${edge.a}-${edge.b}`);
+  }
+  assert.equal(new Set(crosses.map((edge) => edge.distance)).size, 2);
 
   const fuels = NODES.filter((n) => n.shell === "fuel");
   assert.equal(fuels.length, 36);
@@ -393,13 +425,13 @@ test("map is a sparse three-shell web", () => {
   for (const fuel of fuels) {
     const hops = linksFrom(fuel.id);
     assert.ok(hops.length >= 2 && hops.length <= 4, `${fuel.id} ${hops.length}`);
-    for (const hop of hops) assert.equal(hop.distance, 8);
+    for (const hop of hops) assert.equal(hop.distance, hopOf(fuel.id, hop.id), `${fuel.id}-${hop.id}`);
   }
 
   const radii = new Set(fuels.map((n) => n.r.toFixed(2)));
   assert.ok(radii.size > 8, "fuel worlds sit on a pattern");
   for (const fuel of fuels) {
-    assert.ok(fuel.r > 1 && fuel.r < 3.25, fuel.id);
+    assert.ok(fuel.r > 1 && fuel.r < 4.05, fuel.id);
     const nearest = Math.min(
       ...[...INNER, ...MIDDLE, ...OUTER].map((id) => {
         const home = node(id);

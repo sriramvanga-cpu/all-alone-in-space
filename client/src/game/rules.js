@@ -64,12 +64,12 @@ export function compareRuns(a, b) {
   return (a.id ?? 0) - (b.id ?? 0);
 }
 
-/** Keep at least the cheapest exit affordable. A lower variable is left alone. */
+/** Keep the cheapest exit affordable, but never discount below 1. A lower variable is left alone. */
 export function affordableVariable(variable, fuel, distances) {
   if (!(fuel > 0) || !distances.length) return variable;
   const cheapest = Math.min(...distances);
   const cap = (2 * fuel) / cheapest;
-  return Math.min(variable, Math.max(0.1, cap));
+  return Math.min(variable, Math.max(1, cap));
 }
 
 /**
@@ -87,7 +87,7 @@ export function drawMultiplier(rng = Math.random) {
 }
 
 export function applyMultiplier(variable, multiplier) {
-  return Math.max(0.1, variable * multiplier);
+  return Math.max(1, variable * multiplier);
 }
 
 function shuffleWith(list, rng) {

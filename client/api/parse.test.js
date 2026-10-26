@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseScore } from "./store.js";
+import { parseScore, toJson } from "./store.js";
 
 const when = "2026-10-16T13:16:00.000Z";
 
@@ -34,6 +34,46 @@ test("a long run with leftover fuel is accepted", () => {
   assert.equal(parsed.error, undefined);
   assert.equal(parsed.fuel, 50);
   assert.equal(parsed.worlds, 40);
+});
+
+test("a score post keeps roll and phone off the board", () => {
+  const parsed = parseScore({
+    name: "Kirk",
+    roll: " 22B81A12 ",
+    phone: "98765 43210",
+    settled: false,
+    timeLeft: 1,
+    worlds: 1,
+    fuel: 7.5,
+    finishedAt: when,
+  });
+  assert.equal(parsed.roll, "22B81A12");
+  assert.equal(parsed.phone, "9876543210");
+  const json = toJson({
+    id: 1,
+    name: parsed.name,
+    fuel: parsed.fuel,
+    settled: false,
+    time_left: 1,
+    worlds: 1,
+    finished_at: when,
+  });
+  assert.equal("roll" in json, false);
+  assert.equal("phone" in json, false);
+});
+
+test("a score post rejects a bad phone", () => {
+  const parsed = parseScore({
+    name: "Kirk",
+    roll: "22B81A12",
+    phone: "123",
+    settled: false,
+    timeLeft: 1,
+    worlds: 1,
+    fuel: 0,
+    finishedAt: when,
+  });
+  assert.equal(parsed.error, "phone must be a phone number");
 });
 
 test("a score post rejects a bad clock", () => {

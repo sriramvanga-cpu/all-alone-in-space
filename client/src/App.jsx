@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   START_FUEL,
   START_CREDITS,
@@ -25,6 +25,13 @@ import {
   destinations,
 } from "./game/map.js";
 import bank from "./data/questions.json";
+import SpaceBackdrop from "./art/SpaceBackdrop.jsx";
+import { SAUCER_X, ShipShapes, ShipSvg } from "./art/Ship.jsx";
+import { Rocket } from "./art/Rocket.jsx";
+import { Starbase } from "./art/Station.jsx";
+import { PlanetDot, faceOf } from "./art/Planet.jsx";
+import { MapDefs, MapBackdrop } from "./art/MapArt.jsx";
+import { FuelIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipIcon } from "./art/icons.jsx";
 
 const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 const PENDING = "aais-pending-scores";
@@ -33,61 +40,12 @@ const FLIGHT_MS = 2400;
 const VIEW_W = 720;
 const VIEW_H = 640;
 const WORLD = 900;
-const SURFACES = ["rock", "ice", "gas", "dust"];
-const PLANET_COLORS = {
-  rock: [
-    ["#c4784a", "#5c2814", "#f0c4a0"],
-    ["#8e9098", "#3c3e46", "#e6e7ec"],
-    ["#a34b38", "#4a1c14", "#e8b098"],
-    ["#b99262", "#5a4030", "#f3e0c4"],
-  ],
-  ice: [
-    ["#d7e7f2", "#6f98b4", "#ffffff"],
-    ["#b9d6ea", "#3e7394", "#f5fbff"],
-    ["#e7eef3", "#8aa0b0", "#ffffff"],
-  ],
-  gas: [
-    ["#d4a15a", "#6a3a18", "#f3d7a4"],
-    ["#c48448", "#3e2414", "#f6e2b4"],
-    ["#5e98c4", "#16344e", "#d4e9f8"],
-    ["#6fbfb8", "#144240", "#e7fffb"],
-  ],
-  dust: [
-    ["#c4a06a", "#5a3818", "#f0ddb0"],
-    ["#a87858", "#3a2414", "#e8c8a0"],
-    ["#8a6848", "#2c1c10", "#d8c0a0"],
-  ],
-  fuel: [
-    ["#e8a020", "#7a4010", "#ffe6b0"],
-    ["#f0b44a", "#8a5018", "#fff1cc"],
-    ["#d48428", "#5a2808", "#ffd7a4"],
-    ["#c46a22", "#4a1c08", "#f8c890"],
-  ],
-};
-function starfield() {
-  let s = 0x51a7;
-  const rand = () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-  const stars = [];
-  for (let i = 0; i < 280; i++) {
-    const bright = rand() < 0.08;
-    stars.push({
-      x: Math.round((rand() - 0.5) * 2600),
-      y: Math.round((rand() - 0.5) * 2400),
-      r: bright ? 1.4 + rand() * 1.4 : 0.28 + rand() * 0.6,
-      o: bright ? 0.8 + rand() * 0.2 : 0.22 + rand() * 0.45,
-    });
-  }
-  return stars;
-}
-
-const STARS = starfield();
-const BAYS = [0, 60, 120, 180, 240, 300];
 const ROUND_MS = 15 * 60 * 1000;
 const QUESTION_MS = 60_000;
 const FUEL_WORLDS = new Set(NODES.filter((n) => n.shell === "fuel").map((n) => n.id));
+const FACES = new Map(NODES.filter((n) => n.id !== STATION).map((n) => [n.id, faceOf(n)]));
+// Zoomed out past this width, planets drop to simple lit discs so panning stays smooth.
+const DETAIL_W = 1100;
 
 const DOMAINS = [
   ["general", "General knowledge"],
@@ -124,8 +82,12 @@ function round2(v) {
 }
 
 function fmtNum(n) {
-  const shown = Math.round(n * 10) / 10;
+  const shown = round2(n);
   return Object.is(shown, -0) ? "0" : String(shown);
+}
+
+function fare(variable, distance) {
+  return round2(fuelCost(variable, distance));
 }
 
 function fmtScore(n) {
@@ -211,6 +173,8 @@ function fresh() {
   return {
     phase: "name",
     name: "",
+    roll: "",
+    phone: "",
     intro: 0,
     here: STATION,
     fuel: START_FUEL,
@@ -318,14 +282,22 @@ function Ring({ ms, total }) {
   const r = 36;
   const c = 2 * Math.PI * r;
   const u = Math.max(0, Math.min(1, ms / total));
+  const grad = useId();
   return (
-    <svg className="ring" viewBox="0 0 80 80" aria-hidden="true">
+    <svg className={ms <= 10_000 ? "ring urgent" : "ring"} viewBox="0 0 80 80" aria-hidden="true">
+      <defs>
+        <linearGradient id={grad} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" style={{ stopColor: "var(--ring-a)" }} />
+          <stop offset="1" style={{ stopColor: "var(--ring-b)" }} />
+        </linearGradient>
+      </defs>
       <circle className="ring-track" cx="40" cy="40" r={r} />
       <circle
         className="ring-value"
         cx="40"
         cy="40"
         r={r}
+        stroke={`url(#${grad})`}
         strokeDasharray={c}
         strokeDashoffset={c * (1 - u)}
         transform="rotate(-90 40 40)"
@@ -365,14 +337,21 @@ function useBoard() {
   return { rows, err };
 }
 
-function BoardTable({ rows, err }) {
-  const ranked = [...rows].sort(compareRuns);
+const byRank = (rows) => [...rows].sort(compareRuns);
+
+function RankBadge({ n }) {
+  return <span className={n <= 3 ? `rank r${n}` : "rank"}>{n}</span>;
+}
+
+// `start` skips rows already shown elsewhere (the podium) but keeps their numbering.
+function BoardTable({ rows, err, start = 0 }) {
+  const list = byRank(rows).slice(start);
   return (
     <>
       {err ? <p className="error">Can't reach the leaderboard.</p> : null}
-      {ranked.length === 0 ? <p className="hint">No scores yet.</p> : null}
-      {ranked.length > 0 ? (
-        <table>
+      {rows.length === 0 ? <p className="hint">No scores yet.</p> : null}
+      {list.length > 0 ? (
+        <table className="lb">
           <thead>
             <tr>
               <th>#</th>
@@ -384,11 +363,15 @@ function BoardTable({ rows, err }) {
             </tr>
           </thead>
           <tbody>
-            {ranked.map((row, i) => (
-              <tr key={row.id ?? i}>
-                <td>{i + 1}</td>
-                <td>{row.name}</td>
-                <td>{row.settled ? "Yes" : "No"}</td>
+            {list.map((row, i) => (
+              <tr key={row.id ?? start + i} className={start + i < 3 ? `top top${start + i + 1}` : undefined}>
+                <td>
+                  <RankBadge n={start + i + 1} />
+                </td>
+                <td className="who">{row.name}</td>
+                <td>
+                  <span className={row.settled ? "pill yes" : "pill no"}>{row.settled ? "Yes" : "No"}</span>
+                </td>
                 <td className="num">{formatClock((row.timeLeft ?? 0) * 1000)}</td>
                 <td className="num">{row.worlds ?? 0}</td>
                 <td className="num">{fmtScore(Number.isFinite(row.fuel) ? row.fuel : Number(row.score) || 0)}</td>
@@ -401,45 +384,115 @@ function BoardTable({ rows, err }) {
   );
 }
 
+function Podium({ rows }) {
+  const top = byRank(rows).slice(0, 3);
+  if (top.length === 0) return null;
+  return (
+    <div className="podium">
+      {top.map((row, i) => {
+        const fuel = Number.isFinite(row.fuel) ? row.fuel : Number(row.score) || 0;
+        return (
+          <article key={row.id ?? i} className={`pod p${i + 1}`}>
+            <RankBadge n={i + 1} />
+            <p className="pod-name">{row.name}</p>
+            <p className={row.settled ? "pod-result yes" : "pod-result"}>{row.settled ? "Settled" : "Not settled"}</p>
+            <p className="pod-meta">
+              {row.settled ? `${formatClock((row.timeLeft ?? 0) * 1000)} left · ` : ""}
+              {row.worlds ?? 0} {(row.worlds ?? 0) === 1 ? "world" : "worlds"} · fuel {fmtScore(fuel)}
+            </p>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
 function Board() {
   const { rows, err } = useBoard();
   return (
     <main className="board">
-      <p className="eyebrow">All Alone in Space</p>
-      <h1>Leaderboard</h1>
-      <p className="hint">Wins rank above every loss. Then more worlds, then more fuel left. Wins with those tied rank by time left; losses by who lasted longer.</p>
-      <BoardTable rows={rows} err={err} />
+      <header className="board-head">
+        <div>
+          <p className="eyebrow">All Alone in Space</p>
+          <h1>Leaderboard</h1>
+        </div>
+        <span className={err ? "live off" : "live"}>{err ? "Offline" : "Live"}</span>
+      </header>
+      <p className="hint rules">
+        Wins rank above every loss. Then more worlds, then more fuel left. Wins with those tied rank by time left;
+        losses by who lasted longer.
+      </p>
+      <Podium rows={rows} />
+      <BoardTable rows={rows} err={err} start={Math.min(3, rows.length)} />
     </main>
   );
 }
 
 function NameScreen({ onStart }) {
+  const [roll, setRoll] = useState("");
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
   return (
     <main className="screen">
+      <header className="title-card">
+        <ShipSvg className="ship" />
+        <p className="title-big">
+          All Alone
+          <br />
+          in Space
+        </p>
+        <p className="title-tag">Fifteen minutes. One world.</p>
+      </header>
       <form
         className="panel"
         onSubmit={(e) => {
           e.preventDefault();
-          const next = name.trim();
-          if (!next) {
+          const nextRoll = roll.trim();
+          const nextName = name.trim();
+          const nextPhone = phone.replace(/\D/g, "");
+          if (!nextRoll) {
+            setError("Enter a roll number.");
+            return;
+          }
+          if (!nextName) {
             setError("Enter a name.");
             return;
           }
-          onStart(next.slice(0, 40));
+          if (nextPhone.length < 10 || nextPhone.length > 15) {
+            setError("Enter a phone number.");
+            return;
+          }
+          onStart({ roll: nextRoll.slice(0, 32), name: nextName.slice(0, 40), phone: nextPhone });
         }}
       >
-        <p className="eyebrow">All Alone in Space</p>
+        <p className="eyebrow">Pilot registration</p>
         <h1>Who is flying?</h1>
+        <label htmlFor="roll">Roll number</label>
+        <input
+          id="roll"
+          value={roll}
+          onChange={(e) => setRoll(e.target.value)}
+          autoFocus
+          maxLength={32}
+          autoComplete="off"
+        />
         <label htmlFor="pilot">Name</label>
         <input
           id="pilot"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          autoFocus
           maxLength={40}
           autoComplete="name"
+        />
+        <label htmlFor="phone">Phone number</label>
+        <input
+          id="phone"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          maxLength={20}
+          inputMode="tel"
+          autoComplete="tel"
         />
         {error ? <p className="error">{error}</p> : null}
         <div className="row">
@@ -450,183 +503,11 @@ function NameScreen({ onStart }) {
   );
 }
 
-const SAUCER_X = 11.4;
-
-function ShipShapes() {
-  const cx = SAUCER_X;
-  const grid = [-150, -120, -90, -60, -30, 30, 60, 90, 120, 150, 180]
-    .map((deg) => {
-      const a = (deg * Math.PI) / 180;
-      const c = Math.cos(a);
-      const s = Math.sin(a);
-      return `M${(cx + c * 1.9).toFixed(2)} ${(s * 1.9).toFixed(2)}L${(cx + c * 6.3).toFixed(2)} ${(s * 6.3).toFixed(2)}`;
-    })
-    .join("");
-  return (
-    <>
-      <ellipse className="plume" cx="-13.8" cy="-8.16" rx="3.2" ry="0.8" />
-      <ellipse className="plume" cx="-13.8" cy="8.16" rx="3.2" ry="0.8" />
-      <ellipse className="exhaust" cx="-11.9" cy="-8.16" rx="1.25" ry="0.62" />
-      <ellipse className="exhaust" cx="-11.9" cy="8.16" rx="1.25" ry="0.62" />
-      <rect className="nacelle" x="-11.4" y="-9.18" width="16" height="2.05" rx="1.02" />
-      <rect className="nacelle" x="-11.4" y="7.13" width="16" height="2.05" rx="1.02" />
-      <circle className="cap" cx="4.15" cy="-8.16" r="0.9" />
-      <circle className="cap" cx="4.15" cy="8.16" r="0.9" />
-      <path className="line" d="M-9.4 -8.16H3.1M-9.4 8.16H3.1" />
-      <path className="pylon" d="M-0.2 -2.05L-2.6 -7.05L-5.6 -7.05L-2.6 -1.85Z" />
-      <path className="pylon" d="M-0.2 2.05L-2.6 7.05L-5.6 7.05L-2.6 1.85Z" />
-      <path className="hull" d="M9.2 0C8.2 1.9 3.2 2.75-1 2.5-5.4 2.2-8.4 1.35-10.6 0-8.4-1.35-5.4-2.2-1-2.5 3.2-2.75 8.2-1.9 9.2 0Z" />
-      <path className="line" d="M6.6 0H-9.4M-4.2 -1.35V1.35" />
-      <circle className="saucer" cx={cx} cy="0" r="7" />
-      <path className="line" d={grid} />
-      <circle className="line" cx={cx} cy="0" r="4.9" />
-      <circle className="line" cx={cx} cy="0" r="2.7" />
-      <ellipse className="impulse" cx="5.46" cy="-3.71" rx="1.25" ry="0.46" transform="rotate(-58 5.46 -3.71)" />
-      <ellipse className="impulse" cx="5.46" cy="3.71" rx="1.25" ry="0.46" transform="rotate(58 5.46 3.71)" />
-      <circle className="bridge" cx={cx + 2.1} cy="0" r="1.05" />
-      <circle className="line" cx={cx + 2.1} cy="0" r="0.42" />
-    </>
-  );
-}
-
-function ShipSvg({ className }) {
-  return (
-    <svg className={className} viewBox="-24 -11 46 22" aria-hidden="true">
-      <ShipShapes />
-    </svg>
-  );
-}
-
-function hashId(id) {
-  let h = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
-
-function faceOf(node) {
-  const rand = rng(hashId(node.id));
-  const fuel = node.shell === "fuel";
-  const kind = fuel ? "fuel" : SURFACES[Math.floor(rand() * SURFACES.length)];
-  const colors = PLANET_COLORS[kind][Math.floor(rand() * PLANET_COLORS[kind].length)];
-  const spin = Math.floor(rand() * 360);
-  const span = fuel
-    ? [7.4, 12.6]
-    : node.shell === "inner"
-      ? [10, 16]
-      : node.shell === "middle"
-        ? [12.5, 19]
-        : [15, 23];
-  const radius = span[0] + rand() * (span[1] - span[0]);
-  const ring = kind === "gas" && rand() < 0.4;
-  const marks = [];
-  if (kind === "rock" || kind === "dust" || kind === "ice") {
-    const count = kind === "ice" ? 2 : 3 + Math.floor(rand() * 3);
-    for (let i = 0; i < count; i++) {
-      const a = rand() * Math.PI * 2;
-      const d = rand() * 0.58;
-      marks.push({ x: Math.cos(a) * d, y: Math.sin(a) * d, s: 0.07 + rand() * (kind === "dust" ? 0.28 : 0.18) });
-    }
-  }
-  const bands = [];
-  if (kind === "gas" || kind === "fuel") {
-    const count = 3 + Math.floor(rand() * 3);
-    for (let i = 0; i < count; i++) {
-      bands.push({ y: -0.62 + (i / (count - 1)) * 1.24, ry: 0.05 + rand() * 0.11, alt: i % 2 === 1 });
-    }
-  }
-  return { kind, colors, spin, radius, ring, marks, bands, clip: `pd${hashId(node.id).toString(36)}` };
-}
-
-function PlanetDot({ face }) {
-  const r = face.radius;
-  const [base, dark, light] = face.colors;
-  const glossy = face.kind === "gas" || face.kind === "ice" || face.kind === "fuel";
-  return (
-    <g className={`surface surface-${face.kind}`}>
-      {face.ring ? (
-        <ellipse
-          className="halo"
-          rx={r * 1.9}
-          ry={r * 0.42}
-          transform={`rotate(${face.spin})`}
-          fill="none"
-          stroke={light}
-          strokeWidth={Math.max(0.8, r * 0.13)}
-          opacity="0.72"
-        />
-      ) : null}
-      <svg x={-r} y={-r} width={r * 2} height={r * 2} viewBox="-1 -1 2 2">
-        <clipPath id={face.clip}>
-          <circle r="1" />
-        </clipPath>
-        <g clipPath={`url(#${face.clip})`} filter="url(#planet-grain)">
-          <circle className="body" r="1" fill={base} />
-          <g transform={`rotate(${face.spin})`}>
-            {face.kind === "ice" ? <ellipse cy="-0.28" rx="0.82" ry="0.4" fill={light} opacity="0.92" /> : null}
-            {face.bands.map((band, i) => (
-              <ellipse key={i} cy={band.y} rx="1.15" ry={band.ry} fill={band.alt ? light : dark} opacity="0.9" />
-            ))}
-            {face.marks.map((mark, i) => (
-              <circle key={i} cx={mark.x} cy={mark.y} r={mark.s} fill={i % 2 ? light : dark} opacity="0.85" />
-            ))}
-          </g>
-        </g>
-        <circle r="1" fill={`url(#planet-light)`} clipPath={`url(#${face.clip})`} />
-        {glossy ? <ellipse cx="-0.28" cy="-0.32" rx="0.2" ry="0.1" fill="#fff" opacity="0.3" /> : null}
-      </svg>
-      <circle className="limb" r={r + 0.45} fill="none" />
-    </g>
-  );
-}
-
-function Starbase(props) {
-  const { className, ...rest } = props;
-  return (
-    <svg
-      className={className ? `starbase ${className}` : "starbase"}
-      viewBox="-40 -40 80 80"
-      aria-hidden="true"
-      {...rest}
-    >
-      <circle className="ring outer" r="28" />
-      <circle className="ring inner" r="17" />
-      <circle className="core" r="5" />
-      {BAYS.map((deg) => (
-        <circle key={deg} className="bay" r="1.8" transform={`rotate(${deg}) translate(28 0)`} />
-      ))}
-    </svg>
-  );
-}
-
-function Rocket() {
-  return (
-    <svg className="rocket" viewBox="-16 -30 32 60" aria-hidden="true">
-      <path className="flame" d="M-5 18 Q0 32 5 18 Q0 24 -5 18 Z" />
-      <path className="fin" d="M-7 8 L-16 20 L-7 16 Z" />
-      <path className="fin" d="M7 8 L16 20 L7 16 Z" />
-      <path className="hull" d="M0 -24 L8 16 L-8 16 Z" />
-      <circle className="port" cx="0" cy="-4" r="2.4" />
-    </svg>
-  );
-}
-
 function Intro({ step, onSkip }) {
   const beat = BEATS[step];
   return (
     <main className={`opener beat-${beat.k}`}>
       <div className="opener-scene" aria-hidden="true">
-        <div className="starfield" />
         <div className="launch-ground">
           <div className="ball" />
           <Rocket />
@@ -635,16 +516,25 @@ function Intro({ step, onSkip }) {
           <ShipSvg className="ship ship-actor" />
           <Rocket />
         </div>
+        <div className="porthole-frame" />
         <div className="porthole">
           <div className="window-view">
             <div className="ball" />
             <span className="fireball" />
             <span className="shock" />
+            <span className="shock two" />
+            <span className="shock three" />
             <span className="chunk a" />
             <span className="chunk b" />
             <span className="chunk c" />
             <span className="chunk d" />
             <span className="chunk e" />
+            <span className="ember a" />
+            <span className="ember b" />
+            <span className="ember c" />
+            <span className="ember d" />
+            <span className="ember e" />
+            <span className="ember f" />
             <span className="flash" />
           </div>
         </div>
@@ -678,6 +568,7 @@ function MapView({ snap, shipRef, onLaunch, view, onView }) {
   const byId = new Map(options.map((d) => [d.id, d]));
   const shut = new Set(snap.closed);
   const flying = snap.phase === "fly" && snap.flight;
+  const detail = view.w <= DETAIL_W;
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -744,29 +635,8 @@ function MapView({ snap, shipRef, onLaunch, view, onView }) {
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      <defs>
-        <filter id="planet-grain" x="-20%" y="-20%" width="140%" height="140%">
-          <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="4" stitchTiles="stitch" result="noise" />
-          <feComponentTransfer in="noise" result="soft">
-            <feFuncA type="linear" slope="0.28" />
-          </feComponentTransfer>
-          <feBlend in="SourceGraphic" in2="soft" mode="overlay" />
-        </filter>
-        <radialGradient id="planet-light" cx="32%" cy="28%" r="68%">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.62" />
-          <stop offset="38%" stopColor="#ffffff" stopOpacity="0.08" />
-          <stop offset="70%" stopColor="#02040a" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="#02040a" stopOpacity="0.82" />
-        </radialGradient>
-      </defs>
-      <g className="starfield">
-        <rect x="-1500" y="-1400" width="3000" height="2800" fill="#070b16" />
-        <ellipse cx="-480" cy="-220" rx="640" ry="200" fill="#1c2a4a" opacity="0.45" transform="rotate(-16 -480 -220)" />
-        <ellipse cx="520" cy="340" rx="520" ry="160" fill="#2a1830" opacity="0.32" transform="rotate(14 520 340)" />
-        {STARS.map((star, i) => (
-          <circle key={i} className="star" cx={star.x} cy={star.y} r={star.r} opacity={star.o} />
-        ))}
-      </g>
+      <MapDefs />
+      <MapBackdrop />
       {flying ? (
         <path id="flight" d={snap.flight.d} fill="none" stroke="none" pointerEvents="none" />
       ) : null}
@@ -780,7 +650,14 @@ function MapView({ snap, shipRef, onLaunch, view, onView }) {
         const cls = ["link", `d${edge.distance}`, open ? "" : "shut", hot ? "hot" : "", onRoute ? "onroute" : ""]
           .filter(Boolean)
           .join(" ");
-        return <path key={`${edge.a}-${edge.b}`} d={edge.d} className={cls} />;
+        const outward = edge.a === viewer ? edge.d : edge.rev;
+        return (
+          <g key={`${edge.a}-${edge.b}`}>
+            {hot ? <path className="link-glow" d={edge.d} /> : null}
+            <path d={edge.d} className={cls} />
+            {hot ? <path className="link-flow" d={outward} /> : null}
+          </g>
+        );
       })}
       {flying ? (
         <path className="streak" d={snap.flight.d} pathLength="100" style={{ animationDuration: `${FLIGHT_MS}ms` }} />
@@ -788,9 +665,9 @@ function MapView({ snap, shipRef, onLaunch, view, onView }) {
       {NODES.map((n) => {
         const p = POS[n.id];
         const dest = byId.get(n.id);
-        const cost = dest ? fuelCost(snap.variable, dest.distance) : null;
+        const cost = dest ? fare(snap.variable, dest.distance) : null;
         const ready = snap.phase === "map" && cost != null && cost <= snap.fuel + 1e-9;
-        const face = n.id === STATION ? null : faceOf(n);
+        const face = n.id === STATION ? null : FACES.get(n.id);
         const classes = [
           "node",
           `node-${n.shell}`,
@@ -831,15 +708,31 @@ function MapView({ snap, shipRef, onLaunch, view, onView }) {
               <>
                 <circle className="hit" r="30" />
                 <Starbase x="-32" y="-32" width="64" height="64" />
+                {n.id === viewer ? <circle className="here-ring" r="37" /> : null}
+                {ready ? <circle className="ready-ring" r="38" /> : null}
               </>
             ) : (
               <>
                 <circle className="hit" r={Math.max(14, face.radius + 3)} />
-                <PlanetDot face={face} />
+                <PlanetDot face={face} detail={detail} shut={shut.has(n.id)} />
+                {n.id === viewer ? <circle className="here-ring" r={face.radius + 5} /> : null}
+                {ready ? <circle className="ready-ring" r={face.radius + 7} /> : null}
                 {n.shell === "inner" || n.shell === "middle" || n.shell === "outer" ? (
-                  <text className="bang" y={-(face.radius + 21)} textAnchor="middle" aria-hidden="true">
-                    !
-                  </text>
+                  <g className="beacon" transform={`translate(0 ${-(face.radius + 25)})`} aria-hidden="true">
+                    <circle className="beacon-pulse" r="6.5" />
+                    <circle className="beacon-bg" r="6.5" />
+                    <text className="beacon-mark" y="3.3" textAnchor="middle">
+                      !
+                    </text>
+                  </g>
+                ) : null}
+                {n.shell === "fuel" ? (
+                  <path
+                    className="fuel-badge"
+                    transform={`translate(${face.radius * 0.72 + 4} ${-(face.radius * 0.72 + 4)})`}
+                    d="M0 -4.8C2.7 -1 4 1 4 2.7A4 4 0 0 1 -4 2.7C-4 1 -2.7 -1 0 -4.8Z"
+                    aria-hidden="true"
+                  />
                 ) : null}
               </>
             )}
@@ -858,11 +751,15 @@ function MapView({ snap, shipRef, onLaunch, view, onView }) {
         ? ROUTES.map((edge) => {
             const open = linkOpen(edge, snap.here, snap.closed);
             if (!open || (edge.a !== snap.here && edge.b !== snap.here)) return null;
-            const cost = fuelCost(snap.variable, edge.distance);
+            const text = fmtNum(fare(snap.variable, edge.distance));
+            const w = 14 + text.length * 7;
             return (
-              <text key={`cost-${edge.a}-${edge.b}`} className="cost hot" x={edge.mid.x} y={edge.mid.y} textAnchor="middle">
-                {fmtNum(cost)}
-              </text>
+              <g key={`cost-${edge.a}-${edge.b}`} className="cost hot" transform={`translate(${edge.mid.x} ${edge.mid.y})`}>
+                <rect x={-w / 2} y="-9" width={w} height="18" rx="9" />
+                <text y="4" textAnchor="middle">
+                  {text}
+                </text>
+              </g>
             );
           })
         : null}
@@ -899,8 +796,9 @@ function Shop({ credits, fuel, world, onBuy, onLeave }) {
       </p>
       {SHOP_PACKS.map((pack, i) => (
         <div className="pack" key={pack.credits}>
-          <span>
-            {pack.fuel} fuel for {pack.credits} credits
+          <span className="pack-name">
+            <b>{pack.fuel}</b> fuel
+            <em>for {pack.credits} credits</em>
           </span>
           <button
             type="button"
@@ -915,7 +813,7 @@ function Shop({ credits, fuel, world, onBuy, onLeave }) {
           >
             −
           </button>
-          <span>{counts[i]}</span>
+          <span className="count">{counts[i]}</span>
           <button
             type="button"
             onClick={() => {
@@ -948,7 +846,7 @@ function Shop({ credits, fuel, world, onBuy, onLeave }) {
         >
           Buy
         </button>
-        <button type="button" onClick={onLeave}>
+        <button type="button" className="ghost" onClick={onLeave}>
           Back to the map
         </button>
       </div>
@@ -959,14 +857,19 @@ function Shop({ credits, fuel, world, onBuy, onLeave }) {
 function ChoiceButtons({ choices, onPick }) {
   return (
     <div className="choices">
-      {choices.map((choice) => (
-        <button key={choice} type="button" onClick={() => onPick(choice)}>
-          {choice}
+      {choices.map((choice, i) => (
+        <button key={choice} type="button" className="tile choice" onClick={() => onPick(choice)}>
+          <span className="key" aria-hidden="true">
+            {String.fromCharCode(65 + i)}
+          </span>
+          <span>{choice}</span>
         </button>
       ))}
     </div>
   );
 }
+
+const DOMAIN_ICONS = { general: GlobeIcon, mental: BrainIcon, technology: ChipIcon };
 
 function Game() {
   const game = useRef(null);
@@ -1019,7 +922,7 @@ function Game() {
       return;
     }
     if (!destinations(g.here, g.closed).some((d) => d.id === dest.id)) return;
-    const actual = fuelCost(g.variable, dest.distance);
+    const actual = fare(g.variable, dest.distance);
     if (actual > g.fuel + 1e-9) return;
     const ideal = idealCost(dest.distance);
     setFlyFuel(g.fuel);
@@ -1248,7 +1151,7 @@ function Game() {
     if (game.current.phase !== "map") return;
     const g = game.current;
     const open = destinations(g.here, g.closed);
-    const can = open.some((d) => fuelCost(g.variable, d.distance) <= g.fuel + 1e-9);
+    const can = open.some((d) => fare(g.variable, d.distance) <= g.fuel + 1e-9);
     if (!can) finish("stranded");
   }, [snap.phase, snap.here, snap.fuel, snap.variable, snap.closed]);
 
@@ -1296,6 +1199,8 @@ function Game() {
     const facts = runFacts(game.current);
     const payload = {
       name: game.current.name,
+      roll: game.current.roll,
+      phone: game.current.phone,
       ...facts,
       finishedAt: new Date().toISOString(),
     };
@@ -1325,7 +1230,7 @@ function Game() {
   }, []);
 
   if (snap.phase === "name") {
-    return <NameScreen onStart={(name) => commit({ name, phase: "intro", intro: 0 })} />;
+    return <NameScreen onStart={(who) => commit({ ...who, phase: "intro", intro: 0 })} />;
   }
   if (snap.phase === "intro") return <Intro step={snap.intro} onSkip={dock} />;
 
@@ -1350,18 +1255,33 @@ function Game() {
       <header className="hud">
         <div>
           <p className="eyebrow">{snap.name}</p>
-          <strong>{where}</strong>
+          <strong className="where">{where}</strong>
         </div>
         <div className="meters">
-          <span>
-            Fuel <b>{fmtNum(fuelShown)}</b>
-          </span>
-          <span>
-            Credits <b>{snap.credits}</b>
-          </span>
-          <span className="clock">
-            Clock <b>{formatClock(clockMs)}</b>
-          </span>
+          <div className="meter fuel">
+            <FuelIcon />
+            <div className="m-text">
+              <small>Fuel</small>
+              <b>{fmtNum(fuelShown)}</b>
+              <span className="gauge" aria-hidden="true">
+                <i style={{ width: `${Math.max(0, Math.min(1, fuelShown / Math.max(30, fuelShown))) * 100}%` }} />
+              </span>
+            </div>
+          </div>
+          <div className="meter credits">
+            <CreditIcon />
+            <div className="m-text">
+              <small>Credits</small>
+              <b>{snap.credits}</b>
+            </div>
+          </div>
+          <div className={snap.phase !== "end" && clockMs <= 120_000 ? "meter clock urgent" : "meter clock"}>
+            <ClockIcon />
+            <div className="m-text">
+              <small>Clock</small>
+              <b>{formatClock(clockMs)}</b>
+            </div>
+          </div>
         </div>
       </header>
       <div className="play-body">
@@ -1383,12 +1303,16 @@ function Game() {
             <p className="eyebrow">{snap.here}</p>
             <h1>Choose a domain</h1>
             <p>One question. Sixty seconds.</p>
-            <div className="row">
-              {DOMAINS.map(([id, label]) => (
-                <button key={id} type="button" onClick={() => chooseDomain(id)}>
-                  {label}
-                </button>
-              ))}
+            <div className="domains">
+              {DOMAINS.map(([id, label]) => {
+                const DomainIcon = DOMAIN_ICONS[id];
+                return (
+                  <button key={id} type="button" className="tile domain" onClick={() => chooseDomain(id)}>
+                    {DomainIcon ? <DomainIcon /> : null}
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </section>
         ) : null}
@@ -1403,6 +1327,7 @@ function Game() {
               </div>
             </div>
             <p className="prompt">{snap.card.prompt}</p>
+            <p>A right answer might settle you. A miss closes this world.</p>
             <ChoiceButtons
               choices={snap.card.choices}
               onPick={(choice) => {
@@ -1429,7 +1354,7 @@ function Game() {
               onPick={(choice) => markFuel(choice === fuelCard.answer ? "right" : "wrong")}
             />
             <div className="row">
-              <button type="button" onClick={() => markFuel("skip")}>
+              <button type="button" className="ghost" onClick={() => markFuel("skip")}>
                 Skip
               </button>
             </div>
@@ -1462,21 +1387,37 @@ function EndScreen({ snap }) {
         ? "The board is unreachable. This score stays on the laptop and retries."
         : "Sending the score…";
   return (
-    <section className="panel">
-      <p className="eyebrow">Run over</p>
-      <h1>{END_COPY[snap.endReason] || "Run over."}</h1>
-      <p className="final-score">
-        Settled <strong>{facts.settled ? "Yes" : "No"}</strong>
-        {" · "}
-        Time left <strong>{formatClock(facts.timeLeft * 1000)}</strong>
-        {" · "}
-        Worlds <strong>{facts.worlds}</strong>
-        {" · "}
-        Fuel score <strong>{fmtScore(facts.fuel)}</strong>
-      </p>
-      <p>{post}</p>
+    <section className={facts.settled ? "panel wide end won" : "panel wide end lost"}>
+      <div className="end-hero">
+        <div className="end-orb" aria-hidden="true" />
+        <div>
+          <p className="eyebrow">Run over</p>
+          <h1>{END_COPY[snap.endReason] || "Run over."}</h1>
+          <p className="hint">{post}</p>
+        </div>
+      </div>
+      <dl className="stats">
+        <div className="stat">
+          <dt>Settled</dt>
+          <dd className={facts.settled ? "yes" : "no"}>{facts.settled ? "Yes" : "No"}</dd>
+        </div>
+        <div className="stat">
+          <dt>Time left</dt>
+          <dd>{formatClock(facts.timeLeft * 1000)}</dd>
+        </div>
+        <div className="stat">
+          <dt>Worlds</dt>
+          <dd>{facts.worlds}</dd>
+        </div>
+        <div className="stat">
+          <dt>Fuel score</dt>
+          <dd>{fmtScore(facts.fuel)}</dd>
+        </div>
+      </dl>
       <p>
-        <a href="/board">Open the display board</a>
+        <a className="linkbtn" href="/board">
+          Open the display board
+        </a>
       </p>
       <BoardTable rows={rows} err={err} />
     </section>
@@ -1485,6 +1426,10 @@ function EndScreen({ snap }) {
 
 export default function App() {
   const route = window.location.pathname.replace(/\/+$/, "") || "/";
-  if (route === "/board") return <Board />;
-  return <Game />;
+  return (
+    <>
+      <SpaceBackdrop />
+      {route === "/board" ? <Board /> : <Game />}
+    </>
+  );
 }

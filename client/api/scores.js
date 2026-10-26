@@ -14,9 +14,11 @@ export default async function handler(req, res) {
   try {
     const sql = await db();
     const rows = await sql`
-      INSERT INTO scores (name, score, finished_at, settled, time_left, worlds, fuel)
+      INSERT INTO scores (name, roll_no, phone, score, finished_at, settled, time_left, worlds, fuel)
       VALUES (
         ${parsed.name},
+        ${parsed.roll},
+        ${parsed.phone},
         ${parsed.fuel},
         ${parsed.finishedAt},
         ${parsed.settled},

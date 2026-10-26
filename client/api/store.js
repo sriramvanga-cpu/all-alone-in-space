@@ -26,18 +26,32 @@ function getSql() {
 
 export async function db() {
   const query = getSql();
-  ready ??= query`CREATE TABLE IF NOT EXISTS scores (
-    id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name text NOT NULL,
-    score double precision NOT NULL,
-    finished_at timestamptz NOT NULL,
-    settled boolean NOT NULL DEFAULT false,
-    time_left integer NOT NULL DEFAULT 0,
-    worlds integer NOT NULL DEFAULT 0,
-    fuel double precision NOT NULL DEFAULT 0
-  )`;
+  ready ??= (async () => {
+    await query`CREATE TABLE IF NOT EXISTS scores (
+      id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      name text NOT NULL,
+      score double precision NOT NULL,
+      finished_at timestamptz NOT NULL,
+      settled boolean NOT NULL DEFAULT false,
+      time_left integer NOT NULL DEFAULT 0,
+      worlds integer NOT NULL DEFAULT 0,
+      fuel double precision NOT NULL DEFAULT 0
+    )`;
+    await query`ALTER TABLE scores ADD COLUMN IF NOT EXISTS roll_no text`;
+    await query`ALTER TABLE scores ADD COLUMN IF NOT EXISTS phone text`;
+  })();
   await ready;
   return query;
+}
+
+function identity(body) {
+  const sent = body.roll != null || body.phone != null;
+  if (!sent) return { roll: null, phone: null };
+  const roll = typeof body.roll === "string" ? body.roll.trim() : "";
+  const phone = typeof body.phone === "string" ? body.phone.replace(/\D/g, "") : "";
+  if (!roll || roll.length > 32) return { error: "roll must be a non-empty string" };
+  if (phone.length < 10 || phone.length > 15) return { error: "phone must be a phone number" };
+  return { roll, phone };
 }
 
 export function parseScore(body) {
@@ -50,9 +64,11 @@ export function parseScore(body) {
     return { error: "finishedAt must be an ISO-8601 string" };
   }
   const when = new Date(finishedAt).toISOString();
+  const who = identity(body);
+  if (who.error) return who;
   if (typeof body.settled !== "boolean") {
     if (typeof body.score !== "number" || !Number.isFinite(body.score)) return { error: "score must be a finite number" };
-    return { name: name.trim(), fuel: body.score, settled: false, timeLeft: 0, worlds: 0, finishedAt: when };
+    return { name: name.trim(), ...who, fuel: body.score, settled: false, timeLeft: 0, worlds: 0, finishedAt: when };
   }
   const whole = (n, max) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= max;
   if (!whole(body.timeLeft, 24 * 60 * 60) || !whole(body.worlds, 55)) {
@@ -61,6 +77,7 @@ export function parseScore(body) {
   if (typeof body.fuel !== "number" || !Number.isFinite(body.fuel)) return { error: "fuel must be a finite number" };
   return {
     name: name.trim(),
+    ...who,
     fuel: body.fuel,
     settled: body.settled,
     timeLeft: body.timeLeft,
