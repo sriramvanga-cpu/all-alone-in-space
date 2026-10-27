@@ -64,7 +64,10 @@ const END_COPY = {
   win: "A world will take you.",
   time: "Fifteen minutes are up.",
   stranded: "No open route you can afford.",
+  closed: "Every route from here leads to a closed world.",
 };
+// A reload in these phases throws the run away, so the browser asks first.
+const LIVE_PHASES = new Set(["map", "fly", "pick", "question", "fuel", "shop"]);
 
 function round2(v) {
   return Math.round(v * 100) / 100;
@@ -711,7 +714,8 @@ function MapView({ snap, shipRef, onLaunch, view, onView }) {
   );
 }
 
-function Shop({ credits, fuel, world, onBuy, onLeave }) {
+function Shop({ credits, fuel, world, exitFare, onBuy, onLeave }) {
+  const stuck = fuel + 1e-9 < exitFare;
   const [counts, setCounts] = useState([0, 0, 0]);
   const quote = buyPacks({ credits, fuel }, counts);
   function canInc(i) {
@@ -766,6 +770,13 @@ function Shop({ credits, fuel, world, onBuy, onLeave }) {
           ? `${quote.cost} credits for ${quote.fuel - fuel} fuel.`
           : "Choose a pack, or leave."}
       </p>
+      {stuck ? (
+        <p className="error">
+          {Number.isFinite(exitFare)
+            ? `The cheapest route from here costs ${fmtNum(exitFare)} fuel. Buy fuel first, or leaving ends your run.`
+            : "Every route from here leads to a closed world. Leaving ends your run."}
+        </p>
+      ) : null}
       <div className="row">
         <button
           type="button"
@@ -779,7 +790,7 @@ function Shop({ credits, fuel, world, onBuy, onLeave }) {
           Buy
         </button>
         <button type="button" className="ghost" onClick={onLeave}>
-          Back to the map
+          {stuck ? "End the run" : "Back to the map"}
         </button>
       </div>
     </section>
@@ -1074,8 +1085,19 @@ function Game() {
     const g = game.current;
     const open = destinations(g.here, g.closed);
     const can = open.some((d) => fare(g.variable, d.distance) <= g.fuel + 1e-9);
-    if (!can) finish("stranded");
+    if (!can) finish(open.length ? "stranded" : "closed");
   }, [snap.phase, snap.here, snap.fuel, snap.variable, snap.closed]);
+
+  const live = LIVE_PHASES.has(snap.phase);
+  useEffect(() => {
+    if (!live) return;
+    const ask = (e) => {
+      e.preventDefault();
+      e.returnValue = ""; // older Safari only asks when this is set
+    };
+    window.addEventListener("beforeunload", ask);
+    return () => window.removeEventListener("beforeunload", ask);
+  }, [live]);
 
   useEffect(() => {
     if (snap.phase !== "fly" || !snap.flight) return;
@@ -1289,6 +1311,7 @@ function Game() {
             credits={snap.credits}
             fuel={snap.fuel}
             world={snap.here}
+            exitFare={Math.min(...destinations(snap.here, snap.closed).map((d) => fare(snap.variable, d.distance)))}
             onBuy={purchase}
             onLeave={leaveShop}
           />
