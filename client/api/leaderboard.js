@@ -7,10 +7,10 @@ export default async function handler(req, res) {
     const sql = await db();
     const rows = await sql`
       SELECT id, name, fuel, settled, time_left, worlds, finished_at FROM scores
-      ORDER BY settled DESC,
-        CASE WHEN settled THEN time_left ELSE worlds END DESC,
-        CASE WHEN settled THEN fuel ELSE -time_left END DESC,
+      ORDER BY settled DESC, worlds DESC, fuel DESC,
+        CASE WHEN settled THEN time_left ELSE -time_left END DESC,
         id ASC
+      LIMIT 100
     `;
     return send(res, 200, rows.map(toJson));
   } catch (err) {

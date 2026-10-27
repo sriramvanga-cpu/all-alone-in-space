@@ -1,6 +1,6 @@
 # All Alone in Space
 
-The game runs in `client/`. The leaderboard runs in `server/`.
+The game and its leaderboard API both run in `client/`.
 
 ## Game
 
@@ -18,9 +18,7 @@ Starter cards live in `client/src/data/questions.json`. Replace them before the 
 
 ## Leaderboard
 
-Scores are stored in the Neon Postgres branch linked by `neon.ts`. `neon deploy` writes `DATABASE_URL` into `.env.local`. Set that same variable on the Vercel project before a production deploy. The game posts to `/api/scores` on the same host. `/board` reads `/api/leaderboard`.
-
-`server/` is the old SQLite board. The game does not call it.
+Scores are stored in Neon Postgres. Production uses the `production` branch, through `DATABASE_URL` in the Vercel project settings. Local dev uses the `dev` branch, through `DATABASE_URL` in `.env.local`, so test games never reach the fest board. The game posts to `/api/scores` on the same host. `/board` reads `/api/leaderboard`.
 
 ## Image credits
 

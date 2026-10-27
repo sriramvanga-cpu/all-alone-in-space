@@ -14,21 +14,23 @@ export default async function handler(req, res) {
   try {
     const sql = await db();
     const rows = await sql`
-      INSERT INTO scores (name, roll_no, phone, score, finished_at, settled, time_left, worlds, fuel)
+      INSERT INTO scores (name, roll_no, phone, run_id, finished_at, settled, time_left, worlds, fuel)
       VALUES (
         ${parsed.name},
         ${parsed.roll},
         ${parsed.phone},
-        ${parsed.fuel},
+        ${parsed.runId},
         ${parsed.finishedAt},
         ${parsed.settled},
         ${parsed.timeLeft},
         ${parsed.worlds},
         ${parsed.fuel}
       )
+      ON CONFLICT (run_id) DO NOTHING
       RETURNING id, name, fuel, settled, time_left, worlds, finished_at
     `;
-    return send(res, 201, toJson(rows[0]));
+    // No row back means this run was already saved: a retry, so report success.
+    return rows.length ? send(res, 201, toJson(rows[0])) : send(res, 200, { duplicate: true });
   } catch (err) {
     const missing = err?.code === "NO_DATABASE";
     return send(res, missing ? 503 : 500, { error: missing ? "DATABASE_URL is not set" : "database" });

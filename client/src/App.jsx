@@ -1120,6 +1120,8 @@ function Game() {
     game.current = { ...game.current, sent: true };
     const facts = runFacts(game.current);
     const payload = {
+      // Lets the server drop a retry of a post it already saved. randomUUID needs https or localhost.
+      runId: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       name: game.current.name,
       phone: game.current.phone,
       ...facts,

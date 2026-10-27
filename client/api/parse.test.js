@@ -87,3 +87,14 @@ test("a score post rejects a bad clock", () => {
   const parsed = parseScore({ name: "Uhura", settled: false, timeLeft: 1.5, worlds: 0, fuel: 0, finishedAt: when });
   assert.equal(parsed.error, "timeLeft and worlds must be whole numbers");
 });
+
+test("a score post rejects a name longer than the form allows", () => {
+  const parsed = parseScore({ name: "K".repeat(41), settled: false, timeLeft: 1, worlds: 1, fuel: 0, finishedAt: when });
+  assert.equal(parsed.error, "name must be at most 40 characters");
+});
+
+test("a score post keeps its run id, and old posts without one still work", () => {
+  assert.equal(parseScore({ name: "Kirk", runId: "run-1", settled: false, timeLeft: 1, worlds: 1, fuel: 0, finishedAt: when }).runId, "run-1");
+  assert.equal(parseScore({ name: "Kirk", settled: false, timeLeft: 1, worlds: 1, fuel: 0, finishedAt: when }).runId, null);
+  assert.equal(parseScore({ name: "Kirk", runId: 7, settled: false, timeLeft: 1, worlds: 1, fuel: 0, finishedAt: when }).error, "runId must be a short string");
+});

@@ -30,7 +30,7 @@ export async function db() {
     await query`CREATE TABLE IF NOT EXISTS scores (
       id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       name text NOT NULL,
-      score double precision NOT NULL,
+      score double precision,
       finished_at timestamptz NOT NULL,
       settled boolean NOT NULL DEFAULT false,
       time_left integer NOT NULL DEFAULT 0,
@@ -39,7 +39,15 @@ export async function db() {
     )`;
     await query`ALTER TABLE scores ADD COLUMN IF NOT EXISTS roll_no text`;
     await query`ALTER TABLE scores ADD COLUMN IF NOT EXISTS phone text`;
-  })();
+    // Old rows keep their score; new rows only write fuel.
+    await query`ALTER TABLE scores ALTER COLUMN score DROP NOT NULL`;
+    // One id per game, so a retried post can't save the same run twice.
+    await query`ALTER TABLE scores ADD COLUMN IF NOT EXISTS run_id text UNIQUE`;
+  })().catch((err) => {
+    // Forget a failed setup so the next request tries again instead of failing forever.
+    ready = undefined;
+    throw err;
+  });
   await ready;
   return query;
 }
@@ -61,6 +69,11 @@ export function parseScore(body) {
   }
   const { name, finishedAt } = body;
   if (typeof name !== "string" || name.trim() === "") return { error: "name must be a non-empty string" };
+  if (name.trim().length > 40) return { error: "name must be at most 40 characters" };
+  const runId = body.runId ?? null;
+  if (runId !== null && (typeof runId !== "string" || runId.length === 0 || runId.length > 64)) {
+    return { error: "runId must be a short string" };
+  }
   if (typeof finishedAt !== "string" || !ISO.test(finishedAt) || Number.isNaN(Date.parse(finishedAt))) {
     return { error: "finishedAt must be an ISO-8601 string" };
   }
@@ -69,7 +82,7 @@ export function parseScore(body) {
   if (who.error) return who;
   if (typeof body.settled !== "boolean") {
     if (typeof body.score !== "number" || !Number.isFinite(body.score)) return { error: "score must be a finite number" };
-    return { name: name.trim(), ...who, fuel: body.score, settled: false, timeLeft: 0, worlds: 0, finishedAt: when };
+    return { name: name.trim(), ...who, runId, fuel: body.score, settled: false, timeLeft: 0, worlds: 0, finishedAt: when };
   }
   const whole = (n, max) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= max;
   if (!whole(body.timeLeft, 24 * 60 * 60) || !whole(body.worlds, 55)) {
@@ -79,6 +92,7 @@ export function parseScore(body) {
   return {
     name: name.trim(),
     ...who,
+    runId,
     fuel: body.fuel,
     settled: body.settled,
     timeLeft: body.timeLeft,
