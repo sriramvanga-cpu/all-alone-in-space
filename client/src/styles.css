@@ -479,6 +479,21 @@ input:focus {
 .node .planet-art { transition: transform 0.18s var(--ease); }
 .node.ready:hover .planet-art, .node.ready:focus-visible .planet-art { transform: scale(1.1); }
 .node.shut { opacity: 0.55; }
+.hab-tag {
+  font: 700 10.5px var(--font-display);
+  letter-spacing: 0.06em;
+  stroke: rgba(4, 7, 16, 0.92);
+  stroke-width: 3.2px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.node:hover .hab-tag, .node:focus-visible .hab-tag { opacity: 1; }
+.hab-low { fill: var(--danger); }
+.hab-medium { fill: #ffd27a; }
+.hab-high { fill: var(--ok); }
 
 .here-ring { fill: none; stroke: #fff; stroke-width: 1.4; opacity: 0.85; pointer-events: none; }
 .ready-ring {
@@ -695,6 +710,16 @@ input:focus {
 .stat dd { margin: 0.2rem 0 0; font: 800 1.7rem var(--font-display); font-variant-numeric: tabular-nums; }
 .stat dd.yes { color: var(--ok); text-shadow: 0 0 18px rgba(125, 222, 192, 0.5); }
 .stat dd.no { color: var(--danger); }
+.stat dd small { margin-left: 0.25em; font: 600 0.8rem var(--font-body); color: var(--dim); }
+
+/* Scanner readings after a habitability check */
+.scan-bar { height: 4px; margin-top: 0.8rem; background: rgba(90, 209, 255, 0.12); border-radius: 2px; overflow: hidden; }
+.scan-bar i { display: block; height: 100%; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: scanfill linear both; }
+@keyframes scanfill { from { width: 0; } to { width: 100%; } }
+.reading { animation: rise 0.4s var(--ease) both; }
+.verdict { margin: 0.4rem 0 0; font: 700 1.05rem var(--font-display); }
+.verdict.yes { color: var(--ok); }
+.verdict.no { color: var(--danger); }
 
 .linkbtn {
   display: inline-block;
@@ -937,7 +962,7 @@ input:focus {
 
 @media (prefers-reduced-motion: reduce) {
   .streak, .link-flow, .ready-ring, .beacon-pulse, .navlight, .plume, .exhaust, .end-orb, .live::before,
-  .starbase .spin, .starbase .core {
+  .starbase .spin, .starbase .core, .reading, .scan-bar i {
     animation: none !important;
   }
 }

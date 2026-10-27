@@ -13,6 +13,8 @@ import {
   fuelMinute,
   makeFuelCard,
   buyPacks,
+  scanReadings,
+  TOXIC_LIMIT,
 } from "./game/rules.js";
 import {
   INNER,
@@ -72,7 +74,10 @@ const END_COPY = {
   closed: "Every route from here leads to a closed world.",
 };
 // A reload in these phases throws the run away, so the browser asks first.
-const LIVE_PHASES = new Set(["map", "fly", "pick", "question", "fuel", "shop"]);
+const LIVE_PHASES = new Set(["map", "fly", "pick", "question", "scan", "fuel", "shop"]);
+// Follows SHELL_BANDS in rules.js: a right answer settles ~5% inner, ~25% middle, ~55% outer.
+const HAB_LEVEL = { inner: "Low", middle: "Medium", outer: "High" };
+const RING_LEVEL = { inner: "hard", middle: "medium", outer: "easy" };
 
 function round2(v) {
   return Math.round(v * 100) / 100;
@@ -191,6 +196,7 @@ function fresh() {
     fuelDeadline: 0,
     creditFloor: 0,
     visited: [],
+    scan: null,
     note: "",
     postState: "",
     sent: false,
@@ -608,6 +614,7 @@ function MapView({ snap, shipRef, onLaunch, view, onView }) {
         const cost = dest ? fare(snap.variable, dest.distance) : null;
         const ready = snap.phase === "map" && cost != null && cost <= snap.fuel + 1e-9;
         const face = n.id === STATION ? null : FACES.get(n.id);
+        const hab = HAB_LEVEL[n.shell];
         const classes = [
           "node",
           `node-${n.shell}`,
@@ -625,7 +632,9 @@ function MapView({ snap, shipRef, onLaunch, view, onView }) {
             role={ready ? "button" : undefined}
             tabIndex={ready ? 0 : undefined}
             aria-label={
-              ready ? `Fly to ${n.id === STATION ? "the station" : n.id}, ${fmtNum(cost)} fuel` : undefined
+              ready
+                ? `Fly to ${n.id === STATION ? "the station" : n.id}, ${fmtNum(cost)} fuel${hab ? `, habitability ${hab}` : ""}`
+                : undefined
             }
             onClick={() => {
               if (moved.current) {
@@ -642,6 +651,7 @@ function MapView({ snap, shipRef, onLaunch, view, onView }) {
           >
             <title>
               {n.id === STATION ? "Station" : n.id}
+              {hab ? `, habitability ${hab}` : ""}
               {cost != null ? `, ${fmtNum(cost)} fuel${ready ? "" : ", not enough fuel"}` : ""}
             </title>
             {n.id === STATION ? (
@@ -657,7 +667,12 @@ function MapView({ snap, shipRef, onLaunch, view, onView }) {
                 <PlanetDot face={face} detail={detail} shut={shut.has(n.id)} />
                 {n.id === viewer ? <circle className="here-ring" r={face.radius + 5} /> : null}
                 {ready ? <circle className="ready-ring" r={face.radius + 7} /> : null}
-                {n.shell === "inner" || n.shell === "middle" || n.shell === "outer" ? (
+                {hab ? (
+                  <text className={`hab-tag hab-${hab.toLowerCase()}`} y={face.radius + 15} textAnchor="middle" aria-hidden="true">
+                    Habitability: {hab}
+                  </text>
+                ) : null}
+                {hab ? (
                   <g className="beacon" transform={`translate(0 ${-(face.radius + 25)})`} aria-hidden="true">
                     <circle className="beacon-pulse" r="6.5" />
                     <circle className="beacon-bg" r="6.5" />
@@ -927,12 +942,15 @@ function Game() {
     commit({ phase: "pick", here: id, flight: null, visited });
   }
 
-  function takeCard(domain) {
+  function takeCard(domain, level) {
     const seen = usedRef.current[domain];
-    const deck = bank[domain] || [];
+    const all = bank[domain] || [];
+    const leveled = all.filter((card) => card.level === level);
+    // A level with no cards falls back to the whole domain, so a thin bank never blocks a question.
+    const deck = leveled.length ? leveled : all;
     let pool = deck.filter((card) => !seen.has(card.id));
     if (!pool.length) {
-      seen.clear();
+      for (const card of deck) seen.delete(card.id);
       pool = deck;
     }
     if (!pool.length) return null;
@@ -948,7 +966,7 @@ function Game() {
       finish("time");
       return;
     }
-    const card = takeCard(domain);
+    const card = takeCard(domain, RING_LEVEL[shellOf(g.here)]);
     if (!card) return;
     commit({
       phase: "question",
@@ -973,23 +991,23 @@ function Game() {
     const closed = [...g.closed, g.here];
     const exits = destinations(g.here, closed).map((hop) => hop.distance);
     const variable = result.won ? result.variable : affordableVariable(result.variable, g.fuel, exits);
+    const scan = {
+      world: g.here,
+      readings: scanReadings(result.won),
+      note: timedOut ? "Time's up." : correct ? "Right answer." : "Wrong answer.",
+    };
     if (result.won) {
-      game.current = { ...g, credits: result.credits, variable };
+      game.current = { ...g, credits: result.credits, variable, scan };
       finish("win");
       return;
     }
-    commit({
-      credits: result.credits,
-      variable,
-      closed,
-      phase: "map",
-      card: null,
-      note: timedOut
-        ? "Time's up. This world is closed."
-        : correct
-          ? "Right answer. This world is closed."
-          : "Wrong answer. This world is closed.",
-    });
+    commit({ credits: result.credits, variable, closed, phase: "scan", card: null, scan });
+  }
+
+  function leaveScan() {
+    const g = game.current;
+    if (g.phase !== "scan") return;
+    commit({ phase: "map", scan: null, note: `${g.here} is not habitable. This world is closed.` });
   }
 
   function closeFuelMinute() {
@@ -1288,6 +1306,8 @@ function Game() {
           </section>
         ) : null}
 
+        {snap.phase === "scan" && snap.scan ? <Scan scan={snap.scan} onDone={leaveScan} /> : null}
+
         {snap.phase === "fuel" && fuelCard ? (
           <section className="panel">
             <div className="qhead">
@@ -1338,6 +1358,8 @@ function EndScreen({ snap }) {
         ? "The board is unreachable. This score stays on the laptop and retries."
         : "Sending the score…";
   return (
+    <>
+    {facts.settled && snap.scan ? <Scan scan={snap.scan} habitable /> : null}
     <section className={facts.settled ? "panel wide end won" : "panel wide end lost"}>
       <div className="end-hero">
         <div className="end-orb" aria-hidden="true" />
@@ -1371,6 +1393,55 @@ function EndScreen({ snap }) {
         </a>
       </p>
       <BoardTable rows={rows} err={err} />
+    </section>
+    </>
+  );
+}
+
+const SCAN_STEP_MS = 450;
+
+function Scan({ scan, habitable = false, onDone }) {
+  const [done, setDone] = useState(false);
+  const revealMs = (scan.readings.length + 1) * SCAN_STEP_MS;
+  useEffect(() => {
+    const id = setTimeout(() => setDone(true), revealMs);
+    return () => clearTimeout(id);
+  }, [revealMs]);
+  return (
+    <section className="panel wide scan">
+      <p className="eyebrow">{scan.world}</p>
+      <h1>Scientific readings</h1>
+      <p className="hint">{scan.note} {done ? "Scan complete." : "Scanning the surface…"}</p>
+      <div className="scan-bar" aria-hidden="true">
+        <i style={{ animationDuration: `${revealMs}ms` }} />
+      </div>
+      <dl className="stats">
+        {scan.readings.map((r, i) => (
+          <div className="stat reading" key={r.label} style={{ animationDelay: `${(i + 1) * SCAN_STEP_MS}ms` }}>
+            <dt>{r.label}</dt>
+            <dd className={r.toxic ? (habitable ? "yes" : "no") : undefined}>
+              {r.value}
+              <small>{r.unit}</small>
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {done ? (
+        <>
+          <p className={habitable ? "verdict yes" : "verdict no"} aria-live="polite">
+            {habitable
+              ? "All readings within safe limits. Habitable."
+              : `Toxic elements concentration is too high (safe limit ${TOXIC_LIMIT} ppm). Not habitable.`}
+          </p>
+          {onDone ? (
+            <div className="row">
+              <button type="button" onClick={onDone}>
+                Return to the map
+              </button>
+            </div>
+          ) : null}
+        </>
+      ) : null}
     </section>
   );
 }

@@ -162,6 +162,20 @@ export function habitability(state, correct, rng = Math.random) {
   return { percent, credits, variable, roll, multiplier, won, closed: !won };
 }
 
+export const TOXIC_LIMIT = 50;
+
+/** Scanner readings after a habitability check. Only toxic elements carry the verdict: under TOXIC_LIMIT ppm when habitable, far over it when not. */
+export function scanReadings(habitable, rng = Math.random) {
+  const between = (lo, hi, places = 0) => Number((lo + rng() * (hi - lo)).toFixed(places));
+  return [
+    { label: "Oxygen", value: between(17, 24), unit: "%" },
+    { label: "Surface temp", value: between(-8, 34), unit: "°C" },
+    { label: "Gravity", value: between(0.7, 1.3, 2), unit: "g" },
+    { label: "Surface water", value: between(18, 82), unit: "%" },
+    { label: "Toxic elements", value: habitable ? between(5, 40) : between(180, 900), unit: "ppm", toxic: true },
+  ];
+}
+
 /**
  * End of a fuel minute. `answers` is "right" | "wrong" | "skip".
  * Skips are ignored. No completed answers leaves the variable unchanged.

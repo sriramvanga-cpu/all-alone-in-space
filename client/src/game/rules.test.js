@@ -17,6 +17,8 @@ import {
   fuelMinute,
   makeFuelCard,
   buyPacks,
+  scanReadings,
+  TOXIC_LIMIT,
 } from "./rules.js";
 import {
   INNER,
@@ -281,6 +283,14 @@ test("wrong answer applies one multiplier and pays nothing", () => {
   assert.equal(result.roll, 100);
   assert.equal(result.won, false);
   assert.equal(result.closed, true);
+});
+
+test("toxic reading is over the limit exactly when the world is not habitable", () => {
+  for (const sample of [0, 0.5, 0.999999]) {
+    const toxic = (habitable) => scanReadings(habitable, () => sample).find((r) => r.toxic).value;
+    assert.ok(toxic(true) < TOXIC_LIMIT, `habitable at ${sample}`);
+    assert.ok(toxic(false) > TOXIC_LIMIT, `not habitable at ${sample}`);
+  }
 });
 
 test("fuel cards are fresh arithmetic, not one fixed list", () => {
