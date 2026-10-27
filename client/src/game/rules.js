@@ -53,11 +53,23 @@ export function score(path) {
   return Math.round(raw * 1e10) / 1e10;
 }
 
-/** Settled first. Then more worlds, then more fuel left. Wins break remaining ties on time left; losses on who lasted longer. */
+/** A win's points: 10 per world, 1 per fuel left, 1 per 10 seconds left. A loss scores 0. */
+export function runPoints(run) {
+  if (!run.settled) return 0;
+  const worlds = Number.isFinite(run.worlds) ? run.worlds : 0;
+  const fuel = Number.isFinite(run.fuel) ? run.fuel : Number(run.score) || 0;
+  const time = Number.isFinite(run.timeLeft) ? run.timeLeft : 0;
+  return Math.round((worlds * 10 + fuel + time / 10) * 100) / 100;
+}
+
+/** Settled first. Wins then rank by points. Ties, and all losses: more worlds, then more fuel left, then time left for wins or time lasted for losses. */
 export function compareRuns(a, b) {
   const as = a.settled ? 1 : 0;
   const bs = b.settled ? 1 : 0;
   if (as !== bs) return bs - as;
+  const ap = runPoints(a);
+  const bp = runPoints(b);
+  if (ap !== bp) return bp - ap;
   const aw = Number.isFinite(a.worlds) ? a.worlds : 0;
   const bw = Number.isFinite(b.worlds) ? b.worlds : 0;
   if (aw !== bw) return bw - aw;

@@ -10,6 +10,7 @@ import {
   idealCost,
   score,
   compareRuns,
+  runPoints,
   affordableVariable,
   drawMultiplier,
   applyMultiplier,
@@ -72,18 +73,26 @@ test("fuel cost, ideal cost, and the worked score", () => {
   assert.equal(score([{ actual: fuelCost(1, 12), ideal: idealCost(12) }]), 0);
 });
 
-test("settled runs rank above losses, then worlds, fuel left, and time", () => {
+test("settled runs rank above losses; wins rank by points, losses by worlds, fuel left, and time", () => {
   const win = { settled: true, timeLeft: 100, fuel: 0, worlds: 1, id: 1 };
   const luckyLoss = { settled: false, timeLeft: 0, fuel: 40, worlds: 8, id: 2 };
   assert.ok(compareRuns(win, luckyLoss) < 0);
+  assert.equal(runPoints(luckyLoss), 0);
 
+  // 10 per world, 1 per fuel, 1 per 10 s left: a fast win beats a slow tour.
   const explorer = { settled: true, timeLeft: 100, fuel: 1, worlds: 3, id: 3 };
-  const sprinter = { settled: true, timeLeft: 800, fuel: 50, worlds: 1, id: 4 };
-  assert.ok(compareRuns(explorer, sprinter) < 0);
+  const sprinter = { settled: true, timeLeft: 800, fuel: 5, worlds: 1, id: 4 };
+  assert.equal(runPoints(explorer), 41);
+  assert.equal(runPoints(sprinter), 95);
+  assert.ok(compareRuns(sprinter, explorer) < 0);
 
   const rich = { settled: true, timeLeft: 100, fuel: 13.4, worlds: 2, id: 5 };
-  const poor = { settled: true, timeLeft: 400, fuel: 5, worlds: 2, id: 6 };
-  assert.ok(compareRuns(rich, poor) < 0);
+  assert.equal(runPoints(rich), 43.4);
+
+  const wide = { settled: true, timeLeft: 0, fuel: 10, worlds: 2, id: 5 };
+  const deep = { settled: true, timeLeft: 0, fuel: 20, worlds: 1, id: 6 };
+  assert.equal(runPoints(wide), runPoints(deep));
+  assert.ok(compareRuns(wide, deep) < 0);
 
   const sooner = { settled: true, timeLeft: 200, fuel: 5, worlds: 2, id: 7 };
   const later = { settled: true, timeLeft: 100, fuel: 5, worlds: 2, id: 8 };

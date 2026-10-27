@@ -8,6 +8,7 @@ import {
   fuelCost,
   idealCost,
   compareRuns,
+  runPoints,
   habitability,
   affordableVariable,
   fuelMinute,
@@ -361,6 +362,7 @@ function BoardTable({ rows, err, start = 0 }) {
               <th className="num">Time left</th>
               <th className="num">Worlds</th>
               <th className="num">Fuel score</th>
+              <th className="num">Points</th>
             </tr>
           </thead>
           <tbody>
@@ -376,6 +378,7 @@ function BoardTable({ rows, err, start = 0 }) {
                 <td className="num">{formatClock((row.timeLeft ?? 0) * 1000)}</td>
                 <td className="num">{row.worlds ?? 0}</td>
                 <td className="num">{fmtScore(Number.isFinite(row.fuel) ? row.fuel : Number(row.score) || 0)}</td>
+                <td className="num">{row.settled ? fmtScore(runPoints(row)) : "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -398,7 +401,7 @@ function Podium({ rows }) {
             <p className="pod-name">{row.name}</p>
             <p className={row.settled ? "pod-result yes" : "pod-result"}>{row.settled ? "Settled" : "Not settled"}</p>
             <p className="pod-meta">
-              {row.settled ? `${formatClock((row.timeLeft ?? 0) * 1000)} left · ` : ""}
+              {row.settled ? `${fmtScore(runPoints(row))} pts · ${formatClock((row.timeLeft ?? 0) * 1000)} left · ` : ""}
               {row.worlds ?? 0} {(row.worlds ?? 0) === 1 ? "world" : "worlds"} · fuel {fmtScore(fuel)}
             </p>
           </article>
@@ -420,8 +423,8 @@ function Board() {
         <span className={err ? "live off" : "live"}>{err ? "Offline" : "Live"}</span>
       </header>
       <p className="hint rules">
-        Wins rank above every loss. Then more worlds, then more fuel left. Wins with those tied rank by time left;
-        losses by who lasted longer.
+        Wins rank above every loss. Wins rank by points: 10 per world, 1 per fuel left, 1 per 10 seconds left.
+        Losses rank by more worlds, then more fuel left, then who lasted longer.
       </p>
       <Podium rows={rows} />
       <BoardTable rows={rows} err={err} start={Math.min(3, rows.length)} />
@@ -1385,6 +1388,10 @@ function EndScreen({ snap }) {
         <div className="stat">
           <dt>Fuel score</dt>
           <dd>{fmtScore(facts.fuel)}</dd>
+        </div>
+        <div className="stat">
+          <dt>Points</dt>
+          <dd>{facts.settled ? fmtScore(runPoints(facts)) : "—"}</dd>
         </div>
       </dl>
       <p>
