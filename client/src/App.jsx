@@ -31,7 +31,7 @@ import Intro from "./intro/Intro.jsx";
 import { Starbase } from "./art/Station.jsx";
 import { PlanetDot, faceOf } from "./art/Planet.jsx";
 import { MapDefs, MapBackdrop } from "./art/MapArt.jsx";
-import { webglAvailable } from "./three/artStore.js";
+import { publishArt, webglAvailable } from "./three/artStore.js";
 import { FuelIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipIcon } from "./art/icons.jsx";
 
 const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
@@ -47,9 +47,14 @@ const FUEL_WORLDS = new Set(NODES.filter((n) => n.shell === "fuel").map((n) => n
 const FACES = new Map(NODES.filter((n) => n.id !== STATION).map((n) => [n.id, faceOf(n)]));
 // Realistic map art renders in the background; the map shows vector art until it lands.
 if (webglAvailable()) {
+  // While the realistic ship renders, show no ship rather than flash the old vector one.
+  publishArt({ loading: true });
   import("./three/sprites.js")
     .then((m) => m.renderMapArt(FACES.values()))
-    .catch((err) => console.warn("Realistic map art unavailable, keeping vector art:", err));
+    .catch((err) => {
+      console.warn("Realistic map art unavailable, keeping vector art:", err);
+      publishArt({ loading: false });
+    });
 }
 // Zoomed out past this width, planets drop to simple lit discs so panning stays smooth.
 const DETAIL_W = 1100;

@@ -68,7 +68,8 @@ function Engines() {
 }
 
 export function ShipShapes() {
-  const render = useArt().ship;
+  const { ship: render, loading } = useArt();
+  if (!render && loading) return null;
   if (render) {
     return (
       <>
