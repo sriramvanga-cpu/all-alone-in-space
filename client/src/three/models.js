@@ -115,10 +115,13 @@ export function buildStarship() {
   sensor.scale.set(1, 0.35, 1);
   group.add(sensor);
 
-  // Secondary hull with a shuttle-bay stern and a glowing deflector dish.
+  // Secondary hull, open at the stern for the hangar, with a glowing deflector dish.
+  const hullMetal = hullMaterial([2, 1]);
+  // Duller than the rest, so the sun doesn't flare off it when seen from astern.
+  hullMetal.roughness = 0.62;
   const hull = new THREE.Mesh(
-    latheX([[0.01, -10.6], [1.3, -10.55], [1.9, -9.8], [2.2, -6.0], [2.3, -1.0], [2.0, 3.0], [1.5, 5.4], [0.9, 6.4], [0.01, 6.7]]),
-    hullMaterial([2, 1]),
+    latheX([[1.3, -10.55], [1.9, -9.8], [2.2, -6.0], [2.3, -1.0], [2.0, 3.0], [1.5, 5.4], [0.9, 6.4], [0.01, 6.7]]),
+    hullMetal,
   );
   hull.position.set(0, -1.2, 0);
   group.add(hull);
@@ -126,10 +129,33 @@ export function buildStarship() {
   dish.position.set(6.62, -1.2, 0);
   dish.rotation.y = Math.PI / 2;
   group.add(dish);
-  const bay = new THREE.Mesh(new THREE.CircleGeometry(1.25, 32), darkMetal);
-  bay.position.set(-10.58, -1.2, 0);
-  bay.rotation.y = -Math.PI / 2;
-  group.add(bay);
+
+  // Hangar: a stern plate with a door-sized mouth, a lit bay behind it, and two sliding doors.
+  const plate = new THREE.Shape();
+  plate.absarc(0, 0, 1.3, 0, Math.PI * 2);
+  const mouth = new THREE.Path([new THREE.Vector2(-0.8, -0.5), new THREE.Vector2(0.8, -0.5), new THREE.Vector2(0.8, 0.5), new THREE.Vector2(-0.8, 0.5)]);
+  plate.holes.push(mouth);
+  const stern = new THREE.Mesh(new THREE.ShapeGeometry(plate, 32), darkMetal);
+  stern.position.set(-10.55, -1.2, 0);
+  stern.rotation.y = -Math.PI / 2;
+  group.add(stern);
+  const bayLight = hullPanels().clone();
+  bayLight.needsUpdate = true;
+  const hangar = new THREE.Mesh(
+    new THREE.BoxGeometry(2.6, 1.0, 1.6),
+    new THREE.MeshStandardMaterial({ color: "#3a404a", emissive: "#ffe6c0", emissiveMap: bayLight, emissiveIntensity: 1.1, side: THREE.BackSide }),
+  );
+  hangar.position.set(-9.25, -1.2, 0);
+  group.add(hangar);
+  const doorMetal = hullMaterial([0.3, 0.3]);
+  // Doors overlap the mouth a little so the lit bay can't glow through the seams.
+  const doors = [0.28, -0.28].map((y) => {
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.56, 1.7), doorMetal);
+    door.position.set(-10.6, -1.2 + y, 0);
+    door.userData.closedY = door.position.y;
+    group.add(door);
+    return door;
+  });
 
   // Neck from the hull up to the saucer.
   const neckShape = new THREE.Shape([
@@ -229,13 +255,15 @@ export function buildStarship() {
     navRed,
     navGreen,
     strobe,
-    dock: new THREE.Vector3(-10.62, -1.2, 0),
-    bridge: new THREE.Vector3(11.4, 2.95, 0),
+    doors,
+    // Where a shuttle comes to rest inside the hangar.
+    bay: new THREE.Vector3(-9.3, -1.2, 0),
   };
 }
 
-// Sets engine glow and blinking lights. power 0..1, t in seconds.
-export function animateStarship(ship, power, t) {
+// Sets engine glow, blinking lights and the hangar doors. power and doors 0..1, t in seconds.
+export function animateStarship(ship, power, t, doors = 0) {
+  ship.doors.forEach((d, i) => (d.position.y = d.userData.closedY + (i ? -0.5 : 0.5) * doors));
   for (const b of ship.bussards) b.emissiveIntensity = 1.2 + 2.6 * power + 0.3 * Math.sin(t * 7);
   for (const g of ship.grilles) g.emissiveIntensity = 0.4 + 1.6 * power;
   ship.impulse.emissiveIntensity = 1.2 + 2.5 * power;

@@ -5,27 +5,27 @@ import { makeAtmosphereMaterial, makePlanetMaterial } from "../three/planetMater
 import { animateShuttle, animateStarship, buildShuttle, buildStarship } from "../three/models.js";
 import { createComposer } from "../three/post.js";
 import { ParticleSystem, glowSprite } from "../three/particles.js";
-import { clamp, easeIn, easeInOut, easeOut, lerp, rand, smooth } from "./draw.js";
+import { clamp, easeInOut, easeOut, rand, smooth } from "./draw.js";
 
-// The realistic intro: one continuous 3D camera move.
+// The realistic intro: one unbroken camera move, no cuts.
 //   Launch     sunrise on Vulcan's surface; the shuttle lifts off its pad.
-//   Climb      the camera chases it up until Vulcan becomes a sphere below.
-//   Docking    the starship hangs in orbit; the shuttle docks at its stern.
-//   Push in    the camera flies into the bridge dome until the glass fills the frame.
-//   Look back  a cockpit far out; through the window Vulcan cracks and breaks apart.
+//   Climb      the camera rides close behind it while Vulcan curves away below.
+//   Docking    the shuttle lines up behind the starship and flies into its stern hangar.
+//   Escape     the camera sweeps over the ship as it banks away into open space.
+//   Look back  from off the bow, Vulcan cracks and breaks apart behind the ship.
 const LIFT = 1.0;
 const CLIMB = 3.2;
-const ORBIT = 6.4;
-const DOCK = 8.4;
-const ZOOM0 = 9.6;
-const INSIDE = 10.6;
-const BOOM = INSIDE + 2.6;
-const END = INSIDE + 6.4;
+const ALIGN = 7.4;
+const DOCK = 9.8;
+const JUMP = 10.4;
+const ARRIVE = 13.4;
+const BOOM = ARRIVE + 1.0;
+const END = BOOM + 3.6;
 
 const CAPTIONS = [
   { from: 0.7, to: 5.0, title: "Departure", text: "A shuttle lifts off Vulcan. The ground falls away." },
-  { from: 5.6, to: 9.4, title: "Docking", text: "The shuttle locks onto the ship." },
-  { from: INSIDE + 0.4, to: END - 0.7, title: "Look back", text: "Through the window, Vulcan blows apart. The clock starts with the chart." },
+  { from: 5.6, to: DOCK + 0.4, title: "Docking", text: "The shuttle flies into the starship's hangar." },
+  { from: JUMP + 0.8, to: END - 0.7, title: "Look back", text: "The ship pulls clear. Behind it, Vulcan blows apart. The clock starts with the chart." },
 ];
 
 const RP = 1000;
@@ -35,8 +35,6 @@ const EAST = new THREE.Vector3(1, 0, 0);
 const PAD = new THREE.Vector3(0, RP, 0);
 const SUN = new THREE.Vector3(0.75, 0.3, 0.6).normalize();
 const SHIP_POS = new THREE.Vector3(330, RP + 430, -20);
-// Where the cockpit sits for the look back: far out, Vulcan half in daylight.
-const VIEW_FROM = new THREE.Vector3(-0.55, 0.2, 0.8).normalize().multiplyScalar(7000);
 
 const v3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 
@@ -44,19 +42,12 @@ function captionAt(T) {
   return CAPTIONS.findIndex((c) => T >= c.from && T < c.to);
 }
 
-function bezier3(p0, p1, p2, p3, u, out = v3()) {
-  const a = (1 - u) ** 3;
-  const b = 3 * (1 - u) ** 2 * u;
-  const c = 3 * (1 - u) * u * u;
-  const d = u ** 3;
-  return out.set(0, 0, 0).addScaledVector(p0, a).addScaledVector(p1, b).addScaledVector(p2, c).addScaledVector(p3, d);
-}
-
-function bezier2(p0, p1, p2, u, out = v3()) {
-  const a = (1 - u) ** 2;
-  const b = 2 * (1 - u) * u;
-  const c = u * u;
-  return out.set(0, 0, 0).addScaledVector(p0, a).addScaledVector(p1, b).addScaledVector(p2, c);
+// Distance along a path over h seconds, given the speeds at both ends (cubic Hermite).
+function hermite(d0, d1, v0, v1, u, h) {
+  const x = clamp(u);
+  const x2 = x * x;
+  const x3 = x2 * x;
+  return (2 * x3 - 3 * x2 + 1) * d0 + (x3 - 2 * x2 + x) * h * v0 + (3 * x2 - 2 * x3) * d1 + (x3 - x2) * h * v1;
 }
 
 // Orientation that points +X along `forward` with +Y as close to `up` as possible.
@@ -86,119 +77,6 @@ function rockGeometry(seed) {
   }
   geo.computeVertexNormals();
   return geo;
-}
-
-function cockpitTexture(kind) {
-  const c = document.createElement("canvas");
-  c.width = 256;
-  c.height = 128;
-  const g = c.getContext("2d");
-  g.fillStyle = "#04121c";
-  g.fillRect(0, 0, 256, 128);
-  g.strokeStyle = "rgba(90,209,255,0.25)";
-  for (let x = 0; x < 256; x += 32) {
-    g.beginPath();
-    g.moveTo(x, 0);
-    g.lineTo(x, 128);
-    g.stroke();
-  }
-  g.strokeStyle = kind ? "#ffb060" : "#5ad1ff";
-  g.lineWidth = 3;
-  g.beginPath();
-  for (let i = 0; i <= 40; i++) {
-    const x = 8 + i * 6;
-    const y = 64 + Math.sin(i * 0.7 + kind * 2) * 30 * Math.cos(i * 0.13);
-    i ? g.lineTo(x, y) : g.moveTo(x, y);
-  }
-  g.stroke();
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-// The cockpit, built around a camera at its origin looking down -Z.
-function buildCockpit(env) {
-  const group = new THREE.Group();
-  const frameMat = new THREE.MeshStandardMaterial({ color: "#a3afc0", metalness: 0.75, roughness: 0.3 });
-  const wallMat = new THREE.MeshStandardMaterial({ color: "#202834", metalness: 0.5, roughness: 0.6 });
-  const outer = new THREE.Shape([v3(-5, -3), v3(5, -3), v3(5, 3.2), v3(-5, 3.2)].map((p) => new THREE.Vector2(p.x, p.y)));
-  const hole = new THREE.Path();
-  const w = 1.3;
-  const h = 0.76;
-  const r = 0.16;
-  hole.moveTo(-w + r, -h);
-  hole.lineTo(w - r, -h);
-  hole.quadraticCurveTo(w, -h, w, -h + r);
-  hole.lineTo(w, h - r);
-  hole.quadraticCurveTo(w, h, w - r, h);
-  hole.lineTo(-w + r, h);
-  hole.quadraticCurveTo(-w, h, -w, h - r);
-  hole.lineTo(-w, -h + r);
-  hole.quadraticCurveTo(-w, -h, -w + r, -h);
-  outer.holes.push(hole);
-  const front = new THREE.Mesh(
-    new THREE.ExtrudeGeometry(outer, { depth: 0.22, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 3 }),
-    frameMat,
-  );
-  front.position.z = -2.1;
-  group.add(front);
-  for (const x of [-0.5, 0.5]) {
-    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.06, h * 2, 0.12), frameMat);
-    strut.position.set(x * 1.6, 0, -1.95);
-    group.add(strut);
-  }
-  const room = [
-    [v3(-2.6, 0.4, -0.6), [0, Math.PI / 2, 0], [3.2, 5]],
-    [v3(2.6, 0.4, -0.6), [0, -Math.PI / 2, 0], [3.2, 5]],
-    [v3(0, 2.4, -0.6), [Math.PI / 2, 0, 0], [5.4, 3.2]],
-    [v3(0, -1.6, -0.6), [-Math.PI / 2, 0, 0], [5.4, 3.2]],
-  ];
-  for (const [pos, rot, [a, b]] of room) {
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(a, b), wallMat);
-    wall.position.copy(pos);
-    wall.rotation.set(...rot);
-    group.add(wall);
-  }
-  const console_ = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.3, 1.1), new THREE.MeshStandardMaterial({ color: "#232b38", metalness: 0.7, roughness: 0.4 }));
-  console_.position.set(0, -0.8, -1.55);
-  console_.rotation.x = 0.42;
-  group.add(console_);
-  const screens = [];
-  for (const [x, kind] of [[-1.25, 0], [0, 1], [1.25, 0]]) {
-    const scr = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.8, 0.36),
-      new THREE.MeshStandardMaterial({ color: "#000000", emissive: "#ffffff", emissiveMap: cockpitTexture(kind), emissiveIntensity: 1.4 }),
-    );
-    scr.position.set(x, -0.63, -1.45);
-    scr.rotation.x = -1.15;
-    group.add(scr);
-    screens.push(scr);
-  }
-  const buttons = [];
-  for (let i = 0; i < 14; i++) {
-    const mat = new THREE.MeshStandardMaterial({ color: "#000000", emissive: ["#5ad1ff", "#7ddec0", "#ffb020", "#ff7a8a"][i % 4], emissiveIntensity: 2 });
-    const b = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.03, 0.06), mat);
-    b.position.set(-2.0 + (i * 4.0) / 13, -0.83, -1.12);
-    b.rotation.x = 0.42;
-    group.add(b);
-    buttons.push({ mat, phase: Math.random() * 6, rate: 0.8 + Math.random() * 2 });
-  }
-  const glass = new THREE.Mesh(
-    new THREE.PlaneGeometry(w * 2, h * 2),
-    new THREE.MeshBasicMaterial({ color: "#c8e4ff", transparent: true, opacity: 0.03, depthWrite: false }),
-  );
-  glass.position.z = -1.98;
-  group.add(glass);
-  const fill = new THREE.PointLight("#9fd6ff", 4, 9, 2);
-  fill.position.set(0, 1.9, 1.3);
-  group.add(fill);
-  const consoleGlow = new THREE.PointLight("#5ad1ff", 3, 4, 2);
-  consoleGlow.position.set(0, -0.3, -1.1);
-  group.add(consoleGlow);
-  const blast = new THREE.PointLight("#ffa060", 0, 18, 1.6);
-  blast.position.set(0, 0.2, -2.6);
-  group.add(blast);
-  return { group, buttons, blast, screens };
 }
 
 export default function Intro3D({ onDone, onFail }) {
@@ -253,7 +131,6 @@ export default function Intro3D({ onDone, onFail }) {
       scene.environmentIntensity = 1.3;
 
       const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 200000);
-      const cockpitCam = new THREE.PerspectiveCamera(55, 1, 0.05, 200000);
 
       // Sky: the Milky Way photo far away, plus crisp stars in front of it.
       const skyMat = new THREE.MeshBasicMaterial({ map: tex.sky, side: THREE.BackSide, depthWrite: false, toneMapped: false });
@@ -339,15 +216,32 @@ export default function Intro3D({ onDone, onFail }) {
 
       // Ships.
       const ship = buildStarship();
-      ship.group.position.copy(SHIP_POS);
       const shipUp = SHIP_POS.clone().normalize();
       const shipFwd = EAST.clone().addScaledVector(shipUp, -EAST.dot(shipUp)).normalize();
+      const shipSide = shipFwd.clone().cross(shipUp);
+      ship.group.position.copy(SHIP_POS);
       ship.group.quaternion.copy(facing(shipFwd, shipUp));
       scene.add(ship.group);
       ship.group.updateMatrixWorld(true);
-      const dockPoint = ship.dock.clone().applyMatrix4(ship.group.matrixWorld);
-      const bridgePoint = ship.bridge.clone().applyMatrix4(ship.group.matrixWorld);
-      const local = (x, y, z) => v3(x, y, z).applyQuaternion(ship.group.quaternion).add(SHIP_POS);
+      const shipAtRest = ship.group.matrixWorld.clone();
+      const bayStop = ship.bay.clone().applyMatrix4(shipAtRest);
+      // Where the ship runs to before Vulcan goes: far enough to see the whole planet, half in daylight.
+      const escapeDir = shipFwd.clone().multiplyScalar(Math.cos(0.66)).addScaledVector(shipSide, -Math.sin(0.66));
+      const escape = new THREE.CubicBezierCurve3(
+        SHIP_POS.clone(),
+        SHIP_POS.clone().addScaledVector(shipFwd, 400),
+        escapeDir.clone().multiplyScalar(5000),
+        escapeDir.clone().multiplyScalar(7000),
+      );
+      function placeShip(T) {
+        const k = easeInOut((T - JUMP) / (ARRIVE - JUMP));
+        escape.getPoint(k, ship.group.position);
+        const fwd = escape.getTangent(k);
+        // Bank into the turn, level out on arrival.
+        const up = shipUp.clone().applyAxisAngle(fwd, -0.35 * Math.sin(Math.PI * k));
+        ship.group.quaternion.copy(facing(fwd, up));
+        ship.group.updateMatrixWorld(true);
+      }
 
       const shuttle = buildShuttle();
       scene.add(shuttle.group);
@@ -359,64 +253,42 @@ export default function Intro3D({ onDone, onFail }) {
       const liftLight = new THREE.PointLight("#9fd8ff", 0, 6, 2);
       liftLight.position.set(0, -0.3, 0);
       shuttle.group.add(liftLight);
-      const dockFlash = glowSprite("#d8f0ff", 1);
-      dockFlash.position.copy(dockPoint);
-      dockFlash.visible = false;
-      scene.add(dockFlash);
 
-      // Particles: dust and vapour (soft, normal blend) and hot glows (additive).
+      // Dust and vapour (soft, normal blend).
       const dust = new ParticleSystem(900);
-      const glows = new ParticleSystem(500, { additive: true });
-      scene.add(dust.points, glows.points);
+      scene.add(dust.points);
 
-      // Shuttle path: hover off the pad, climb, swing east into orbit, dock.
+      // Shuttle path: hover off the pad, then one curve up to a line behind the ship and
+      // straight along it into the hangar. Speeds match where the pieces meet, so it never jerks.
       const p0 = PAD.clone().addScaledVector(UP, 0.22);
-      const climbTop = PAD.clone().addScaledVector(UP, 6.2);
-      const backOff = shipFwd.clone().multiplyScalar(-70).addScaledVector(shipUp, -16);
-      const orbitStart = dockPoint.clone().add(backOff);
-      const ascentCtrl = v3(10, RP + 320, -5);
-      const noseOffset = shuttle.nose.x;
-      const tmpA = v3();
-      const tmpB = v3();
-      function ascentAt(a, out) {
-        const k = 4.2;
-        const s = (Math.exp(a * k) - 1) / (Math.exp(k) - 1);
-        return bezier2(climbTop, ascentCtrl, orbitStart, s, out);
+      const climbTop = p0.clone().addScaledVector(UP, 6);
+      const LINE = 32;
+      const lineUp = bayStop.clone().addScaledVector(shipFwd, -LINE);
+      const flight = new THREE.CurvePath();
+      flight.add(new THREE.CubicBezierCurve3(climbTop, climbTop.clone().addScaledVector(UP, 160), lineUp.clone().addScaledVector(shipFwd, -140), lineUp));
+      flight.add(new THREE.LineCurve3(lineUp, bayStop));
+      const flightLen = flight.getLength();
+      const lineSpeed = 20;
+      function flightAt(T) {
+        const d = T < ALIGN
+          ? hermite(0, flightLen - LINE, 0, lineSpeed, (T - CLIMB) / (ALIGN - CLIMB), ALIGN - CLIMB)
+          : hermite(flightLen - LINE, flightLen, lineSpeed, 0, (T - ALIGN) / (DOCK - ALIGN), DOCK - ALIGN);
+        return d / flightLen;
       }
       function shuttlePose(T) {
         if (T < CLIMB) {
           const h = T < LIFT ? 0 : 6 * easeInOut((T - LIFT) / (CLIMB - LIFT));
-          return { pos: p0.clone().addScaledVector(UP, h), quat: facing(EAST, UP), thrust: T < LIFT - 0.5 ? 0 : 1, vtol: 1 };
+          return { pos: p0.clone().addScaledVector(UP, h), dir: UP.clone(), quat: facing(EAST, UP), thrust: T < LIFT - 0.5 ? 0 : 1, vtol: 1 };
         }
-        if (T < ORBIT) {
-          const a = (T - CLIMB) / (ORBIT - CLIMB);
-          const pos = ascentAt(a, v3());
-          const dir = ascentAt(Math.min(1, a + 0.01), tmpA).sub(ascentAt(Math.max(0, a - 0.01), tmpB));
-          const up = pos.clone().normalize();
-          const tilt = smooth(CLIMB, CLIMB + 1.0, T);
-          const fwd = EAST.clone().lerp(dir.normalize(), tilt * 0.85).normalize();
-          return { pos, quat: facing(fwd, up), thrust: 1, vtol: 1 - tilt };
-        }
-        const startDir = ascentAt(1, tmpA).sub(ascentAt(0.98, tmpB)).normalize();
-        const P1 = orbitStart.clone().addScaledVector(startDir, 30);
-        const P2 = dockPoint.clone().addScaledVector(shipFwd, -28);
-        const k = smooth(ORBIT, DOCK, T);
-        const nose = T >= DOCK ? dockPoint.clone() : bezier3(orbitStart, P1, P2, dockPoint, k);
-        const ahead = T >= DOCK ? shipFwd.clone() : bezier3(orbitStart, P1, P2, dockPoint, Math.min(1, k + 0.01)).sub(bezier3(orbitStart, P1, P2, dockPoint, Math.max(0, k - 0.01))).normalize();
-        const fwd = k > 0.97 ? shipFwd.clone() : ahead;
-        const pos = nose.clone().addScaledVector(fwd, -noseOffset);
-        return { pos, quat: facing(fwd, shipUp), thrust: T < DOCK - 0.9 ? 1 : clamp((DOCK - 0.6 - T) / 0.3), vtol: 0 };
+        const u = flightAt(T);
+        const pos = flight.getPoint(u);
+        const dir = flight.getTangent(u);
+        const up = pos.clone().normalize();
+        // The nose pitches up off the pad but never quite vertical, then follows the path in.
+        const tilt = smooth(CLIMB, CLIMB + 1.0, T);
+        const fwd = EAST.clone().addScaledVector(up, -EAST.dot(up)).lerp(dir, tilt * (0.85 + 0.15 * smooth(ALIGN - 1, ALIGN, T))).normalize();
+        return { pos, dir, quat: facing(fwd, up), thrust: 1 - smooth(ALIGN - 0.5, DOCK - 0.4, T), vtol: 1 - tilt };
       }
-
-      // Look back: the cockpit far out, facing Vulcan.
-      const cockpit = buildCockpit(env);
-      cockpit.group.position.copy(VIEW_FROM);
-      // lookAt aims a group's +Z at the target; the window is on -Z, so turn round.
-      cockpit.group.lookAt(0, 0, 0);
-      cockpit.group.rotateY(Math.PI);
-      cockpit.group.visible = false;
-      scene.add(cockpit.group);
-      cockpit.group.add(cockpitCam);
 
       // Blast: flash, flat shock ring, light for the debris, rocks, embers, smoke.
       const flash = glowSprite("#fff0d8", 1);
@@ -440,8 +312,7 @@ export default function Intro3D({ onDone, onFail }) {
       for (let i = 0; i < ruv.count; i++) ruv.setXY(i, Math.hypot(rp.getX(i), rp.getY(i)), 0);
       const ring = new THREE.Mesh(ringGeo, ringMat);
       ring.visible = false;
-      const viewDir = VIEW_FROM.clone().normalize();
-      const ringNormal = UP.clone().addScaledVector(viewDir, -UP.dot(viewDir)).normalize().multiplyScalar(0.98).addScaledVector(viewDir, 0.2).normalize();
+      const ringNormal = UP.clone().addScaledVector(escapeDir, -UP.dot(escapeDir)).normalize().multiplyScalar(0.98).addScaledVector(escapeDir, 0.2).normalize();
       ring.quaternion.setFromUnitVectors(v3(0, 0, 1), ringNormal);
       scene.add(ring);
       const coreLight = new THREE.PointLight("#ff8a3a", 0, 0, 2);
@@ -458,8 +329,7 @@ export default function Intro3D({ onDone, onFail }) {
 
       let W = 0;
       let H = 0;
-      let fovBoost = 1;
-      const { composer, render, bloom, film } = createComposer(renderer, scene, camera);
+      const { composer, bloom, film } = createComposer(renderer, scene, camera);
       function resize() {
         W = window.innerWidth;
         H = window.innerHeight;
@@ -467,19 +337,59 @@ export default function Intro3D({ onDone, onFail }) {
         composer.setPixelRatio(pixelRatio);
         composer.setSize(W, H);
         bloom.setSize(Math.round((W * pixelRatio) / 2), Math.round((H * pixelRatio) / 2));
-        for (const cam of [camera, cockpitCam]) {
-          cam.aspect = W / H;
-          cam.updateProjectionMatrix();
-        }
+        camera.aspect = W / H;
         // Tall (phone) screens see less sideways, so widen the view to keep the ship in frame.
-        fovBoost = W < H ? 1 + (1 - W / H) * 0.9 : 1;
-        cockpitCam.fov = 55 * fovBoost;
-        cockpitCam.updateProjectionMatrix();
+        camera.fov = 50 * (W < H ? 1 + (1 - W / H) * 0.9 : 1);
+        camera.updateProjectionMatrix();
       }
       resize();
       window.addEventListener("resize", resize);
 
-      let docked = false;
+      // The camera, start to finish. Up to docking it is tied to the shuttle by an offset in
+      // (east, up, side) terms: level with it after the lift, above it for the climb so Vulcan
+      // curves away below, in behind it for the approach, then easing back to watch it go in.
+      const padLook = PAD.clone().add(v3(0.6, 1.0, -1.2));
+      const riseEnd = PAD.clone().add(v3(-8.5 + 0.4 * CLIMB + 2, 7, 10.5 - 0.4 * CLIMB - 1));
+      const chaseFrom = riseEnd.clone().sub(climbTop);
+      const chaseHigh = v3(-4.5, 4.2, 3.2);
+      const chaseBehind = v3(-6.0, 1.0, 1.6);
+      const chaseHold = v3(-12, 2.2, 3.4);
+      function chaseCamera(T, pose, outPos, outLook) {
+        if (T < CLIMB) {
+          // A low aerial shot of the pad at sunrise, drifting in, then rising with the lift-off.
+          const a = easeInOut((T - LIFT) / (CLIMB - LIFT));
+          outPos.copy(PAD).add(v3(-8.5 + 0.4 * T + 2 * a, 3 + 4 * a, 10.5 - 0.4 * T - a));
+          outLook.copy(padLook).lerp(pose.pos, smooth(LIFT, LIFT + 1.2, T));
+          return;
+        }
+        const toBay = smooth(ALIGN - 1.8, ALIGN + 0.2, T);
+        const o = chaseFrom.clone().lerp(chaseHigh, smooth(CLIMB, CLIMB + 1.6, T)).lerp(chaseBehind, toBay).lerp(chaseHold, smooth(ALIGN, DOCK, T));
+        const up = pose.pos.clone().normalize();
+        const east = EAST.clone().addScaledVector(up, -EAST.dot(up)).normalize();
+        const side = east.clone().cross(up);
+        outPos.copy(pose.pos).addScaledVector(east, o.x).addScaledVector(up, o.y).addScaledVector(side, o.z);
+        // Aim a little below the shuttle so it sits high in frame, clear of the captions.
+        outLook.copy(pose.pos).addScaledVector(up, -1.5 * smooth(CLIMB, CLIMB + 1.6, T)).lerp(bayStop, toBay);
+      }
+      // After docking the camera rides with the ship, in its own frame: from behind the hangar,
+      // up over the starboard side and round off the bow, looking back past the ship at Vulcan.
+      const holdPos = v3();
+      const holdLook = v3();
+      chaseCamera(DOCK, shuttlePose(DOCK), holdPos, holdLook);
+      const toShipFrame = shipAtRest.clone().invert();
+      const sweep = new THREE.CubicBezierCurve3(holdPos.clone().applyMatrix4(toShipFrame), v3(-14, 9, 10), v3(18, 14, 16), v3(55, 8, 10));
+      const holdLookLocal = holdLook.clone().applyMatrix4(toShipFrame);
+      const shipMid = v3(2, 0.5, 0);
+      function sweepCamera(T, outPos, outLook) {
+        const k = easeInOut((T - JUMP) / (ARRIVE - JUMP));
+        // A slow push in while Vulcan goes.
+        sweep.getPoint(k, outPos).x -= 6 * smooth(ARRIVE - 0.4, END, T);
+        outPos.applyMatrix4(ship.group.matrixWorld);
+        const toShip = holdLookLocal.clone().lerp(shipMid, smooth(JUMP, JUMP + 1.2, T)).applyMatrix4(ship.group.matrixWorld).sub(outPos).normalize();
+        const toPlanet = outPos.clone().negate().normalize();
+        outLook.copy(outPos).add(toShip.lerp(toPlanet, 0.6 * smooth(JUMP + 1.5, ARRIVE, T)));
+      }
+
       let boomed = false;
       let lastRcs = 0;
       let shown = -1;
@@ -490,38 +400,6 @@ export default function Intro3D({ onDone, onFail }) {
       let raf = 0;
       const camPos = v3();
       const camLook = v3();
-      const tmp = v3();
-
-      function chaseCamera(T, pose) {
-        // A low aerial shot of the pad at sunrise, drifting in, then rising with the lift-off.
-        const padLook = PAD.clone().add(v3(0.6, 1.0, -1.2));
-        if (T < LIFT) {
-          camPos.copy(PAD).add(v3(-8.5 + T * 0.4, 3.0, 10.5 - T * 0.4));
-          camLook.copy(padLook);
-          return;
-        }
-        if (T < CLIMB) {
-          const a = easeInOut((T - LIFT) / (CLIMB - LIFT));
-          camPos.copy(PAD).add(v3(-8.1 + a * 2.0, 3.0 + a * 4.0, 10.1 - a * 1.0));
-          camLook.copy(padLook).lerp(pose.pos, smooth(LIFT, LIFT + 1.2, T));
-          return;
-        }
-        // Chase from behind and above, looking ahead at the horizon so the
-        // planet curves away below as the shuttle climbs.
-        const a = clamp((T - CLIMB) / (ORBIT - CLIMB));
-        const up = pose.pos.clone().normalize();
-        const ahead = EAST.clone().addScaledVector(up, -EAST.dot(up)).normalize();
-        const side = ahead.clone().cross(up).normalize().negate();
-        const grow = 1 + 7 * easeIn(a);
-        const offset = ahead.clone().multiplyScalar(-6 * grow).addScaledVector(up, 1.6 * grow).addScaledVector(side, 3.5 * grow);
-        const riseEnd = PAD.clone().add(v3(-6.1, 7.0, 9.1));
-        camPos.copy(riseEnd).lerp(pose.pos.clone().add(offset), smooth(0, 0.18, a));
-        // Tilt down with the horizon's dip so the planet stays in the lower frame.
-        const alt = Math.max(1, pose.pos.length() - RP);
-        const pitch = Math.max(0.05, Math.acos(RP / (RP + alt)) - 0.12);
-        camLook.copy(camPos).addScaledVector(ahead, Math.cos(pitch) * 100).addScaledVector(up, -Math.sin(pitch) * 100);
-        camLook.lerp(pose.pos, 0.35);
-      }
 
       function frame(now) {
         const T = (now - start) / 1000;
@@ -551,218 +429,164 @@ export default function Intro3D({ onDone, onFail }) {
           setCaption(cap);
         }
 
-        const inside = T >= INSIDE;
-        let shake = 0;
-        let activeCam = camera;
+        // --- Shuttle -------------------------------------------------------------
+        const pose = shuttlePose(T);
+        shuttle.group.position.copy(pose.pos);
+        shuttle.group.quaternion.copy(pose.quat);
+        // Hidden once the hangar doors shut behind it, so the ship can leave with it.
+        shuttle.group.visible = T < JUMP;
+        animateShuttle(shuttle, pose.thrust, T);
+        const flick = 0.85 + 0.15 * Math.sin(T * 63) + 0.08 * Math.sin(T * 141);
+        thrusterGlow.forEach((g) => g.scale.setScalar(0.28 * pose.thrust * pose.vtol * flick));
+        engineGlow.forEach((g, i) => g.scale.setScalar((i ? 0.28 : 0.45) * pose.thrust * (1 - pose.vtol * 0.7) * flick));
+        liftLight.intensity = 2.5 * pose.thrust * pose.vtol * (1 - smooth(CLIMB - 0.6, CLIMB, T));
+        padLights.forEach((m, i) => (m.emissiveIntensity = Math.sin(T * 4 - i * 0.7) > 0.2 ? 4 : 0.3));
 
-        if (!inside) {
-          const pose = shuttlePose(T);
-          shuttle.group.position.copy(pose.pos);
-          shuttle.group.quaternion.copy(pose.quat);
-          animateShuttle(shuttle, pose.thrust, T);
-          const flick = 0.85 + 0.15 * Math.sin(T * 63) + 0.08 * Math.sin(T * 141);
-          thrusterGlow.forEach((g) => g.scale.setScalar(0.28 * pose.thrust * pose.vtol * flick));
-          engineGlow.forEach((g, i) => g.scale.setScalar((i ? 0.28 : 0.45) * pose.thrust * (1 - pose.vtol * 0.7) * flick));
-          liftLight.intensity = 2.5 * pose.thrust * pose.vtol * (1 - smooth(CLIMB - 0.6, CLIMB, T));
-          padLights.forEach((m, i) => (m.emissiveIntensity = Math.sin(T * 4 - i * 0.7) > 0.2 ? 4 : 0.3));
-
-          const altitude = pose.pos.length() - RP;
-          // Dust off the pad while the thrusters are close to the ground.
-          if (pose.thrust > 0 && altitude < 4 && T < CLIMB) {
-            const ground = 1 - clamp(altitude / 4);
-            for (let i = 0; i < 4; i++) {
-              const a = rand(0, Math.PI * 2);
-              const out = v3(Math.cos(a), 0, Math.sin(a));
-              dust.add({
-                pos: PAD.clone().addScaledVector(out, rand(0.2, 0.8)).addScaledVector(UP, 0.05),
-                vel: out.multiplyScalar(rand(1.5, 5) * ground).addScaledVector(UP, rand(0.1, 0.6)),
-                size: rand(0.3, 0.7), grow: rand(0.8, 1.8), life: rand(1.6, 2.8), drag: 0.9, alpha: 0.2 * ground,
-                color: [0.82, 0.55, 0.4], end: [0.55, 0.38, 0.3],
-              });
-            }
-          }
-          // Thin vapour trail while still in the air.
-          if (T > CLIMB && altitude < 120) {
-            const back = v3(-1, 0, 0).applyQuaternion(pose.quat);
-            for (let i = 0; i < 2; i++) {
-              dust.add({
-                pos: pose.pos.clone().addScaledVector(back, 0.7), vel: back.clone().multiplyScalar(rand(0.2, 0.8)),
-                size: 0.25 + altitude * 0.01, grow: 0.6 + altitude * 0.02, life: rand(1.4, 2.2), drag: 0.4,
-                alpha: 0.35 * (1 - altitude / 120), color: [0.92, 0.88, 0.86], end: [0.7, 0.66, 0.66],
-              });
-            }
-          }
-          if (T > DOCK - 1.1 && T < DOCK - 0.1 && T - lastRcs > 0.12) {
-            lastRcs = T;
-            const fwd = v3(1, 0, 0).applyQuaternion(pose.quat);
-            const side = v3(0, 0, 1).applyQuaternion(pose.quat);
-            for (const s of [-1, 1]) {
-              dust.add({
-                pos: pose.pos.clone().addScaledVector(fwd, 0.5).addScaledVector(side, s * 0.25), vel: fwd.clone().multiplyScalar(2).addScaledVector(side, s * 0.6),
-                size: 0.08, grow: 0.5, life: 0.55, alpha: 0.6, color: [0.95, 0.97, 1], end: [0.8, 0.85, 0.9],
-              });
-            }
-          }
-          if (T >= DOCK && !docked) {
-            docked = true;
-            for (let i = 0; i < 40; i++) {
-              const d = v3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
-              glows.add({ pos: dockPoint, vel: d.multiplyScalar(rand(0.5, 3)), size: 0.06, life: rand(0.3, 0.8), drag: 2, alpha: 1, color: [1, 0.85, 0.6] });
-            }
-          }
-          dust.update(dt);
-          glows.update(dt);
-
-          const contact = T >= DOCK ? Math.exp(-(T - DOCK) * 5) : 0;
-          dockFlash.visible = contact > 0.01;
-          dockFlash.scale.setScalar(4 * contact + 0.5);
-          animateStarship(ship, smooth(DOCK + 0.2, DOCK + 1.3, T), T);
-
-          // Camera: chase the launch, swing round to frame the ship, then dive at the bridge.
-          chaseCamera(T, pose);
-          const dockCam = local(-26, 30, 36);
-          const dockLook = local(-3, -6, 0);
-          const toDock = easeInOut(smooth(ORBIT - 0.8, ORBIT + 1.0, T));
-          camPos.lerp(dockCam, toDock);
-          camLook.lerp(dockLook, toDock);
-          const z = clamp((T - ZOOM0) / (INSIDE - ZOOM0));
-          if (z > 0) {
-            const e = easeIn(z);
-            camPos.lerp(bridgePoint.clone().addScaledVector(shipUp, 0.15), e);
-            camLook.lerp(bridgePoint, smooth(0, 0.6, z));
-          }
-          camera.position.copy(camPos);
-          camera.up.copy(camPos.clone().normalize());
-          camera.lookAt(camLook);
-          camera.fov = (50 - 10 * smooth(0.3, 1, z)) * fovBoost;
-          camera.updateProjectionMatrix();
-
-          // Atmosphere and ground detail by altitude.
-          const camAlt = camPos.length() - RP;
-          planetMat.uniforms.hazeAmount.value = 1 - smooth(20, 260, camAlt);
-          planetMat.uniforms.hazeDist.value = 160;
-          planetMat.uniforms.detail.value = 1 - smooth(80, 700, camAlt);
-          skyMat.color.setScalar(0.05 + 0.95 * smooth(15, 220, camAlt));
-          starMat.opacity = smooth(8, 220, camAlt);
-          film.uniforms.uWhite.value = smooth(0.55, 1, z);
-          sunLight.intensity = 3.0;
-          // Warm light bouncing off the desert while low, fading in orbit.
-          bounce.intensity = 0.5 + 1.2 * (1 - smooth(10, 300, camAlt));
-        } else {
-          // --- Inside the cockpit, far out, looking back at Vulcan ---------------
-          activeCam = cockpitCam;
-          if (!cockpit.group.visible) {
-            cockpit.group.visible = true;
-            ship.group.visible = false;
-            shuttle.group.visible = false;
-            pad.visible = false;
-            pebbles.visible = false;
-            dust.clear();
-            glows.clear();
-            dust.update(0);
-            glows.update(0);
-            sunLight.intensity = 0;
-            bounce.intensity = 0.25;
-            planetMat.uniforms.hazeAmount.value = 0;
-            planetMat.uniforms.detail.value = 0;
-            skyMat.color.setScalar(1);
-            starMat.opacity = 1;
-          }
-          const t = T - INSIDE;
-          const since = T - BOOM;
-          const back = easeOut(t / 0.9);
-          cockpitCam.position.set(0, 0, lerp(-1.75, 0, back));
-          film.uniforms.uWhite.value = 1 - smooth(0, 0.6, t);
-          const crack = smooth(INSIDE + 1.4, BOOM, T);
-          planetMat.uniforms.crack.value = crack;
-          planetMat.uniforms.city.value = 1 - crack;
-          const flashV = since >= 0 ? Math.exp(-since * 3) * (reduce ? 0.4 : 1) : 0;
-          const boom = since >= 0 ? easeOut(since / 2.8) : 0;
-          planetMat.uniforms.boom.value = boom;
-          atmosphere.visible = boom < 0.3;
-          atmMat.uniforms.strength.value = Math.max(0, 1 - boom * 3);
-
-          if (since >= 0 && !boomed) {
-            boomed = true;
-            flash.visible = true;
-            remnant.visible = true;
-            ring.visible = true;
-            rocks.visible = true;
-            for (let i = 0; i < rocks.count; i++) {
-              const d = v3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
-              rockState.push({
-                pos: d.clone().multiplyScalar(RP * Math.sqrt(Math.random()) * 0.8),
-                vel: d.clone().multiplyScalar(RP * rand(0.25, 1.5)),
-                axis: v3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize(),
-                spin: rand(-1.4, 1.4),
-                size: RP * rand(0.04, 0.14),
-              });
-            }
-            for (let i = 0; i < 560; i++) {
-              const d = v3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
-              embers.add({
-                pos: d.clone().multiplyScalar(RP * Math.sqrt(Math.random()) * 0.9), vel: d.multiplyScalar(RP * (0.6 + 6 * Math.random() ** 2)),
-                size: RP * rand(0.01, 0.03), life: rand(1.2, 3.6), drag: 0.55, alpha: 1, color: [3, 2.2, 1.4], end: [2.2, 0.6, 0.15],
-              });
-            }
-            for (let i = 0; i < 60; i++) {
-              const d = v3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
-              smoke.add({
-                pos: d.clone().multiplyScalar(RP * Math.random() * 0.6), vel: d.multiplyScalar(RP * rand(0.2, 0.8)),
-                size: RP * rand(0.5, 0.9), grow: RP * 0.5, life: rand(2.5, 4), drag: 0.4, alpha: 0.32, color: [0.55, 0.26, 0.14], end: [0.3, 0.14, 0.1],
-              });
-            }
-          }
-          if (boomed) {
-            const m = new THREE.Matrix4();
-            const q = new THREE.Quaternion();
-            rockState.forEach((r, i) => {
-              r.vel.multiplyScalar(Math.exp(-0.25 * dt));
-              r.pos.addScaledVector(r.vel, dt);
-              q.setFromAxisAngle(r.axis, r.spin * since);
-              m.compose(r.pos, q, v3(r.size, r.size * 0.8, r.size));
-              rocks.setMatrixAt(i, m);
+        const altitude = pose.pos.length() - RP;
+        // Dust off the pad while the thrusters are close to the ground.
+        if (pose.thrust > 0 && altitude < 4 && T < CLIMB) {
+          const ground = 1 - clamp(altitude / 4);
+          for (let i = 0; i < 4; i++) {
+            const a = rand(0, Math.PI * 2);
+            const out = v3(Math.cos(a), 0, Math.sin(a));
+            dust.add({
+              pos: PAD.clone().addScaledVector(out, rand(0.2, 0.8)).addScaledVector(UP, 0.05),
+              vel: out.multiplyScalar(rand(1.5, 5) * ground).addScaledVector(UP, rand(0.1, 0.6)),
+              size: rand(0.3, 0.7), grow: rand(0.8, 1.8), life: rand(1.6, 2.8), drag: 0.9, alpha: 0.2 * ground,
+              color: [0.82, 0.55, 0.4], end: [0.55, 0.38, 0.3],
             });
-            rocks.instanceMatrix.needsUpdate = true;
-            rockMat.emissiveIntensity = 0.45 * Math.exp(-since * 0.9);
-            const grow = 1 - Math.pow(1 - clamp(since / 2.8), 4);
-            ring.scale.setScalar(RP * (1 + grow * 6));
-            ringMat.uniforms.uFade.value = (1 - clamp(since / 3)) * 0.9;
-            flash.scale.setScalar(RP * (1.5 + since * 1.2) * Math.max(0.05, flashV));
-            flash.material.opacity = Math.min(1, flashV * 0.85);
-            const rem = Math.exp(-since * 0.9);
-            remnant.scale.setScalar(RP * (1.6 + since * 0.9));
-            remnant.material.opacity = rem * 0.8;
-            coreLight.intensity = 4e7 * (flashV * 0.5 + rem * 0.6);
           }
-          embers.update(dt);
-          smoke.update(dt);
-          cockpit.blast.intensity = 22 * Math.min(1, flashV * 1.2 + crack * 0.08 + (since > 0 ? 0.3 * Math.exp(-since * 0.8) : 0));
-          cockpit.buttons.forEach((b) => (b.mat.emissiveIntensity = Math.sin(T * b.rate + b.phase) > -0.2 ? 2.4 : 0.15));
-          const tremor = T > INSIDE + 1.6 && since < 0 ? 0.004 * smooth(INSIDE + 1.6, BOOM, T) : 0;
-          const blastShake = since >= 0 ? 0.03 * Math.exp(-since * 2.2) : 0;
-          shake = reduce ? 0 : tremor + blastShake;
-          cockpitCam.rotation.set(
-            shake * (Math.sin(T * 83) + Math.sin(T * 47)),
-            shake * (Math.sin(T * 71) + Math.cos(T * 53)),
-            shake * 0.5 * Math.sin(T * 39),
-          );
         }
+        // Thin vapour trail while still in the air.
+        if (T > CLIMB && altitude < 120) {
+          const back = v3(-1, 0, 0).applyQuaternion(pose.quat);
+          for (let i = 0; i < 2; i++) {
+            dust.add({
+              pos: pose.pos.clone().addScaledVector(back, 0.7), vel: back.clone().multiplyScalar(rand(0.2, 0.8)),
+              size: 0.25 + altitude * 0.01, grow: 0.6 + altitude * 0.02, life: rand(1.4, 2.2), drag: 0.4,
+              alpha: 0.35 * (1 - altitude / 120), color: [0.92, 0.88, 0.86], end: [0.7, 0.66, 0.66],
+            });
+          }
+        }
+        // Braking puffs from the nose while it lines up on the hangar.
+        if (T > ALIGN + 0.3 && T < DOCK - 0.8 && T - lastRcs > 0.12) {
+          lastRcs = T;
+          const fwd = v3(1, 0, 0).applyQuaternion(pose.quat);
+          const side = v3(0, 0, 1).applyQuaternion(pose.quat);
+          for (const s of [-1, 1]) {
+            dust.add({
+              pos: pose.pos.clone().addScaledVector(fwd, 0.5).addScaledVector(side, s * 0.25), vel: fwd.clone().multiplyScalar(2).addScaledVector(side, s * 0.6),
+              size: 0.08, grow: 0.5, life: 0.55, alpha: 0.6, color: [0.95, 0.97, 1], end: [0.8, 0.85, 0.9],
+            });
+          }
+        }
+        dust.update(dt);
 
-        // Sun, sky and stars stay infinitely far: follow the active camera.
-        const eye = activeCam.getWorldPosition(tmp);
-        sky.position.copy(eye);
-        stars.position.copy(eye);
-        sunCore.position.copy(eye).addScaledVector(SUN, 30000);
+        // --- Starship: hangar doors open for the shuttle, then it powers up and runs ---
+        if (T >= JUMP) placeShip(T);
+        const doors = smooth(ALIGN - 1.6, ALIGN - 0.4, T) * (1 - smooth(DOCK + 0.05, JUMP - 0.05, T));
+        animateStarship(ship, smooth(DOCK + 0.2, JUMP + 0.4, T), T, doors);
+
+        // --- Vulcan breaks up ------------------------------------------------------
+        const since = T - BOOM;
+        const crack = smooth(ARRIVE - 0.8, BOOM, T);
+        planetMat.uniforms.crack.value = crack;
+        planetMat.uniforms.city.value = 1 - crack;
+        const flashV = since >= 0 ? Math.exp(-since * 3) * (reduce ? 0.4 : 1) : 0;
+        const boom = since >= 0 ? easeOut(since / 2.8) : 0;
+        planetMat.uniforms.boom.value = boom;
+        atmosphere.visible = boom < 0.3;
+        atmMat.uniforms.strength.value = Math.max(0, 1 - boom * 3);
+        if (since >= 0 && !boomed) {
+          boomed = true;
+          flash.visible = true;
+          remnant.visible = true;
+          ring.visible = true;
+          rocks.visible = true;
+          for (let i = 0; i < rocks.count; i++) {
+            const d = v3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
+            rockState.push({
+              pos: d.clone().multiplyScalar(RP * Math.sqrt(Math.random()) * 0.8),
+              vel: d.clone().multiplyScalar(RP * rand(0.25, 1.5)),
+              axis: v3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize(),
+              spin: rand(-1.4, 1.4),
+              size: RP * rand(0.04, 0.14),
+            });
+          }
+          for (let i = 0; i < 560; i++) {
+            const d = v3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
+            embers.add({
+              pos: d.clone().multiplyScalar(RP * Math.sqrt(Math.random()) * 0.9), vel: d.multiplyScalar(RP * (0.6 + 6 * Math.random() ** 2)),
+              size: RP * rand(0.01, 0.03), life: rand(1.2, 3.6), drag: 0.55, alpha: 1, color: [3, 2.2, 1.4], end: [2.2, 0.6, 0.15],
+            });
+          }
+          for (let i = 0; i < 60; i++) {
+            const d = v3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
+            smoke.add({
+              pos: d.clone().multiplyScalar(RP * Math.random() * 0.6), vel: d.multiplyScalar(RP * rand(0.2, 0.8)),
+              size: RP * rand(0.5, 0.9), grow: RP * 0.5, life: rand(2.5, 4), drag: 0.4, alpha: 0.32, color: [0.55, 0.26, 0.14], end: [0.3, 0.14, 0.1],
+            });
+          }
+        }
+        if (boomed) {
+          const m = new THREE.Matrix4();
+          const q = new THREE.Quaternion();
+          rockState.forEach((r, i) => {
+            r.vel.multiplyScalar(Math.exp(-0.25 * dt));
+            r.pos.addScaledVector(r.vel, dt);
+            q.setFromAxisAngle(r.axis, r.spin * since);
+            m.compose(r.pos, q, v3(r.size, r.size * 0.8, r.size));
+            rocks.setMatrixAt(i, m);
+          });
+          rocks.instanceMatrix.needsUpdate = true;
+          rockMat.emissiveIntensity = 0.45 * Math.exp(-since * 0.9);
+          const grow = 1 - Math.pow(1 - clamp(since / 2.8), 4);
+          ring.scale.setScalar(RP * (1 + grow * 6));
+          ringMat.uniforms.uFade.value = (1 - clamp(since / 3)) * 0.9;
+          flash.scale.setScalar(RP * (1.5 + since * 1.2) * Math.max(0.05, flashV));
+          flash.material.opacity = Math.min(1, flashV * 0.85);
+          const rem = Math.exp(-since * 0.9);
+          remnant.scale.setScalar(RP * (1.6 + since * 0.9));
+          remnant.material.opacity = rem * 0.8;
+          coreLight.intensity = 4e7 * (flashV * 0.5 + rem * 0.6);
+        }
+        embers.update(dt);
+        smoke.update(dt);
+
+        // --- Camera ----------------------------------------------------------------
+        if (T < JUMP) chaseCamera(T, pose, camPos, camLook);
+        else sweepCamera(T, camPos, camLook);
+        camera.position.copy(camPos);
+        camera.up.copy(camPos.clone().normalize().lerp(shipUp, smooth(ALIGN - 1.8, ALIGN, T)).normalize());
+        camera.lookAt(camLook);
+        // A tremor as the crust splits, a jolt at the blast, another as the shock ring rolls past.
+        const tremor = since < 0 ? 0.003 * crack : 0;
+        const jolt = since >= 0 ? 0.025 * Math.exp(-since * 2.2) + (since > 2.2 ? 0.02 * Math.exp(-(since - 2.2) * 3) : 0) : 0;
+        const shake = reduce ? 0 : tremor + jolt;
+        camera.rotateX(shake * (Math.sin(T * 83) + Math.sin(T * 47)));
+        camera.rotateY(shake * (Math.sin(T * 71) + Math.cos(T * 53)));
+        camera.rotateZ(shake * 0.5 * Math.sin(T * 39));
+
+        // Atmosphere and ground detail by altitude.
+        const camAlt = camPos.length() - RP;
+        planetMat.uniforms.hazeAmount.value = 1 - smooth(20, 260, camAlt);
+        planetMat.uniforms.hazeDist.value = 160;
+        planetMat.uniforms.detail.value = 1 - smooth(80, 700, camAlt);
+        skyMat.color.setScalar(0.05 + 0.95 * smooth(15, 220, camAlt));
+        starMat.opacity = smooth(8, 220, camAlt);
+        // Warm light bouncing off the desert while low, fading in orbit.
+        bounce.intensity = 0.5 + 1.2 * (1 - smooth(10, 300, camAlt));
+
+        // Sun, sky and stars stay infinitely far: follow the camera.
+        sky.position.copy(camPos);
+        stars.position.copy(camPos);
+        sunCore.position.copy(camPos).addScaledVector(SUN, 30000);
         sunHalo.position.copy(sunCore.position);
         sunCore.scale.setScalar(900);
         sunHalo.scale.setScalar(5200);
         sunHalo.material.opacity = 0.45;
-        sunCore.visible = !inside;
-        sunHalo.visible = !inside;
 
-        for (const ps of [dust, glows, embers, smoke]) ps.setScale(activeCam, H * pixelRatio);
-        render.camera = activeCam;
+        for (const ps of [dust, embers, smoke]) ps.setScale(camera, H * pixelRatio);
         film.uniforms.uTime.value = T;
         film.uniforms.uBlack.value = 1 - smooth(0, 1, T) * (1 - smooth(END - 0.8, END, T));
         composer.render(dt);
