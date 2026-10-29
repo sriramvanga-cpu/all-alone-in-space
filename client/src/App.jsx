@@ -423,11 +423,54 @@ function Board() {
         <span className={err ? "live off" : "live"}>{err ? "Offline" : "Live"}</span>
       </header>
       <p className="hint rules">
-        Wins rank above every loss. Wins rank by points: 10 per world, 1 per fuel left, 1 per 10 seconds left.
+        Wins rank above every loss. Wins rank by points: 1 per fuel left and 1 per 10 seconds left.
         Losses rank by more worlds, then more fuel left, then who lasted longer.
       </p>
       <Podium rows={rows} />
       <BoardTable rows={rows} err={err} start={Math.min(3, rows.length)} />
+    </main>
+  );
+}
+
+const BRIEF = [
+  ["Fly", `You start at the station with ${START_FUEL} fuel. Tap a highlighted planet to fly there. Every route shows its fuel cost.`],
+  [
+    "Test a world",
+    "Planets marked ! might be habitable. Pick a subject and answer one question in 60 seconds. A right answer earns 15 credits and a chance to settle, and the scanner decides. A wrong answer or a timeout closes the world and can make fuel cost more.",
+  ],
+  [
+    "Choose your ring",
+    "Near the station, worlds are cheap to reach but have low habitability and hard questions. The middle ring is medium. The outer ring has high habitability and easy questions, but costs more fuel to reach. Hover a planet to see its habitability.",
+  ],
+  [
+    "Refuel",
+    "Planets with a fuel drop give a one-minute maths round: one credit per right answer, and too many misses can raise fuel costs. Then spend credits on fuel in the shop.",
+  ],
+  ["One visit each", "A planet closes once you have tried it. The run ends when you settle, when the 15 minutes run out, or when no open route is affordable."],
+  ["Score", "Settling beats every loss. Wins rank by points: 1 per fuel left and 1 per 10 seconds left."],
+];
+
+function Briefing({ onStart }) {
+  return (
+    <main className="screen">
+      <section className="panel wide brief">
+        <p className="eyebrow">Mission briefing</p>
+        <h1>How to play</h1>
+        <p>Find a planet that will take you before the 15-minute clock runs out.</p>
+        <ol>
+          {BRIEF.map(([title, text]) => (
+            <li key={title}>
+              <b>{title}</b>
+              <p>{text}</p>
+            </li>
+          ))}
+        </ol>
+        <div className="row">
+          <button type="button" onClick={onStart} autoFocus>
+            Start the mission
+          </button>
+        </div>
+      </section>
     </main>
   );
 }
@@ -821,10 +864,23 @@ function Shop({ credits, fuel, world, exitFare, onBuy, onLeave }) {
 }
 
 function ChoiceButtons({ choices, onPick }) {
+  // The next card appears under the pointer, so a double click would answer a card nobody read.
+  const shownAt = useRef(0);
+  useEffect(() => {
+    shownAt.current = performance.now();
+  }, [choices]);
   return (
     <div className="choices">
       {choices.map((choice, i) => (
-        <button key={choice} type="button" className="tile choice" onClick={() => onPick(choice)}>
+        <button
+          key={choice}
+          type="button"
+          className="tile choice"
+          onClick={() => {
+            if (performance.now() - shownAt.current < 300) return;
+            onPick(choice);
+          }}
+        >
           <span className="key" aria-hidden="true">
             {String.fromCharCode(65 + i)}
           </span>
@@ -922,10 +978,6 @@ function Game() {
       return;
     }
     if (FUEL_WORLDS.has(id)) {
-      if (g.closed.includes(id)) {
-        commit({ phase: "map", here: id, flight: null, visited });
-        return;
-      }
       const card = drawFuelCard(g.fuelSeen);
       commit({
         phase: "fuel",
@@ -1201,8 +1253,9 @@ function Game() {
   }, []);
 
   if (snap.phase === "name") {
-    return <NameScreen onStart={(who) => commit({ ...who, phase: "intro" })} />;
+    return <NameScreen onStart={(who) => commit({ ...who, phase: "brief" })} />;
   }
+  if (snap.phase === "brief") return <Briefing onStart={() => commit({ phase: "intro" })} />;
   if (snap.phase === "intro") return <Intro onDone={dock} />;
 
   const clockMs =

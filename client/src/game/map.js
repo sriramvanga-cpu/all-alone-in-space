@@ -78,15 +78,24 @@ const meanR = (shell) => {
 const nearMiddle = (meanR("inner") + meanR("middle")) / 2;
 const nearOuter = (meanR("middle") + meanR("outer")) / 2;
 
+// Seeded, so every player flies the same map and runs on the board are comparable.
+// Seed 18 puts the outer ring a typical 26 fuel and 3 fuel stops from the station.
+const MAP_SEED = 18;
+
 function scatterFuel() {
+  let seed = MAP_SEED;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
   const placed = [];
   let guard = 0;
   while (placed.length < MORE_FUEL.length && guard < 8000) {
     guard += 1;
-    const a = HABITABLE[Math.floor(Math.random() * HABITABLE.length)];
-    let b = HABITABLE[Math.floor(Math.random() * HABITABLE.length)];
+    const a = HABITABLE[Math.floor(random() * HABITABLE.length)];
+    let b = HABITABLE[Math.floor(random() * HABITABLE.length)];
     if (a.id === b.id) continue;
-    const t = 0.28 + Math.random() * 0.44;
+    const t = 0.28 + random() * 0.44;
     const ax = a.r * Math.cos(a.angle);
     const ay = a.r * Math.sin(a.angle);
     const bx = b.r * Math.cos(b.angle);
@@ -94,7 +103,7 @@ function scatterFuel() {
     const dx = bx - ax;
     const dy = by - ay;
     const len = Math.hypot(dx, dy) || 1;
-    const j = (Math.random() - 0.5) * 0.45;
+    const j = (random() - 0.5) * 0.45;
     const x = ax + dx * t + (-dy / len) * j;
     const y = ay + dy * t + (dx / len) * j;
     const spot = { r: Math.hypot(x, y), angle: Math.atan2(y, x) };

@@ -79,18 +79,18 @@ test("settled runs rank above losses; wins rank by points, losses by worlds, fue
   assert.ok(compareRuns(win, luckyLoss) < 0);
   assert.equal(runPoints(luckyLoss), 0);
 
-  // 10 per world, 1 per fuel, 1 per 10 s left: a fast win beats a slow tour.
-  const explorer = { settled: true, timeLeft: 100, fuel: 1, worlds: 3, id: 3 };
+  // 1 per fuel, 1 per 10 s left, nothing per world: a fast win beats a slow tour.
+  const explorer = { settled: true, timeLeft: 100, fuel: 1, worlds: 12, id: 3 };
   const sprinter = { settled: true, timeLeft: 800, fuel: 5, worlds: 1, id: 4 };
-  assert.equal(runPoints(explorer), 41);
-  assert.equal(runPoints(sprinter), 95);
+  assert.equal(runPoints(explorer), 11);
+  assert.equal(runPoints(sprinter), 85);
   assert.ok(compareRuns(sprinter, explorer) < 0);
 
   const rich = { settled: true, timeLeft: 100, fuel: 13.4, worlds: 2, id: 5 };
-  assert.equal(runPoints(rich), 43.4);
+  assert.equal(runPoints(rich), 23.4);
 
-  const wide = { settled: true, timeLeft: 0, fuel: 10, worlds: 2, id: 5 };
-  const deep = { settled: true, timeLeft: 0, fuel: 20, worlds: 1, id: 6 };
+  const wide = { settled: true, timeLeft: 100, fuel: 10, worlds: 2, id: 5 };
+  const deep = { settled: true, timeLeft: 50, fuel: 15, worlds: 1, id: 6 };
   assert.equal(runPoints(wide), runPoints(deep));
   assert.ok(compareRuns(wide, deep) < 0);
 
@@ -533,6 +533,12 @@ test("map is a sparse three-shell web", () => {
   assert.ok(openIds.includes("Andoria") && openIds.includes("Denobula"));
   assert.equal(openIds.filter((id) => node(id).shell === "fuel").length, 3);
   assert.equal(openIds.includes("Earth"), false);
+});
+
+test("every load builds the same map", async () => {
+  const again = await import("./map.js?again");
+  assert.deepEqual(again.LINKS, LINKS);
+  assert.deepEqual(again.NODES, NODES);
 });
 
 test("planets keep shells and sit off perfect circles", () => {
