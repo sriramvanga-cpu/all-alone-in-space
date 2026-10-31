@@ -1,4 +1,4 @@
-# All Alone in Space
+# Nova Grid
 
 The game and its leaderboard API both run in `client/`.
 

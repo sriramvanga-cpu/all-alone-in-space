@@ -111,6 +111,7 @@ export function toJson(row) {
     timeLeft: Number(row.time_left),
     worlds: Number(row.worlds),
     finishedAt: when.toISOString(),
+    ...(row.rank != null && { rank: Number(row.rank), total: Number(row.total), mine: row.mine === true }),
   };
 }
 

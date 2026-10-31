@@ -256,8 +256,7 @@ input:focus {
 /* How-to-play briefing between registration and the intro */
 .brief ol {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-  gap: 0.7rem;
+  gap: 0.5rem;
   margin: 1rem 0 0;
   padding: 0;
   list-style: none;
@@ -265,7 +264,7 @@ input:focus {
 }
 .brief li {
   position: relative;
-  padding: 0.8rem 1rem 0.85rem 3.1rem;
+  padding: 0.6rem 1rem 0.6rem 3.1rem;
   background: rgba(5, 9, 20, 0.5);
   border: 1px solid rgba(160, 190, 255, 0.16);
   border-radius: 14px;
@@ -274,8 +273,9 @@ input:focus {
 .brief li::before {
   content: counter(step);
   position: absolute;
-  top: 0.8rem;
+  top: 50%;
   left: 0.95rem;
+  transform: translateY(-50%);
   display: grid;
   place-items: center;
   width: 1.5rem;
@@ -285,8 +285,8 @@ input:focus {
   border: 1px solid var(--accent);
   border-radius: 50%;
 }
-.brief li b { display: block; margin-bottom: 0.2rem; font-family: var(--font-display); letter-spacing: 0.04em; }
-.brief li p { margin: 0; color: var(--dim); font-size: 0.92rem; line-height: 1.45; }
+.brief li b { margin-right: 0.5rem; font-family: var(--font-display); letter-spacing: 0.04em; }
+.brief li p { display: inline; margin: 0; color: var(--dim); font-size: 0.95rem; line-height: 1.45; }
 .title-card .ship {
   display: block;
   width: min(52vw, 240px);
@@ -359,6 +359,26 @@ input:focus {
   border-radius: 12px;
 }
 .meter .icon { width: 1.4rem; height: 1.4rem; flex: none; }
+.meter { position: relative; }
+.delta {
+  position: absolute;
+  top: -0.35rem;
+  right: 0.5rem;
+  font: 800 1rem var(--font-display);
+  pointer-events: none;
+  animation: delta 1.2s var(--ease) forwards;
+}
+.delta.up { color: var(--ok); text-shadow: 0 0 10px rgba(125, 222, 192, 0.8); }
+.delta.down { color: var(--danger); text-shadow: 0 0 10px rgba(255, 122, 138, 0.7); }
+.meter-flash { position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; animation: meterflash 0.9s ease-out forwards; }
+.meter-flash.up { box-shadow: 0 0 0 1px var(--ok), 0 0 20px rgba(125, 222, 192, 0.6); }
+.meter-flash.down { box-shadow: 0 0 0 1px var(--danger), 0 0 20px rgba(255, 122, 138, 0.5); }
+@keyframes delta {
+  0% { opacity: 0; transform: translateY(8px) scale(0.7); }
+  15% { opacity: 1; transform: translateY(0) scale(1.2); }
+  100% { opacity: 0; transform: translateY(-24px) scale(1); }
+}
+@keyframes meterflash { from { opacity: 1; } to { opacity: 0; } }
 .meter .m-text { display: flex; flex-direction: column; line-height: 1.1; }
 .meter small {
   font: 600 0.58rem var(--font-display);
@@ -421,6 +441,7 @@ input:focus {
 
 @media (prefers-reduced-motion: reduce) {
   .backdrop .stars, .backdrop .sky, .panel, .title-card .ship, .meter.clock.urgent { animation: none !important; }
+  .delta, .meter-flash { display: none; }
 }
 
 /* ============================================================
@@ -799,6 +820,9 @@ input:focus {
 .lb tr.top1 td { background: rgba(60, 48, 20, 0.62); border-color: rgba(255, 200, 60, 0.28); }
 .lb tr.top2 td { background: rgba(34, 42, 62, 0.62); border-color: rgba(200, 215, 240, 0.22); }
 .lb tr.top3 td { background: rgba(52, 34, 22, 0.62); border-color: rgba(220, 140, 70, 0.26); }
+.lb tr.me td { background: rgba(20, 60, 80, 0.7); border-color: var(--accent); box-shadow: 0 0 14px rgba(90, 209, 255, 0.25); }
+.lb tr.gap td { padding: 0; text-align: center; color: var(--dim); background: none; border: 0; }
+.rank-stat dd { color: var(--accent); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .rank {

@@ -627,7 +627,7 @@ export default function Intro3D({ onDone, onFail }) {
         {CAPTIONS.map((c, i) => (
           <div key={c.title} className={i === caption ? "cap show" : "cap"}>
             <p className="eyebrow">
-              {String(i + 1).padStart(2, "0")} / 03 · All Alone in Space
+              {String(i + 1).padStart(2, "0")} / 03 · Nova Grid
             </p>
             <h1>{c.title}</h1>
             <p>{c.text}</p>

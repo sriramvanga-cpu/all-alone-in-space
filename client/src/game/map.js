@@ -78,9 +78,11 @@ const meanR = (shell) => {
 const nearMiddle = (meanR("inner") + meanR("middle")) / 2;
 const nearOuter = (meanR("middle") + meanR("outer")) / 2;
 
-// Seeded, so every player flies the same map and runs on the board are comparable.
-// Seed 18 puts the outer ring a typical 26 fuel and 3 fuel stops from the station.
-const MAP_SEED = 18;
+// Each load picks one of a few seeded maps that simulate the same (outer ring 24–26 fuel and
+// 3 fuel stops out, equal win rates and finish times), so runs on the board stay comparable.
+// Add a seed only after the same check.
+export const MAP_SEEDS = Object.freeze([45, 68, 85, 104, 139]);
+const MAP_SEED = MAP_SEEDS[Math.floor(Math.random() * MAP_SEEDS.length)];
 
 function scatterFuel() {
   let seed = MAP_SEED;

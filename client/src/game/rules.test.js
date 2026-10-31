@@ -33,6 +33,7 @@ import {
   node,
   linksFrom,
   destinations,
+  MAP_SEEDS,
 } from "./map.js";
 
 function scripted(values) {
@@ -535,10 +536,58 @@ test("map is a sparse three-shell web", () => {
   assert.equal(openIds.includes("Earth"), false);
 });
 
-test("every load builds the same map", async () => {
-  const again = await import("./map.js?again");
-  assert.deepEqual(again.LINKS, LINKS);
-  assert.deepEqual(again.NODES, NODES);
+test("every map in the set is equally fair", async () => {
+  const real = Math.random;
+  const maps = [];
+  for (let i = 0; i < MAP_SEEDS.length; i++) {
+    Math.random = () => (i + 0.5) / MAP_SEEDS.length; // the load-time pick lands on seed i
+    try {
+      maps.push(await import(`./map.js?m=${i}`));
+    } finally {
+      Math.random = real;
+    }
+  }
+  assert.equal(new Set(maps.map((m) => JSON.stringify(m.LINKS))).size, MAP_SEEDS.length);
+  for (const [i, m] of maps.entries()) {
+    const seed = MAP_SEEDS[i];
+    // Cheapest route from the station to the outer ring, refuelling only at fuel worlds.
+    const cost = new Map([[m.STATION, 0]]);
+    const hops = new Map([[m.STATION, 0]]);
+    const todo = new Set([m.STATION]);
+    let outer = null;
+    while (todo.size) {
+      const id = [...todo].reduce((a, b) => (cost.get(a) <= cost.get(b) ? a : b));
+      todo.delete(id);
+      const shell = m.shellOf(id);
+      if (shell === "outer") {
+        outer = id;
+        break;
+      }
+      if (id !== m.STATION && shell !== "fuel") continue;
+      for (const hop of m.linksFrom(id)) {
+        const c = cost.get(id) + fuelCost(1, hop.distance);
+        if (cost.has(hop.id) && cost.get(hop.id) <= c) continue;
+        cost.set(hop.id, c);
+        hops.set(hop.id, hops.get(id) + 1);
+        todo.add(hop.id);
+      }
+    }
+    assert.ok(outer, `seed ${seed} reaches the outer ring`);
+    assert.equal(hops.get(outer) - 1, 3, `seed ${seed} fuel stops`);
+    assert.ok(cost.get(outer) >= 24 && cost.get(outer) <= 26, `seed ${seed} costs ${cost.get(outer)}`);
+
+    const seen = new Set([m.STATION]);
+    const queue = [m.STATION];
+    while (queue.length) {
+      for (const next of m.linksFrom(queue.pop())) {
+        if (!seen.has(next.id)) {
+          seen.add(next.id);
+          queue.push(next.id);
+        }
+      }
+    }
+    assert.equal(seen.size, m.NODES.length, `seed ${seed} reaches every world`);
+  }
 });
 
 test("planets keep shells and sit off perfect circles", () => {

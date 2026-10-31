@@ -280,6 +280,28 @@ async function flushPendingBody() {
   return left.length;
 }
 
+// A floating "+15" / "−25" and a glow on a HUD meter whenever its value changes.
+function Delta({ value }) {
+  const prev = useRef(value);
+  const [pop, setPop] = useState(null);
+  useEffect(() => {
+    const diff = value - prev.current;
+    prev.current = value;
+    if (Math.abs(diff) >= 0.01) setPop((p) => ({ n: (p?.n ?? 0) + 1, diff }));
+  }, [value]);
+  if (!pop) return null;
+  const dir = pop.diff > 0 ? "up" : "down";
+  return (
+    <>
+      <span key={`f${pop.n}`} className={`meter-flash ${dir}`} aria-hidden="true" />
+      <span key={`d${pop.n}`} className={`delta ${dir}`} aria-hidden="true">
+        {pop.diff > 0 ? "+" : "−"}
+        {fmtNum(Math.abs(pop.diff))}
+      </span>
+    </>
+  );
+}
+
 function Ring({ ms, total }) {
   const r = 36;
   const c = 2 * Math.PI * r;
@@ -311,14 +333,16 @@ function Ring({ ms, total }) {
   );
 }
 
-function useBoard() {
+// `run` asks the server to add that run's own row and rank to the top 10.
+function useBoard(run) {
   const [rows, setRows] = useState([]);
   const [err, setErr] = useState(false);
   useEffect(() => {
     let stop = false;
     async function pull() {
       try {
-        const res = await fetch(`${API}/api/leaderboard`, { signal: AbortSignal.timeout(8000) });
+        const query = run ? `?run=${encodeURIComponent(run)}` : "";
+        const res = await fetch(`${API}/api/leaderboard${query}`, { signal: AbortSignal.timeout(8000) });
         if (!res.ok) throw new Error(String(res.status));
         const data = await res.json();
         if (!stop) {
@@ -335,7 +359,7 @@ function useBoard() {
       stop = true;
       clearInterval(id);
     };
-  }, []);
+  }, [run]);
   return { rows, err };
 }
 
@@ -345,9 +369,12 @@ function RankBadge({ n }) {
   return <span className={n <= 3 ? `rank r${n}` : "rank"}>{n}</span>;
 }
 
-// `start` skips rows already shown elsewhere (the podium) but keeps their numbering.
+// The top 10 only; `start` skips rows already shown elsewhere (the podium) but keeps their numbering.
+// The player's own row, when it is outside the top 10, follows a gap with its real rank.
 function BoardTable({ rows, err, start = 0 }) {
-  const list = byRank(rows).slice(start);
+  const ranked = byRank(rows);
+  const list = ranked.slice(start, 10);
+  const mine = ranked.find((row) => row.mine && row.rank > 10);
   return (
     <>
       {err ? <p className="error">Can't reach the leaderboard.</p> : null}
@@ -366,10 +393,18 @@ function BoardTable({ rows, err, start = 0 }) {
             </tr>
           </thead>
           <tbody>
-            {list.map((row, i) => (
-              <tr key={row.id ?? start + i} className={start + i < 3 ? `top top${start + i + 1}` : undefined}>
+            {[...list, ...(mine ? [null, mine] : [])].map((row, i) =>
+              row === null ? (
+                <tr key="gap" className="gap" aria-hidden="true">
+                  <td colSpan={7}>⋯</td>
+                </tr>
+              ) : (
+              <tr
+                key={row.id ?? start + i}
+                className={[start + i < 3 && row !== mine ? `top top${start + i + 1}` : "", row.mine ? "me" : ""].join(" ").trim() || undefined}
+              >
                 <td>
-                  <RankBadge n={start + i + 1} />
+                  <RankBadge n={row === mine ? row.rank : start + i + 1} />
                 </td>
                 <td className="who">{row.name}</td>
                 <td>
@@ -380,7 +415,8 @@ function BoardTable({ rows, err, start = 0 }) {
                 <td className="num">{fmtScore(Number.isFinite(row.fuel) ? row.fuel : Number(row.score) || 0)}</td>
                 <td className="num">{row.settled ? fmtScore(runPoints(row)) : "—"}</td>
               </tr>
-            ))}
+              ),
+            )}
           </tbody>
         </table>
       ) : null}
@@ -417,7 +453,7 @@ function Board() {
     <main className="board">
       <header className="board-head">
         <div>
-          <p className="eyebrow">All Alone in Space</p>
+          <p className="eyebrow">Nova Grid</p>
           <h1>Leaderboard</h1>
         </div>
         <span className={err ? "live off" : "live"}>{err ? "Offline" : "Live"}</span>
@@ -433,21 +469,13 @@ function Board() {
 }
 
 const BRIEF = [
-  ["Fly", `You start at the station with ${START_FUEL} fuel. Tap a highlighted planet to fly there. Every route shows its fuel cost.`],
-  [
-    "Test a world",
-    "Planets marked ! might be habitable. Pick a subject and answer one question in 60 seconds. A right answer earns 15 credits and a chance to settle, and the scanner decides. A wrong answer or a timeout closes the world and can make fuel cost more.",
-  ],
-  [
-    "Choose your ring",
-    "Near the station, worlds are cheap to reach but have low habitability and hard questions. The middle ring is medium. The outer ring has high habitability and easy questions, but costs more fuel to reach. Hover a planet to see its habitability.",
-  ],
-  [
-    "Refuel",
-    "Planets with a fuel drop give a one-minute maths round: one credit per right answer, and too many misses can raise fuel costs. Then spend credits on fuel in the shop.",
-  ],
-  ["One visit each", "A planet closes once you have tried it. The run ends when you settle, when the 15 minutes run out, or when no open route is affordable."],
-  ["Score", "Settling beats every loss. Wins rank by points: 1 per fuel left and 1 per 10 seconds left."],
+  ["Goal", "Land on a planet that will take you within 15 minutes."],
+  ["Fly", `Tap a glowing planet. You start with ${START_FUEL} fuel; each route shows its cost.`],
+  ["Test", "On a ! planet, answer one question. Right: 15 credits and a chance to settle. Wrong: fuel costs rise."],
+  ["Go far", "Outer planets are easier to settle but cost more fuel to reach."],
+  ["Refuel", "On a fuel-drop planet, answer quick maths for a minute (1 credit each), then buy fuel."],
+  ["Once only", "Each planet can be tried once. Run out of fuel or time and the run ends."],
+  ["Score", "Settling beats every loss. Faster wins with more fuel left rank higher."],
 ];
 
 function Briefing({ onStart }) {
@@ -456,7 +484,6 @@ function Briefing({ onStart }) {
       <section className="panel wide brief">
         <p className="eyebrow">Mission briefing</p>
         <h1>How to play</h1>
-        <p>Find a planet that will take you before the 15-minute clock runs out.</p>
         <ol>
           {BRIEF.map(([title, text]) => (
             <li key={title}>
@@ -484,9 +511,9 @@ function NameScreen({ onStart }) {
       <header className="title-card">
         <ShipSvg className="ship" />
         <p className="title-big">
-          All Alone
+          Nova
           <br />
-          in Space
+          Grid
         </p>
         <p className="title-tag">Fifteen minutes. One world.</p>
       </header>
@@ -1219,15 +1246,17 @@ function Game() {
     if (snap.phase !== "end" || game.current.sent) return;
     game.current = { ...game.current, sent: true };
     const facts = runFacts(game.current);
+    // Lets the server drop a retry of a post it already saved, and the end screen find this run's rank.
+    // randomUUID needs https or localhost.
+    const runId = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const payload = {
-      // Lets the server drop a retry of a post it already saved. randomUUID needs https or localhost.
-      runId: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      runId,
       name: game.current.name,
       phone: game.current.phone,
       ...facts,
       finishedAt: new Date().toISOString(),
     };
-    commit({ postState: "saving" });
+    commit({ postState: "saving", runId });
     serial(async () => {
       const list = readPending();
       const seen = list.some(
@@ -1291,6 +1320,7 @@ function Game() {
                 <i style={{ width: `${Math.max(0, Math.min(1, fuelShown / Math.max(30, fuelShown))) * 100}%` }} />
               </span>
             </div>
+            <Delta value={snap.fuel} />
           </div>
           <div className="meter credits">
             <CreditIcon />
@@ -1298,6 +1328,7 @@ function Game() {
               <small>Credits</small>
               <b>{snap.credits}</b>
             </div>
+            <Delta value={snap.credits} />
           </div>
           <div className={snap.phase !== "end" && clockMs <= 120_000 ? "meter clock urgent" : "meter clock"}>
             <ClockIcon />
@@ -1405,8 +1436,9 @@ function Game() {
 }
 
 function EndScreen({ snap }) {
-  const { rows, err } = useBoard();
+  const { rows, err } = useBoard(snap.runId);
   const facts = runFacts(snap);
+  const mine = rows.find((row) => row.mine);
   const post =
     snap.postState === "saved"
       ? "Score is on the board."
@@ -1426,6 +1458,13 @@ function EndScreen({ snap }) {
         </div>
       </div>
       <dl className="stats">
+        <div className="stat rank-stat">
+          <dt>Your rank</dt>
+          <dd>
+            {mine ? `#${mine.rank}` : "…"}
+            {mine ? <small>of {mine.total}</small> : null}
+          </dd>
+        </div>
         <div className="stat">
           <dt>Settled</dt>
           <dd className={facts.settled ? "yes" : "no"}>{facts.settled ? "Yes" : "No"}</dd>

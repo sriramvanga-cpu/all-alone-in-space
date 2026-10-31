@@ -98,3 +98,11 @@ test("a score post keeps its run id, and old posts without one still work", () =
   assert.equal(parseScore({ name: "Kirk", settled: false, timeLeft: 1, worlds: 1, fuel: 0, finishedAt: when }).runId, null);
   assert.equal(parseScore({ name: "Kirk", runId: 7, settled: false, timeLeft: 1, worlds: 1, fuel: 0, finishedAt: when }).error, "runId must be a short string");
 });
+
+test("a leaderboard row carries its rank and whether it is yours", () => {
+  const json = toJson({ id: 7, name: "Kirk", fuel: 3, settled: true, time_left: 60, worlds: 2, finished_at: when, mine: true, rank: "14", total: "230" });
+  assert.equal(json.rank, 14);
+  assert.equal(json.total, 230);
+  assert.equal(json.mine, true);
+  assert.equal("rank" in toJson({ id: 1, name: "Spock", fuel: 0, settled: false, time_left: 0, worlds: 0, finished_at: when }), false);
+});
