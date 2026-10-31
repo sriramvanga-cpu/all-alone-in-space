@@ -253,6 +253,11 @@ input:focus {
 /* Title lockup on the name screen. */
 .title-card { text-align: center; margin-bottom: 1.5rem; }
 
+/* Mission card between the intro and the star chart */
+.mission { text-align: center; }
+.mission > p:not(.eyebrow) { max-width: 30rem; margin-inline: auto; line-height: 1.55; }
+.mission .row { justify-content: center; }
+
 /* How-to-play briefing between registration and the intro */
 .brief ol {
   display: grid;
@@ -689,6 +694,56 @@ input:focus {
 
 .qhead { display: flex; gap: 1rem; align-items: center; }
 .prompt { margin: 1rem 0; font-size: 1.45rem; line-height: 1.35; }
+
+/* Fuel-stop rounds */
+.fuel .prompt { margin: 1.1rem 0 0.4rem; text-align: center; font: 700 2.1rem/1.2 var(--font-display); letter-spacing: 0.06em; }
+.cells {
+  position: relative;
+  height: 9.5rem;
+  margin: 1rem 0 0.4rem;
+  background: rgba(5, 9, 20, 0.5);
+  border: 1px solid var(--glass-line);
+  border-radius: 14px;
+}
+.cells span { position: absolute; translate: -50% -50%; color: var(--accent); }
+.cells .icon { display: block; width: 1.8rem; height: 1.8rem; }
+.gauge { flex: 1; height: 0.9rem; overflow: hidden; background: rgba(255, 255, 255, 0.08); border-radius: 99px; }
+.gauge i { display: block; height: 100%; background: linear-gradient(90deg, #4a7cff, #7be0ff); }
+
+.valve-track {
+  position: relative;
+  height: 2.6rem;
+  margin: 1.4rem 0 0.4rem;
+  overflow: hidden;
+  background: rgba(5, 9, 20, 0.6);
+  border: 1px solid var(--glass-line);
+  border-radius: 12px;
+}
+.valve-band { position: absolute; inset-block: 0; background: rgba(61, 220, 132, 0.3); border-inline: 2px solid #3ddc84; }
+.valve-needle { position: absolute; inset-block: 0; width: 4px; translate: -50%; background: #fff; box-shadow: 0 0 12px #fff; }
+.valve .row { align-items: center; }
+.valve .row button { min-width: 9rem; }
+.flash { font: 700 0.9rem var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; animation: pop 0.5s var(--ease) both; }
+.flash.hit { color: #3ddc84; }
+.flash.miss { color: var(--danger); }
+@keyframes pop {
+  from { opacity: 0; transform: scale(1.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.pads { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.7rem; margin-top: 0.6rem; }
+.pad {
+  height: 5.5rem;
+  padding: 0;
+  background: var(--pad);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 16px;
+  opacity: 0.3;
+  transition: opacity 0.1s, box-shadow 0.1s;
+}
+.pad:hover:not(:disabled) { filter: none; box-shadow: none; transform: none; }
+.pads .pad.lit,
+.pads .pad:active:not([aria-disabled="true"]) { opacity: 1; box-shadow: 0 0 30px var(--pad); }
 
 .ring { width: 88px; height: 88px; flex: none; --ring-a: #7be0ff; --ring-b: #4a7cff; }
 .ring.urgent { --ring-a: #ffa08f; --ring-b: #ff4d6a; }

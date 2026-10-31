@@ -10,7 +10,7 @@ export const SHOP_PACKS = Object.freeze([
   Object.freeze({ credits: 25, fuel: 15 }),
 ]);
 
-function rollInt(rng, lo, hi) {
+export function rollInt(rng, lo, hi) {
   const span = hi - lo + 1;
   const pick = Math.floor(rng() * span);
   return lo + Math.min(span - 1, Math.max(0, pick));
@@ -107,7 +107,7 @@ export function applyMultiplier(variable, multiplier) {
   return Math.max(1, variable * multiplier);
 }
 
-function shuffleWith(list, rng) {
+export function shuffleWith(list, rng) {
   const a = [...list];
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));

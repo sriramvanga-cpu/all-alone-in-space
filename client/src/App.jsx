@@ -12,11 +12,11 @@ import {
   habitability,
   affordableVariable,
   fuelMinute,
-  makeFuelCard,
   buyPacks,
   scanReadings,
   TOXIC_LIMIT,
 } from "./game/rules.js";
+import { FUEL_ROUNDS } from "./game/fuelRounds.js";
 import {
   INNER,
   MIDDLE,
@@ -190,6 +190,7 @@ function fresh() {
     domain: "",
     card: null,
     qDeadline: 0,
+    fuelRound: null,
     fuelDeck: [],
     fuelIndex: 0,
     fuelAnswers: [],
@@ -222,9 +223,13 @@ function runFacts(snap) {
   };
 }
 
-function drawFuelCard(seen) {
-  let card = makeFuelCard();
-  for (let i = 0; i < 12 && seen.includes(card.prompt); i++) card = makeFuelCard();
+const fuelKey = (card) => card.prompt ?? card.choices.join();
+
+// Interactive rounds have no cards.
+function drawFuelCard(round, seen) {
+  if (!round.make) return null;
+  let card = round.make();
+  for (let i = 0; i < 12 && seen.includes(fuelKey(card)); i++) card = round.make();
   return card;
 }
 
@@ -473,7 +478,7 @@ const BRIEF = [
   ["Fly", `Tap a glowing planet. You start with ${START_FUEL} fuel; each route shows its cost.`],
   ["Test", "On a ! planet, answer one question. Right: 15 credits and a chance to settle. Wrong: fuel costs rise."],
   ["Go far", "Outer planets are easier to settle but cost more fuel to reach."],
-  ["Refuel", "On a fuel-drop planet, answer quick maths for a minute (1 credit each), then buy fuel."],
+  ["Refuel", "On a fuel-drop planet, play a one-minute challenge for credits (a new one at every stop), then buy fuel."],
   ["Once only", "Each planet can be tried once. Run out of fuel or time and the run ends."],
   ["Score", "Settling beats every loss. Faster wins with more fuel left rank higher."],
 ];
@@ -495,6 +500,28 @@ function Briefing({ onStart }) {
         <div className="row">
           <button type="button" onClick={onStart} autoFocus>
             Start the mission
+          </button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+// Shown after the cutscene, before the chart opens and the clock starts.
+function Mission({ onStart }) {
+  return (
+    <main className="screen">
+      <section className="panel mission">
+        <p className="eyebrow">Your mission</p>
+        <h1>Find a new home</h1>
+        <p>
+          Vulcan is gone, and there is no world left to call home. Somewhere in Nova Grid is a planet that can
+          support life. Find it before your fuel or the {ROUND_MS / 60000}-minute clock runs out.
+        </p>
+        <p className="hint">The clock starts when the star chart opens.</p>
+        <div className="row">
+          <button type="button" onClick={onStart} autoFocus>
+            Open the star chart
           </button>
         </div>
       </section>
@@ -890,7 +917,7 @@ function Shop({ credits, fuel, world, exitFare, onBuy, onLeave }) {
   );
 }
 
-function ChoiceButtons({ choices, onPick }) {
+function ChoiceButtons({ choices, onPick, render = (choice) => <span>{choice}</span> }) {
   // The next card appears under the pointer, so a double click would answer a card nobody read.
   const shownAt = useRef(0);
   useEffect(() => {
@@ -911,12 +938,142 @@ function ChoiceButtons({ choices, onPick }) {
           <span className="key" aria-hidden="true">
             {String.fromCharCode(65 + i)}
           </span>
-          <span>{choice}</span>
+          {render(choice)}
         </button>
       ))}
     </div>
   );
 }
+
+const VALVE_BAND = 0.2;
+
+// A needle sweeps the gauge back and forth; a tap inside the green band is a hit, anywhere else a miss.
+function Valve({ onMark }) {
+  const needle = useRef(null);
+  const sweep = useRef({ t0: performance.now(), period: 2200 });
+  const [band, setBand] = useState(0.5);
+  const [flash, setFlash] = useState(null);
+
+  // Phase in [0, 1) of the current back-and-forth.
+  const phase = () => (((performance.now() - sweep.current.t0) / sweep.current.period) % 1 + 1) % 1;
+  const at = () => {
+    const p = phase();
+    return p < 0.5 ? p * 2 : 2 - p * 2;
+  };
+
+  useEffect(() => {
+    let id;
+    const step = () => {
+      if (needle.current) needle.current.style.left = `${at() * 100}%`;
+      id = requestAnimationFrame(step);
+    };
+    id = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  function vent() {
+    const hit = Math.abs(at() - band) <= VALVE_BAND / 2;
+    onMark(hit ? "right" : "wrong");
+    setFlash((f) => ({ hit, n: (f?.n ?? 0) + 1 }));
+    if (!hit) return;
+    // Speed up, keeping the needle where it is; then move the band well away.
+    const p = phase();
+    const period = Math.max(1100, sweep.current.period * 0.94);
+    sweep.current = { t0: performance.now() - p * period, period };
+    let next = band;
+    while (Math.abs(next - band) < 0.25) next = 0.15 + Math.random() * 0.7;
+    setBand(next);
+  }
+
+  return (
+    <div className="valve">
+      <div className="valve-track">
+        <span className="valve-band" style={{ left: `${(band - VALVE_BAND / 2) * 100}%`, width: `${VALVE_BAND * 100}%` }} />
+        <span className="valve-needle" ref={needle} />
+      </div>
+      <div className="row">
+        <button type="button" onClick={vent} autoFocus>
+          Vent
+        </button>
+        {flash ? (
+          <span key={flash.n} className={flash.hit ? "flash hit" : "flash miss"}>
+            {flash.hit ? "Hit" : "Miss"}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+const PADS = ["#ff5a5a", "#3ddc84", "#4f8bff", "#ffd23f"];
+
+// Simon-style: watch a sequence of pads light up, then tap it back. It grows by one after a
+// success (up to 6) and shrinks by one after a mistake (down to 3).
+function ReactorCode({ onMark }) {
+  const [seq, setSeq] = useState(() => codeOf(3));
+  const [lit, setLit] = useState(-1);
+  const [watching, setWatching] = useState(true);
+  const [last, setLast] = useState(null);
+  const [got, setGot] = useState(0);
+  const pos = useRef(0);
+
+  useEffect(() => {
+    pos.current = 0;
+    setGot(0);
+    setWatching(true);
+    const timers = seq.flatMap((pad, i) => [
+      setTimeout(() => setLit(pad), 600 + i * 600),
+      setTimeout(() => setLit(-1), 600 + i * 600 + 400),
+    ]);
+    timers.push(setTimeout(() => setWatching(false), 600 + seq.length * 600));
+    return () => timers.forEach(clearTimeout);
+  }, [seq]);
+
+  function press(pad) {
+    if (watching) return;
+    if (pad !== seq[pos.current]) {
+      onMark("wrong");
+      setLast("wrong");
+      setSeq(codeOf(Math.max(3, seq.length - 1)));
+      return;
+    }
+    pos.current += 1;
+    setGot(pos.current);
+    if (pos.current === seq.length) {
+      onMark("right");
+      setLast("right");
+      setSeq(codeOf(Math.min(6, seq.length + 1)));
+    }
+  }
+
+  const status = watching
+    ? last === "wrong" ? "Wrong code. Watch again." : "Watch the lights."
+    : `Your turn: ${got} of ${seq.length}.`;
+  return (
+    <div className="code">
+      <p className="hint" aria-live="polite">{status}</p>
+      <div className="pads">
+        {PADS.map((color, i) => (
+          <button
+            key={color}
+            type="button"
+            className={lit === i ? "pad lit" : "pad"}
+            style={{ "--pad": color }}
+            aria-label={`Pad ${i + 1}`}
+            aria-disabled={watching}
+            onClick={() => press(i)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function codeOf(length) {
+  return Array.from({ length }, () => Math.floor(Math.random() * PADS.length));
+}
+
+const FUEL_GAMES = { valve: Valve, code: ReactorCode };
 
 const DOMAIN_ICONS = { general: GlobeIcon, mental: BrainIcon, technology: ChipIcon };
 
@@ -954,7 +1111,7 @@ function Game() {
   void tick;
 
   function dock() {
-    if (game.current.phase !== "intro") return;
+    if (game.current.phase !== "mission") return;
     const percents = {};
     for (const id of [...INNER, ...MIDDLE, ...OUTER]) {
       percents[id] = drawPercent(shellOf(id));
@@ -1005,7 +1162,10 @@ function Game() {
       return;
     }
     if (FUEL_WORLDS.has(id)) {
-      const card = drawFuelCard(g.fuelSeen);
+      // Fuel worlds close after one visit, so this counts earlier fuel stops.
+      const stops = g.visited.filter((v) => FUEL_WORLDS.has(v)).length;
+      const round = FUEL_ROUNDS[stops % FUEL_ROUNDS.length];
+      const card = drawFuelCard(round, g.fuelSeen);
       commit({
         phase: "fuel",
         here: id,
@@ -1013,10 +1173,11 @@ function Game() {
         visited,
         closed: [...g.closed, id],
         creditFloor: g.credits,
+        fuelRound: round,
         fuelDeck: [card],
         fuelIndex: 0,
         fuelAnswers: [],
-        fuelSeen: [...g.fuelSeen, card.prompt],
+        fuelSeen: card ? [...g.fuelSeen, fuelKey(card)] : g.fuelSeen,
         fuelDeadline: Date.now() + QUESTION_MS,
       });
       return;
@@ -1116,13 +1277,14 @@ function Game() {
       return;
     }
     const answers = [...g.fuelAnswers, kind];
-    const card = drawFuelCard(g.fuelSeen);
+    const card = drawFuelCard(g.fuelRound, g.fuelSeen);
+    const right = answers.filter((answer) => answer === "right").length;
     commit({
       fuelAnswers: answers,
       fuelIndex: 0,
       fuelDeck: [card],
-      fuelSeen: [...g.fuelSeen, card.prompt],
-      credits: g.creditFloor + answers.filter((answer) => answer === "right").length,
+      fuelSeen: card ? [...g.fuelSeen, fuelKey(card)] : g.fuelSeen,
+      credits: g.creditFloor + Math.floor(right / g.fuelRound.per),
     });
   }
 
@@ -1285,7 +1447,10 @@ function Game() {
     return <NameScreen onStart={(who) => commit({ ...who, phase: "brief" })} />;
   }
   if (snap.phase === "brief") return <Briefing onStart={() => commit({ phase: "intro" })} />;
-  if (snap.phase === "intro") return <Intro onDone={dock} />;
+  if (snap.phase === "intro") {
+    return <Intro onDone={() => game.current.phase === "intro" && commit({ phase: "mission" })} />;
+  }
+  if (snap.phase === "mission") return <Mission onStart={dock} />;
 
   const clockMs =
     snap.phase === "end"
@@ -1300,6 +1465,7 @@ function Game() {
         : snap.here;
   const domainLabel = DOMAINS.find((d) => d[0] === snap.domain)?.[1] || "";
   const fuelCard = snap.fuelDeck[snap.fuelIndex] ?? null;
+  const FuelGame = snap.fuelRound && FUEL_GAMES[snap.fuelRound.id];
   const qMs = Math.max(0, snap.qDeadline - now);
   const fuelMs = Math.max(0, snap.fuelDeadline - now);
 
@@ -1395,26 +1561,50 @@ function Game() {
 
         {snap.phase === "scan" && snap.scan ? <Scan scan={snap.scan} onDone={leaveScan} /> : null}
 
-        {snap.phase === "fuel" && fuelCard ? (
-          <section className="panel">
+        {snap.phase === "fuel" && snap.fuelRound ? (
+          <section className="panel fuel">
             <div className="qhead">
               <Ring ms={fuelMs} total={QUESTION_MS} />
               <div>
-                <p className="eyebrow">{snap.here}</p>
-                <h1>Fuel minute</h1>
+                <p className="eyebrow">{snap.here} · Fuel minute</p>
+                <h1>{snap.fuelRound.title}</h1>
               </div>
             </div>
-            <p>One credit for each right answer. You have {snap.credits}. Skip if you want.</p>
-            <p className="prompt">{fuelCard.prompt}</p>
-            <ChoiceButtons
-              choices={fuelCard.choices}
-              onPick={(choice) => markFuel(choice === fuelCard.answer ? "right" : "wrong")}
-            />
-            <div className="row">
-              <button type="button" className="ghost" onClick={() => markFuel("skip")}>
-                Skip
-              </button>
-            </div>
+            <p>
+              {snap.fuelRound.how}{" "}
+              {snap.fuelRound.per === 1 ? "1 credit each." : `1 credit for every ${snap.fuelRound.per}.`}{" "}
+              You have {snap.credits}.
+            </p>
+            {FuelGame ? (
+              <FuelGame key={snap.here} onMark={markFuel} />
+            ) : fuelCard ? (
+              <>
+                {fuelCard.dots ? (
+                  <div className="cells" role="img" aria-label="Fuel cells to count">
+                    {fuelCard.dots.map(([x, y]) => (
+                      <span key={`${x},${y}`} style={{ left: `${x}%`, top: `${y}%` }}>
+                        <FuelIcon />
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {fuelCard.prompt ? (
+                  <p className="prompt" style={fuelCard.ink ? { color: fuelCard.ink } : undefined}>
+                    {fuelCard.prompt}
+                  </p>
+                ) : null}
+                <ChoiceButtons
+                  choices={fuelCard.choices}
+                  render={fuelCard.gauge ? (level) => <span className="gauge"><i style={{ width: `${level}%` }} /></span> : undefined}
+                  onPick={(choice) => markFuel(choice === fuelCard.answer ? "right" : "wrong")}
+                />
+                <div className="row">
+                  <button type="button" className="ghost" onClick={() => markFuel("skip")}>
+                    Skip
+                  </button>
+                </div>
+              </>
+            ) : null}
           </section>
         ) : null}
 
