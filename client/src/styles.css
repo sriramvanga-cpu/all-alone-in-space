@@ -745,6 +745,42 @@ input:focus {
 .pads .pad.lit,
 .pads .pad:active:not([aria-disabled="true"]) { opacity: 1; box-shadow: 0 0 30px var(--pad); }
 
+/* Right answers in a row during a fuel minute */
+.fuel .qhead { flex-wrap: wrap; }
+.combo {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0 auto;
+  padding: 0.3rem 0.85rem;
+  font: 600 0.72rem var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--dim);
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+}
+.combo b { font-size: 1.15rem; color: var(--ink); }
+.combo.hot { color: var(--gold); border-color: rgba(255, 224, 138, 0.5); }
+
+/* Landing choice after a right answer */
+.land small { font: 400 0.88rem/1.35 var(--font-body); letter-spacing: 0; text-transform: none; color: var(--dim); }
+
+/* A flight event sits over the paused map */
+.map-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(2, 4, 10, 0.35);
+  cursor: default;
+}
+.event { width: min(100%, 27rem); }
+.event .choice { justify-content: space-between; }
+.event .choice small { color: var(--dim); font-size: 0.85rem; text-align: right; }
+
 .ring { width: 88px; height: 88px; flex: none; --ring-a: #7be0ff; --ring-b: #4a7cff; }
 .ring.urgent { --ring-a: #ffa08f; --ring-b: #ff4d6a; }
 .ring-track { fill: none; stroke: rgba(255, 255, 255, 0.1); stroke-width: 6; }

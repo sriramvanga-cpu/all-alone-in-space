@@ -16,14 +16,16 @@ export function rollInt(rng, lo, hi) {
   return lo + Math.min(span - 1, Math.max(0, pick));
 }
 
-// Each shell draws from its own band, so even a right answer rarely settles an
-// inner world and usually settles an outer one. With the 25-point answer shift
-// and a 0–100 roll, a right answer settles about: inner 5%, middle 25%,
-// outer 55%. Percent can exceed 100; the roll still has to beat it.
+// Each shell draws from its own band, so a right answer rarely settles an inner
+// world and settles an outer one most often. With the 25-point answer shift and a
+// 0–100 roll, landing blind after a right answer settles about: inner 5%, middle
+// 25%, outer 30%; a scan's second site lifts those to 10%, 43% and 50%. With the
+// scan, streak bonus and flight events, these odds keep a simulated typical player
+// winning about half their runs. Percent can exceed 100; the roll still has to beat it.
 const SHELL_BANDS = Object.freeze({
   inner: [108, 125],
   middle: [85, 115],
-  outer: [58, 95],
+  outer: [83, 120],
 });
 const ANSWER_SHIFT = 25;
 
@@ -216,6 +218,27 @@ export function fuelMinute(variable, answers, rng = Math.random) {
     multiplier,
     credits,
   };
+}
+
+export const STREAK = 5;
+
+/** Right answers in a row at the end of a fuel minute, and 1 bonus credit for every STREAK in a row. A wrong answer resets the run; a skip doesn't. */
+export function fuelStreak(answers) {
+  let streak = 0;
+  let bonus = 0;
+  for (const answer of answers) {
+    if (answer === "wrong") streak = 0;
+    else if (answer === "right" && ++streak % STREAK === 0) bonus += 1;
+  }
+  return { streak, bonus };
+}
+
+// A scan from orbit costs this much fuel and checks a second landing site when the first is toxic.
+export const SCAN_FUEL = 1;
+
+/** The second site of a scan: same percent, its own roll. */
+export function secondSite(percent, rng = Math.random) {
+  return rollInt(rng, 0, 100) > percent;
 }
 
 /**

@@ -20,6 +20,9 @@ import {
   buyPacks,
   scanReadings,
   TOXIC_LIMIT,
+  STREAK,
+  fuelStreak,
+  secondSite,
 } from "./rules.js";
 import {
   INNER,
@@ -123,30 +126,33 @@ test("each shell draws from its own band and keeps max, min, or average", () => 
   assert.equal(drawPercent("inner", rolls(108, 125, 108, 125)), 125);
   assert.equal(drawPercent("middle", rolls(85, 115, 85, 96)), 91);
   assert.equal(drawPercent("middle", rolls(85, 115, 90, 110)), 100);
-  assert.equal(drawPercent("outer", rolls(58, 95, 70, 60)), 60);
-  assert.equal(drawPercent("outer", rolls(58, 95, 58, 95)), 58);
+  assert.equal(drawPercent("outer", rolls(83, 120, 95, 85)), 85);
+  assert.equal(drawPercent("outer", rolls(83, 120, 83, 120)), 83);
   assert.throws(() => drawPercent("fuel"));
 });
 
-test("a right answer settles rarely near the station and often far out", () => {
+test("a right answer settles rarely near the station and most often far out, and a scan lifts the odds", () => {
   let s = 99;
   const rng = () => {
     s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
     return s / 4294967296;
   };
-  const rate = (shell) => {
+  const rate = (shell, scanned) => {
     let wins = 0;
     for (let i = 0; i < 4000; i++) {
-      if (habitability({ percent: drawPercent(shell, rng), credits: 0, variable: 1 }, true, rng).won) wins++;
+      const result = habitability({ percent: drawPercent(shell, rng), credits: 0, variable: 1 }, true, rng);
+      if (result.won || (scanned && secondSite(result.percent, rng))) wins++;
     }
     return wins / 4000;
   };
   const inner = rate("inner");
   const middle = rate("middle");
   const outer = rate("outer");
+  const outerScan = rate("outer", true);
   assert.ok(inner < 0.1, `inner ${inner}`);
-  assert.ok(middle > inner + 0.15 && middle < outer - 0.15, `middle ${middle}`);
-  assert.ok(outer > 0.45, `outer ${outer}`);
+  assert.ok(middle > inner + 0.15 && middle < outer, `middle ${middle}`);
+  assert.ok(outer > 0.25 && outer < 0.35, `outer ${outer}`);
+  assert.ok(outerScan > 0.45 && outerScan < 0.55, `outer with a scan ${outerScan}`);
 });
 
 test("a careful player settles more often than a guesser", () => {
@@ -188,9 +194,9 @@ test("a careful player settles more often than a guesser", () => {
   }
   const skilled = settleRate(0.85, 7);
   const guesser = settleRate(0.25, 7);
-  assert.ok(skilled > 0.55, `skilled ${skilled}`);
-  assert.ok(guesser < 0.3, `guesser ${guesser}`);
-  assert.ok(skilled - guesser > 0.3, `${skilled} vs ${guesser}`);
+  assert.ok(skilled > 0.35, `skilled ${skilled}`);
+  assert.ok(guesser < 0.2, `guesser ${guesser}`);
+  assert.ok(skilled - guesser > 0.25, `${skilled} vs ${guesser}`);
 });
 
 test("multiplier band is 0–1 only on roll 1", () => {
@@ -640,4 +646,34 @@ test("ten different fuel rounds, and every card has one right answer among four"
       checks[round.id]?.(card);
     }
   }
+});
+
+test("a streak pays 1 bonus credit for every 5 right in a row; a wrong answer resets it, a skip doesn't", () => {
+  const r = (n) => Array(n).fill("right");
+  assert.equal(STREAK, 5);
+  assert.deepEqual(fuelStreak([]), { streak: 0, bonus: 0 });
+  assert.deepEqual(fuelStreak(r(4)), { streak: 4, bonus: 0 });
+  assert.deepEqual(fuelStreak(r(5)), { streak: 5, bonus: 1 });
+  assert.deepEqual(fuelStreak(r(11)), { streak: 11, bonus: 2 });
+  assert.deepEqual(fuelStreak([...r(4), "wrong", ...r(4)]), { streak: 4, bonus: 0 });
+  assert.deepEqual(fuelStreak([...r(3), "skip", ...r(2), "wrong"]), { streak: 0, bonus: 1 });
+});
+
+test("a scan's second site settles only when its roll beats the percent", () => {
+  const half = () => 0.5; // rollInt(0, 100) → 50
+  assert.equal(secondSite(49, half), true);
+  assert.equal(secondSite(50, half), false);
+  assert.equal(secondSite(-5, () => 0), true);
+});
+
+test("every flight event has two options, and one of them is always open", async () => {
+  const { FLIGHT_EVENTS, canTake } = await import("./events.js");
+  assert.equal(new Set(FLIGHT_EVENTS.map((e) => e.id)).size, FLIGHT_EVENTS.length);
+  for (const event of FLIGHT_EVENTS) {
+    assert.equal(event.options.length, 2, event.id);
+    assert.ok(event.options.some((o) => canTake(o, { fuel: 0, credits: 0 })), event.id);
+  }
+  assert.equal(canTake({ fuel: -1 }, { fuel: 0.9, credits: 0 }), false);
+  assert.equal(canTake({ fuel: -1 }, { fuel: 1, credits: 0 }), true);
+  assert.equal(canTake({ credits: -5 }, { fuel: 0, credits: 4 }), false);
 });

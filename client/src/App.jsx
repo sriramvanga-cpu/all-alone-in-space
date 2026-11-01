@@ -15,8 +15,14 @@ import {
   buyPacks,
   scanReadings,
   TOXIC_LIMIT,
+  STREAK,
+  fuelStreak,
+  SCAN_FUEL,
+  secondSite,
 } from "./game/rules.js";
 import { FUEL_ROUNDS } from "./game/fuelRounds.js";
+import { EVENT_CHANCE, FLIGHT_EVENTS, canTake } from "./game/events.js";
+import { engine, sfx } from "./sound.js";
 import {
   INNER,
   MIDDLE,
@@ -75,8 +81,8 @@ const END_COPY = {
   closed: "Every route from here leads to a closed world.",
 };
 // A reload in these phases throws the run away, so the browser asks first.
-const LIVE_PHASES = new Set(["map", "fly", "pick", "question", "scan", "fuel", "shop"]);
-// Follows SHELL_BANDS in rules.js: a right answer settles ~5% inner, ~25% middle, ~55% outer.
+const LIVE_PHASES = new Set(["map", "fly", "pick", "question", "land", "scan", "fuel", "shop"]);
+// Follows SHELL_BANDS in rules.js: a blind landing after a right answer settles ~5% inner, ~25% middle, ~30% outer.
 const HAB_LEVEL = { inner: "Low", middle: "Medium", outer: "High" };
 const RING_LEVEL = { inner: "hard", middle: "medium", outer: "easy" };
 
@@ -198,6 +204,10 @@ function fresh() {
     fuelDeadline: 0,
     creditFloor: 0,
     visited: [],
+    landing: null,
+    // Every event shows once before any repeats.
+    eventOrder: shuffle(FLIGHT_EVENTS),
+    eventCount: 0,
     scan: null,
     note: "",
     postState: "",
@@ -475,10 +485,10 @@ function Board() {
 
 const BRIEF = [
   ["Goal", "Land on a planet that will take you within 15 minutes."],
-  ["Fly", `Tap a glowing planet. You start with ${START_FUEL} fuel; each route shows its cost.`],
-  ["Test", "On a ! planet, answer one question. Right: 15 credits and a chance to settle. Wrong: fuel costs rise."],
+  ["Fly", `Tap a glowing planet. You start with ${START_FUEL} fuel; each route shows its cost. Some flights bring a surprise.`],
+  ["Test", `On a ! planet, answer one question. Right: 15 credits, then land blind, or pay ${SCAN_FUEL} fuel to scan for a second landing site. Wrong: fuel costs rise.`],
   ["Go far", "Outer planets are easier to settle but cost more fuel to reach."],
-  ["Refuel", "On a fuel-drop planet, play a one-minute challenge for credits (a new one at every stop), then buy fuel."],
+  ["Refuel", `On a fuel-drop planet, play a one-minute challenge for credits (a new one at every stop; ${STREAK} right in a row earns a bonus), then buy fuel.`],
   ["Once only", "Each planet can be tried once. Run out of fuel or time and the run ends."],
   ["Score", "Settling beats every loss. Faster wins with more fuel left rank higher."],
 ];
@@ -603,7 +613,7 @@ function fit(origin, size) {
   return Math.max(-WORLD, Math.min(hi, origin));
 }
 
-function MapView({ snap, shipRef, onLaunch, view, onView }) {
+function MapView({ snap, shipRef, onLaunch, view, onView, children }) {
   const stageRef = useRef(null);
   const drag = useRef(null);
   const moved = useRef(false);
@@ -706,7 +716,12 @@ function MapView({ snap, shipRef, onLaunch, view, onView }) {
         );
       })}
       {flying ? (
-        <path className="streak" d={snap.flight.d} pathLength="100" style={{ animationDuration: `${FLIGHT_MS}ms` }} />
+        <path
+          className="streak"
+          d={snap.flight.d}
+          pathLength="100"
+          style={{ animationDuration: `${FLIGHT_MS}ms`, animationPlayState: snap.flight.paused ? "paused" : undefined }}
+        />
       ) : null}
       {NODES.map((n) => {
         const p = POS[n.id];
@@ -830,7 +845,38 @@ function MapView({ snap, shipRef, onLaunch, view, onView }) {
         </g>
       )}
     </svg>
+    {children ? <div className="map-overlay">{children}</div> : null}
     </div>
+  );
+}
+
+function effectText(option) {
+  const sign = (n) => (n > 0 ? "+" : "−") + Math.abs(n);
+  const parts = [];
+  if (option.fuel) parts.push(`${sign(option.fuel)} fuel`);
+  if (option.credits) parts.push(`${sign(option.credits)} credits`);
+  if (option.time) parts.push(`${sign(option.time)} s on the clock`);
+  return parts.join(", ") || "No change";
+}
+
+function FlightEvent({ event, fuel, credits, onPick }) {
+  return (
+    <section className="panel event" aria-live="assertive">
+      <p className="eyebrow">En route</p>
+      <h1>{event.title}</h1>
+      <p>{event.text}</p>
+      <div className="choices">
+        {event.options.map((option) => {
+          const open = canTake(option, { fuel, credits });
+          return (
+            <button key={option.label} type="button" className="tile choice" disabled={!open} onClick={() => onPick(option)}>
+              <span>{option.label}</span>
+              <small>{open ? effectText(option) : `${effectText(option)}: not enough`}</small>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -1099,6 +1145,7 @@ function Game() {
 
   function finish(reason) {
     if (game.current.phase === "end") return;
+    sfx(reason === "win" ? "win" : "lose");
     commit({
       phase: "end",
       endReason: reason,
@@ -1131,6 +1178,8 @@ function Game() {
     const actual = fare(g.variable, dest.distance);
     if (actual > g.fuel + 1e-9) return;
     const ideal = idealCost(dest.distance);
+    // Never on the first flight, so the player has seen a plain one first.
+    const event = g.path.length && Math.random() < EVENT_CHANCE ? g.eventOrder[g.eventCount % g.eventOrder.length] : null;
     setFlyFuel(g.fuel);
     commit({
       phase: "fly",
@@ -1138,13 +1187,31 @@ function Game() {
       path: [...g.path, { ideal, actual }],
       fuel: g.fuel - actual,
       note: "",
+      eventCount: g.eventCount + (event ? 1 : 0),
       flight: {
         from: g.here,
         to: dest.id,
         d: routePath(g.here, dest.id),
         fromFuel: g.fuel,
         actual,
+        event,
+        paused: false,
+        resume: 0,
       },
+    });
+  }
+
+  // The flight pauses halfway while an event is open; the pick applies, then the flight resumes.
+  function resolveEvent(option) {
+    const g = game.current;
+    if (g.phase !== "fly" || !g.flight?.paused || !canTake(option, g)) return;
+    const fuel = option.fuel ?? 0;
+    if (option.credits > 0) sfx("credit");
+    commit({
+      fuel: g.fuel + fuel,
+      credits: g.credits + (option.credits ?? 0),
+      deadline: g.deadline + (option.time ?? 0) * 1000,
+      flight: { ...g.flight, event: null, paused: false, resume: 0.5, fromFuel: g.flight.fromFuel + fuel },
     });
   }
 
@@ -1231,20 +1298,42 @@ function Game() {
       correct,
     );
     percentRef.current[g.here] = result.percent;
+    sfx(correct ? "right" : "wrong");
+    if (correct) {
+      // The first site is already rolled; the player now picks a blind landing or a scan.
+      commit({ phase: "land", card: null, credits: result.credits, landing: { won: result.won, percent: result.percent } });
+      return;
+    }
     const closed = [...g.closed, g.here];
     const exits = destinations(g.here, closed).map((hop) => hop.distance);
-    const variable = result.won ? result.variable : affordableVariable(result.variable, g.fuel, exits);
+    const scan = { world: g.here, readings: scanReadings(false), note: timedOut ? "Time's up." : "Wrong answer." };
+    commit({ variable: affordableVariable(result.variable, g.fuel, exits), closed, phase: "scan", card: null, scan });
+  }
+
+  function land(scanned) {
+    const g = game.current;
+    if (g.phase !== "land" || !g.landing) return;
+    if (g.deadline && Date.now() >= g.deadline) {
+      finish("time");
+      return;
+    }
+    if (scanned && g.fuel + 1e-9 < SCAN_FUEL) return;
+    const fuel = scanned ? g.fuel - SCAN_FUEL : g.fuel;
+    const second = scanned && !g.landing.won;
+    const won = g.landing.won || (second && secondSite(g.landing.percent));
     const scan = {
       world: g.here,
-      readings: scanReadings(result.won),
-      note: timedOut ? "Time's up." : correct ? "Right answer." : "Wrong answer.",
+      readings: scanReadings(won),
+      note: second ? "Site 1 was toxic, so the scanner checked a second site." : scanned ? "Scanned from orbit." : "Landed blind.",
     };
-    if (result.won) {
-      game.current = { ...g, credits: result.credits, variable, scan };
+    if (won) {
+      game.current = { ...g, fuel, scan, landing: null };
       finish("win");
       return;
     }
-    commit({ credits: result.credits, variable, closed, phase: "scan", card: null, scan });
+    const closed = [...g.closed, g.here];
+    const exits = destinations(g.here, closed).map((hop) => hop.distance);
+    commit({ fuel, variable: affordableVariable(g.variable, fuel, exits), closed, phase: "scan", scan, landing: null });
   }
 
   function leaveScan() {
@@ -1279,12 +1368,15 @@ function Game() {
     const answers = [...g.fuelAnswers, kind];
     const card = drawFuelCard(g.fuelRound, g.fuelSeen);
     const right = answers.filter((answer) => answer === "right").length;
+    const { bonus } = fuelStreak(answers);
+    const credits = g.creditFloor + Math.floor(right / g.fuelRound.per) + bonus;
+    sfx(bonus > fuelStreak(g.fuelAnswers).bonus ? "bonus" : credits > g.credits ? "credit" : kind);
     commit({
       fuelAnswers: answers,
       fuelIndex: 0,
       fuelDeck: [card],
       fuelSeen: card ? [...g.fuelSeen, fuelKey(card)] : g.fuelSeen,
-      credits: g.creditFloor + Math.floor(right / g.fuelRound.per),
+      credits,
     });
   }
 
@@ -1372,8 +1464,9 @@ function Game() {
     const pathEl = document.getElementById("flight");
     if (!el || !pathEl) return;
     const len = pathEl.getTotalLength();
-    const { fromFuel, actual } = snap.flight;
-    const started = performance.now();
+    const { fromFuel, actual, event, paused, resume } = snap.flight;
+    const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
+    const started = performance.now() - resume * FLIGHT_MS;
     let dead = false;
     let raf = 0;
     const place = (u) => {
@@ -1384,16 +1477,34 @@ function Game() {
       const angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
       el.setAttribute("transform", `translate(${p.x} ${p.y}) rotate(${angle}) translate(${-SAUCER_X} 0)`);
     };
+    const halfway = () => {
+      place(ease(0.5));
+      setFlyFuel(fromFuel - actual * ease(0.5));
+    };
+    if (paused) {
+      halfway();
+      return;
+    }
     const frame = (now) => {
       if (dead) return;
       const t = Math.min(1, (now - started) / FLIGHT_MS);
-      const u = t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
+      if (event && t >= 0.5) {
+        halfway();
+        engine(0);
+        sfx("alert");
+        commit({ flight: { ...game.current.flight, paused: true } });
+        return;
+      }
+      const u = ease(t);
       place(u);
       setFlyFuel(fromFuel - actual * u);
+      // Louder as the ship speeds up mid-route.
+      engine(0.25 + 0.75 * (t < 0.5 ? 2 * t : 2 - 2 * t));
       if (t < 1) raf = requestAnimationFrame(frame);
       else {
         place(1);
         setFlyFuel(null);
+        engine(0);
         arrive();
       }
     };
@@ -1401,6 +1512,7 @@ function Game() {
     return () => {
       dead = true;
       cancelAnimationFrame(raf);
+      engine(0);
     };
   }, [snap.phase, snap.flight]);
 
@@ -1468,6 +1580,7 @@ function Game() {
   const FuelGame = snap.fuelRound && FUEL_GAMES[snap.fuelRound.id];
   const qMs = Math.max(0, snap.qDeadline - now);
   const fuelMs = Math.max(0, snap.fuelDeadline - now);
+  const streak = fuelStreak(snap.fuelAnswers);
 
   return (
     <div className="play">
@@ -1502,6 +1615,7 @@ function Game() {
               <small>Clock</small>
               <b>{formatClock(clockMs)}</b>
             </div>
+            <Delta value={snap.deadline / 1000} />
           </div>
         </div>
       </header>
@@ -1515,7 +1629,11 @@ function Game() {
             ) : (
               <p className="hint">Routes from here show the fuel they cost.</p>
             )}
-            <MapView snap={snap} shipRef={shipRef} onLaunch={launch} view={view} onView={setView} />
+            <MapView snap={snap} shipRef={shipRef} onLaunch={launch} view={view} onView={setView}>
+              {snap.phase === "fly" && snap.flight?.paused ? (
+                <FlightEvent event={snap.flight.event} fuel={snap.fuel} credits={snap.credits} onPick={resolveEvent} />
+              ) : null}
+            </MapView>
           </>
         ) : null}
 
@@ -1559,6 +1677,25 @@ function Game() {
           </section>
         ) : null}
 
+        {snap.phase === "land" ? (
+          <section className="panel">
+            <p className="eyebrow">
+              {snap.here} · Habitability {HAB_LEVEL[shellOf(snap.here)]}
+            </p>
+            <h1>Right answer. How will you land?</h1>
+            <div className="domains land">
+              <button type="button" className="tile domain" disabled={snap.fuel + 1e-9 < SCAN_FUEL} onClick={() => land(true)}>
+                Scan first · {SCAN_FUEL} fuel
+                <small>If the first landing site is toxic, the scanner checks a second one.</small>
+              </button>
+              <button type="button" className="tile domain" onClick={() => land(false)}>
+                Land blind · free
+                <small>One landing site, one chance.</small>
+              </button>
+            </div>
+          </section>
+        ) : null}
+
         {snap.phase === "scan" && snap.scan ? <Scan scan={snap.scan} onDone={leaveScan} /> : null}
 
         {snap.phase === "fuel" && snap.fuelRound ? (
@@ -1569,11 +1706,19 @@ function Game() {
                 <p className="eyebrow">{snap.here} · Fuel minute</p>
                 <h1>{snap.fuelRound.title}</h1>
               </div>
+              <p className={streak.streak ? "combo hot" : "combo"} aria-live="polite">
+                <b>{streak.streak}</b> in a row
+                {streak.bonus ? (
+                  <span key={streak.bonus} className="flash hit">
+                    Bonus +{streak.bonus}
+                  </span>
+                ) : null}
+              </p>
             </div>
             <p>
               {snap.fuelRound.how}{" "}
               {snap.fuelRound.per === 1 ? "1 credit each." : `1 credit for every ${snap.fuelRound.per}.`}{" "}
-              You have {snap.credits}.
+              Every {STREAK} in a row earns a bonus credit. You have {snap.credits}.
             </p>
             {FuelGame ? (
               <FuelGame key={snap.here} onMark={markFuel} />

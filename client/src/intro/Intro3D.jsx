@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { loadTextures } from "../three/assets.js";
 import { makeAtmosphereMaterial, makePlanetMaterial } from "../three/planetMaterial.js";
 import { animateShuttle, animateStarship, buildShuttle, buildStarship } from "../three/models.js";
+import { engine } from "../sound.js";
 import { createComposer } from "../three/post.js";
 import { ParticleSystem, glowSprite } from "../three/particles.js";
 import { clamp, easeInOut, easeOut, rand, smooth } from "./draw.js";
@@ -485,7 +486,10 @@ export default function Intro3D({ onDone, onFail }) {
         // --- Starship: hangar doors open for the shuttle, then it powers up and runs ---
         if (T >= JUMP) placeShip(T);
         const doors = smooth(ALIGN - 1.6, ALIGN - 0.4, T) * (1 - smooth(DOCK + 0.05, JUMP - 0.05, T));
-        animateStarship(ship, smooth(DOCK + 0.2, JUMP + 0.4, T), T, doors);
+        const power = smooth(DOCK + 0.2, JUMP + 0.4, T);
+        animateStarship(ship, power, T, doors);
+        // The hum fades as Vulcan breaks up behind the ship.
+        engine(power * (1 - smooth(BOOM, END - 1, T)));
 
         // --- Vulcan breaks up ------------------------------------------------------
         const since = T - BOOM;
@@ -596,6 +600,7 @@ export default function Intro3D({ onDone, onFail }) {
 
       return () => {
         cancelAnimationFrame(raf);
+        engine(0);
         window.removeEventListener("resize", resize);
         composer.dispose?.();
         pmrem.dispose();
