@@ -2,6 +2,27 @@
 // optional: no audio support, or a context the browser hasn't unlocked yet, just stays silent.
 let ac = null;
 let hum = null;
+// Booth staff can mute the game; the choice is remembered on this laptop.
+let muted = false;
+try {
+  muted = localStorage.getItem("nova-muted") === "1";
+} catch {
+  /* storage blocked: start with sound on */
+}
+
+export function isMuted() {
+  return muted;
+}
+
+export function setMuted(on) {
+  muted = on;
+  try {
+    localStorage.setItem("nova-muted", on ? "1" : "0");
+  } catch {
+    /* the choice lasts until reload */
+  }
+  if (on && hum) hum.gain.gain.value = 0;
+}
 
 function audio() {
   if (!ac) {
@@ -52,6 +73,7 @@ const SOUNDS = {
 };
 
 export function sfx(name) {
+  if (muted) return;
   try {
     SOUNDS[name]?.();
   } catch {
@@ -61,6 +83,7 @@ export function sfx(name) {
 
 /** Engine hum at power 0–1: louder and higher as power rises, and silent at 0. */
 export function engine(power) {
+  if (muted) power = 0;
   if (!hum && !(power > 0)) return;
   const a = audio();
   if (!a) return;

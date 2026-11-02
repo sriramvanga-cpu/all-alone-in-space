@@ -38,6 +38,7 @@ import {
   lanesFrom,
   orbitAt,
   hopDistance,
+  ringLabelAngle,
 } from "./map.js";
 
 function scripted(values) {
@@ -414,5 +415,18 @@ test("every habitability card has one right answer among four, and each level ha
       assert.ok(card.choices.includes(card.answer), card.id);
     }
     assert.ok(count.easy >= 16 && count.medium >= 12 && count.hard >= 12, `${domain} ${JSON.stringify(count)}`);
+  }
+});
+
+test("each ring's label sits in a gap, clear of that ring's systems", () => {
+  for (const ring of ["inner", "middle", "outer"]) {
+    const at = ringLabelAngle(ring);
+    const nearest = Math.min(
+      ...SYSTEMS.filter((s) => s.ring === ring).map((s) => {
+        const d = Math.abs(((at - s.angle) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+        return Math.min(d, 2 * Math.PI - d);
+      }),
+    );
+    assert.ok(nearest > 0.35, `${ring} label is ${nearest.toFixed(2)} rad from a system`);
   }
 });

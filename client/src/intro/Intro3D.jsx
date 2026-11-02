@@ -25,7 +25,7 @@ const END = BOOM + 3.6;
 
 const CAPTIONS = [
   { from: 0.7, to: 5.0, title: "Vulcan is dying", text: "Its core is breaking up. The last shuttle lifts off." },
-  { from: 5.6, to: DOCK + 0.4, title: "Reach the starship", text: "Dock before the planet comes apart." },
+  { from: 5.6, to: DOCK + 0.4, title: "Racing for the starship", text: "The last shuttle has to dock before the planet breaks apart." },
   { from: JUMP + 0.8, to: END - 0.7, title: "Vulcan is gone", text: "No world is left to call home. You have 15 minutes to find a new one." },
 ];
 

@@ -114,6 +114,20 @@ export const LANES = Object.freeze(
   ),
 );
 
+// A ring's label sits in the widest gap between its systems, since the chart turns each load.
+export function ringLabelAngle(ring) {
+  const turn = 2 * Math.PI;
+  const angles = SYSTEMS.filter((s) => s.ring === ring)
+    .map((s) => ((s.angle % turn) + turn) % turn)
+    .sort((a, b) => a - b);
+  let best = { gap: -1, at: 0 };
+  angles.forEach((a, i) => {
+    const next = i + 1 < angles.length ? angles[i + 1] : angles[0] + turn;
+    if (next - a > best.gap) best = { gap: next - a, at: (a + next) / 2 };
+  });
+  return best.at;
+}
+
 export function system(id) {
   return SYSTEMS.find((s) => s.id === id) ?? null;
 }

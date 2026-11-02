@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { SYSTEMS, TILT } from "../game/map.js";
+import { SYSTEMS, TILT, ringLabelAngle } from "../game/map.js";
 import { ShipDefs } from "./Ship.jsx";
 import { StationDefs } from "./Station.jsx";
 
@@ -205,14 +205,27 @@ function meanRadius(ring) {
   return (systems.reduce((sum, s) => sum + s.r, 0) / systems.length) * SCALE;
 }
 
-const SHELL_RINGS = ["inner", "middle", "outer"].map((shell) => ({ shell, r: meanRadius(shell) }));
+const RING_WORDS = { inner: "Hard questions", middle: "Medium questions", outer: "Easy questions" };
+const SHELL_RINGS = ["inner", "middle", "outer"].map((shell) => ({ shell, r: meanRadius(shell), a: ringLabelAngle(shell) }));
 
-// The photo sky shows through the map, so only the faint shell guide rings are drawn.
+// The photo sky shows through the map, so only the faint shell guide rings and their labels are drawn.
 export function MapBackdrop() {
   return (
     <g className="map-bg">
       {SHELL_RINGS.map((ring) => (
         <circle key={ring.shell} className={`shell-ring ${ring.shell}`} r={ring.r} />
+      ))}
+      {SHELL_RINGS.map((ring) => (
+        <text
+          key={`${ring.shell}-label`}
+          className={`shell-label ${ring.shell}`}
+          x={Math.round(ring.r * Math.cos(ring.a))}
+          y={Math.round(ring.r * Math.sin(ring.a))}
+          textAnchor="middle"
+          dominantBaseline="middle"
+        >
+          {RING_WORDS[ring.shell]}
+        </text>
       ))}
     </g>
   );

@@ -23,7 +23,7 @@ const BRIDGE_X = 13.5;
 
 const CAPTIONS = [
   { from: 0.7, to: 5.0, title: "Vulcan is dying", text: "Its core is breaking up. The last shuttle lifts off." },
-  { from: 5.6, to: 9.4, title: "Reach the starship", text: "Dock before the planet comes apart." },
+  { from: 5.6, to: 9.4, title: "Racing for the starship", text: "The last shuttle has to dock before the planet breaks apart." },
   { from: INSIDE + 0.4, to: END - 0.7, title: "Vulcan is gone", text: "No world is left to call home. You have 15 minutes to find a new one." },
 ];
 

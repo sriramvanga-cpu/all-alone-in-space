@@ -27,7 +27,7 @@ import {
 } from "./game/rules.js";
 import { FUEL_ROUNDS } from "./game/fuelRounds.js";
 import { EVENT_CHANCE, FLIGHT_EVENTS, canTake } from "./game/events.js";
-import { engine, sfx } from "./sound.js";
+import { engine, sfx, isMuted, setMuted } from "./sound.js";
 import {
   STATION,
   SYSTEMS,
@@ -91,9 +91,9 @@ const DOMAINS = [
 ];
 
 const END_COPY = {
-  win: "New home found",
-  time: "Fifteen minutes are up.",
-  stranded: "No lane you can afford, and no planet left here.",
+  win: (world) => `You settled ${world}.`,
+  time: () => "Fifteen minutes are up.",
+  stranded: () => "No lane you can afford, and no planet left here.",
 };
 // A reload in these phases throws the run away, so the browser asks first.
 const LIVE_PHASES = new Set(["map", "fly", "pick", "question", "land", "scan", "fuel", "shop"]);
@@ -103,9 +103,15 @@ function round2(v) {
   return Math.round(v * 100) / 100;
 }
 
+// Fuel, power and costs show one decimal at most; the rules still use exact values.
 function fmtNum(n) {
-  const shown = round2(n);
+  const shown = Math.round(n * 10) / 10;
   return Object.is(shown, -0) ? "0" : String(shown);
+}
+
+// How much more a move needs, rounded up so it never reads as 0.
+function shortBy(n) {
+  return fmtNum(Math.ceil(n * 10 - 1e-9) / 10);
 }
 
 function fare(variable, distance) {
@@ -240,7 +246,10 @@ function fresh() {
     // Every event shows once before any repeats.
     eventOrder: shuffle(FLIGHT_EVENTS),
     // Each player meets the fuel games in their own order; none repeats until all have been played.
-    fuelOrder: shuffle(FUEL_ROUNDS),
+    // Reduced motion leaves out Asteroid tap, which is nothing but moving targets.
+    fuelOrder: shuffle(FUEL_ROUNDS.filter((r) => !(r.id === "rocks" && stillMotion()))),
+    // What the last fuel minute earned, shown at the top of the shop.
+    fuelResult: null,
     eventCount: 0,
     // Tips already shown this run; when the open one appeared; clock time handed back for reading them.
     tipsSeen: [],
@@ -251,6 +260,10 @@ function fresh() {
     postState: "",
     sent: false,
   };
+}
+
+function stillMotion() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
 
 function payloadOk(p) {
@@ -430,8 +443,8 @@ function BoardTable({ rows, err, start = 0 }) {
   const mine = ranked.find((row) => row.mine && row.rank > 10);
   return (
     <>
-      {err ? <p className="error">Can't reach the leaderboard.</p> : null}
-      {rows.length === 0 ? <p className="hint">No scores yet.</p> : null}
+      {err ? <p className="error">Can't reach the leaderboard. Retrying.</p> : null}
+      {!err && rows.length === 0 ? <p className="hint">No scores yet.</p> : null}
       {list.length > 0 ? (
         <table className="lb">
           <thead>
@@ -441,7 +454,7 @@ function BoardTable({ rows, err, start = 0 }) {
               <th>Settled</th>
               <th className="num">Time left</th>
               <th className="num">Worlds</th>
-              <th className="num">Fuel score</th>
+              <th className="num">Fuel left</th>
               <th className="num">Points</th>
             </tr>
           </thead>
@@ -530,9 +543,9 @@ const TIPS = {
   ],
   system: [
     "Solar system",
-    "Planets circle the sun. Tap one to hop there: a hop costs power, less when the planets line up. Drop planets refuel you, and ! planets could be your new home. Power recharges while you're in a system.",
+    "Planets circle the sun. Tap one to hop there: a hop costs power, less when the planets line up. Planets with a drop refuel you. Planets marked ! could be home. Power recharges while you're in a system.",
   ],
-  fuel: ["Fuel stop", "Play for one minute to earn credits, then spend them in the shop on fuel and power. Too many mistakes make fuel cost more."],
+  fuel: ["Fuel stop", "Play for one minute to earn credits, then spend them in the shop on fuel and power. Get more than 1 in 10 wrong and fuel costs more."],
   test: [
     "A possible home",
     "Answer one question, then try to land. The chance grows with time: 5% at the start, 60% after 10 minutes. A right answer adds 10% and pays 15 credits; a wrong one makes fuel cost more. Each planet can be tried once.",
@@ -564,7 +577,7 @@ function Tip({ id, onClose }) {
 // The mission card ends the opening film: what to do, how to win, how you score. The clock starts here.
 const MISSION = [
   [CompassIcon, "Explore", "Scan the star map and fly between solar systems. Fuel flies the lanes; power flies between planets."],
-  [GlobeIcon, "Land", "On a ! planet, answer a question, then try to land. Your chance grows from 5% to 60% as the clock runs, and a right answer adds 10%."],
+  [GlobeIcon, "Land", "On a planet marked !, answer a question, then try to land. Your chance grows from 5% to 60% as the clock runs, and a right answer adds 10%."],
   [StarIcon, "Win", "Land before your fuel or the 15-minute clock runs out. Points = fuel left + 1 per 10 s left. Most points tops the board; watch yours in the top bar."],
 ];
 
@@ -597,7 +610,14 @@ function Mission({ onStart }) {
 function NameScreen({ onStart }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [error, setError] = useState("");
+  // Which field is wrong and why; the field gets focus so screen readers hear the message with it.
+  const [error, setError] = useState(null);
+  const nameRef = useRef(null);
+  const phoneRef = useRef(null);
+  function fail(field, text) {
+    setError({ field, text });
+    (field === "pilot" ? nameRef : phoneRef).current?.focus();
+  }
   return (
     <main className="screen">
       <i className="shooting-star" aria-hidden="true" />
@@ -619,11 +639,11 @@ function NameScreen({ onStart }) {
           const nextName = name.trim();
           const nextPhone = phone.replace(/\D/g, "");
           if (!nextName) {
-            setError("Enter a name.");
+            fail("pilot", "Enter your name.");
             return;
           }
           if (nextPhone.length < 10 || nextPhone.length > 15) {
-            setError("Enter a phone number.");
+            fail("phone", "Phone number needs 10 to 15 digits.");
             return;
           }
           // Browsers only allow fullscreen from the click itself, so ask here. Older Safari has only the
@@ -638,22 +658,40 @@ function NameScreen({ onStart }) {
         <label htmlFor="pilot">Name</label>
         <input
           id="pilot"
+          ref={nameRef}
           value={name}
           onChange={(e) => setName(e.target.value)}
           autoFocus
           maxLength={40}
           autoComplete="name"
+          aria-invalid={error?.field === "pilot" || undefined}
+          aria-describedby={error?.field === "pilot" ? "pilot-error" : undefined}
         />
+        {error?.field === "pilot" ? (
+          <p className="error" id="pilot-error" role="alert">
+            {error.text}
+          </p>
+        ) : null}
         <label htmlFor="phone">Phone number</label>
         <input
           id="phone"
+          ref={phoneRef}
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           maxLength={20}
           inputMode="tel"
           autoComplete="tel"
+          aria-invalid={error?.field === "phone" || undefined}
+          aria-describedby={error?.field === "phone" ? "phone-error phone-hint" : "phone-hint"}
         />
-        {error ? <p className="error">{error}</p> : null}
+        <p className="hint field-hint" id="phone-hint">
+          Only used to contact prize winners.
+        </p>
+        {error?.field === "phone" ? (
+          <p className="error" id="phone-error" role="alert">
+            {error.text}
+          </p>
+        ) : null}
         <div className="row">
           <button type="submit">Launch</button>
         </div>
@@ -685,12 +723,28 @@ function Ship({ at, angle }) {
   );
 }
 
-function CostPill({ text, x, y, power = false }) {
-  const w = 14 + text.length * 7;
+// Phones get bigger map targets and labels; the map's own scale would make them too small to tap.
+const NARROW = "(max-width: 560px)";
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => window.matchMedia?.(NARROW).matches ?? false);
+  useEffect(() => {
+    const mq = window.matchMedia?.(NARROW);
+    if (!mq) return;
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return narrow;
+}
+
+function CostPill({ text, x, y, power = false, short = false, big = false }) {
+  const w = big ? 18 + text.length * 10 : 14 + text.length * 7;
+  const h = big ? 26 : 18;
+  const cls = ["cost", "hot", power ? "power" : "", short ? "short" : "", big ? "big" : ""].filter(Boolean).join(" ");
   return (
-    <g className={power ? "cost hot power" : "cost hot"} transform={`translate(${x} ${y})`}>
-      <rect x={-w / 2} y="-9" width={w} height="18" rx="9" />
-      <text y="4" textAnchor="middle">
+    <g className={cls} transform={`translate(${x} ${y})`}>
+      <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={h / 2} />
+      <text y={big ? 5.5 : 4} textAnchor="middle">
         {text}
       </text>
     </g>
@@ -699,7 +753,8 @@ function CostPill({ text, x, y, power = false }) {
 
 // The star map: the station and the systems you have found. A scan reveals the systems one
 // lane away and the lanes to them; whatever you have found stays on the chart.
-function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
+function StarMap({ snap, now, shipRef, onLaunch, onBlocked, view, onView, children }) {
+  const narrow = useNarrow();
   const stageRef = useRef(null);
   const drag = useRef(null);
   const moved = useRef(false);
@@ -768,7 +823,7 @@ function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
   return (
     <div className="map-stage" ref={stageRef}>
     <svg
-      className={flying ? "map-svg flying" : "map-svg"}
+      className={["map-svg", flying ? "flying" : "", narrow ? "narrow" : ""].filter(Boolean).join(" ")}
       viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
       role="img"
       aria-label="Star map"
@@ -814,9 +869,12 @@ function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
         const s = system(id);
         const move = byId.get(id);
         const ready = move != null && move.fuel <= snap.fuel + 1e-9;
+        // A lane you can see but can't pay for: still a button, so a tap explains the shortfall.
+        const short = move != null && !ready;
         const planets = s ? planetsOf(id) : [];
         const name = id === STATION ? "Station" : id;
-        const classes = ["node", s ? `node-${s.ring} system` : "node-station", id === viewer ? "here" : "", ready ? "ready" : ""]
+        const go = () => (ready ? onLaunch(id) : short ? onBlocked(id === STATION ? "The station" : id, move.fuel - snap.fuel, "fuel") : null);
+        const classes = ["node", s ? `node-${s.ring} system` : "node-station", id === viewer ? "here" : "", ready ? "ready" : "", short ? "far" : ""]
           .filter(Boolean)
           .join(" ");
         return (
@@ -824,24 +882,27 @@ function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
             key={id}
             className={classes}
             transform={`translate(${p.x} ${p.y})`}
-            role={ready ? "button" : undefined}
-            tabIndex={ready ? 0 : undefined}
+            role={move ? "button" : undefined}
+            tabIndex={move ? 0 : undefined}
+            aria-disabled={short || undefined}
             aria-label={
               ready
                 ? `Fly to ${id === STATION ? "the station" : id}, ${fmtNum(move.fuel)} fuel`
-                : undefined
+                : short
+                  ? `${name}, ${fmtNum(move.fuel)} fuel, ${shortBy(move.fuel - snap.fuel)} more than you have`
+                  : undefined
             }
             onClick={() => {
               if (moved.current) {
                 moved.current = false;
                 return;
               }
-              if (ready) onLaunch(id);
+              go();
             }}
             onKeyDown={(e) => {
-              if (!ready || (e.key !== "Enter" && e.key !== " ")) return;
+              if (!move || (e.key !== "Enter" && e.key !== " ")) return;
               e.preventDefault();
-              onLaunch(id);
+              go();
             }}
           >
             <title>
@@ -851,14 +912,14 @@ function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
             </title>
             {id === STATION ? (
               <>
-                <circle className="hit" r="30" />
+                <circle className="hit" r={narrow ? 33 : 30} />
                 <Starbase x="-32" y="-32" width="64" height="64" />
                 {id === viewer ? <circle className="here-ring" r="37" /> : null}
                 {ready ? <circle className="ready-ring" r="38" /> : null}
               </>
             ) : (
               <>
-                <circle className="hit" r={STAR_R + 12} />
+                <circle className="hit" r={narrow ? 33 : STAR_R + 12} />
                 <StarDot kind={s.star} r={STAR_R} />
                 {id === viewer ? <circle className="here-ring" r={STAR_R + 8} /> : null}
                 {ready ? <circle className="ready-ring" r={STAR_R + 10} /> : null}
@@ -897,7 +958,16 @@ function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
       })}
       {options.map((m) => {
         const edge = ROUTES.find((r) => (r.a === snap.here && r.b === m.id) || (r.b === snap.here && r.a === m.id));
-        return <CostPill key={`cost-${m.id}`} text={fmtNum(m.fuel)} x={edge.mid.x} y={edge.mid.y} />;
+        return (
+          <CostPill
+            key={`cost-${m.id}`}
+            text={fmtNum(m.fuel)}
+            x={edge.mid.x}
+            y={edge.mid.y}
+            short={m.fuel > snap.fuel + 1e-9}
+            big={narrow}
+          />
+        );
       })}
       {flying ? (
         <g ref={shipRef} className="ship">
@@ -914,7 +984,9 @@ function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
 
 // A system's planets orbit its sun. A hop costs power by how far apart two planets are right
 // now, so each open planet's price moves with them; a click pays the price on its label.
-function SystemMap({ snap, shipRef, onLaunch, children }) {
+function SystemMap({ snap, shipRef, onLaunch, onBlocked, children }) {
+  const narrow = useNarrow();
+  const zoom = narrow ? 2 : PLANET_ZOOM;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     let id = 0;
@@ -935,32 +1007,42 @@ function SystemMap({ snap, shipRef, onLaunch, children }) {
   const sunward = (at) => (Math.atan2(-at.y, -at.x) * 180) / Math.PI;
   // Fit the view to this system: the jump point on the left, the outer orbit with its labels on the right.
   const reach = Math.max(...planets.map((p) => p.orbit));
-  const box = [-JUMP_R - 40, -reach * TILT - 65, JUMP_R + reach + 120, 2 * reach * TILT + 115];
+  // Phones draw planets bigger, so their labels and pills need wider margins.
+  const box = narrow
+    ? [-JUMP_R - 40, -reach * TILT - 105, JUMP_R + reach + 180, 2 * reach * TILT + 165]
+    : [-JUMP_R - 40, -reach * TILT - 65, JUMP_R + reach + 120, 2 * reach * TILT + 115];
   const placed = planets.map((p) => ({ p, at: orbitAt(p, now) }));
   // Planets on the far side of the star are drawn before it, the near side after, so they pass behind it.
   const drawPlanet = ({ p, at }) => {
     const move = byId.get(p.id);
     const ready = move != null && move.power <= snap.power + 1e-9;
+    const short = move != null && !ready;
     const face = FACES.get(p.id);
     const test = p.shell !== "fuel";
-    const classes = ["node", `node-${p.shell}`, p.id === snap.here ? "here" : "", shut.has(p.id) ? "shut" : "", ready ? "ready" : ""]
+    const go = () => (ready ? onLaunch(p.id) : short ? onBlocked(p.id, move.power - snap.power, "power") : null);
+    const classes = ["node", `node-${p.shell}`, p.id === snap.here ? "here" : "", shut.has(p.id) ? "shut" : "", ready ? "ready" : "", short ? "far" : ""]
       .filter(Boolean)
       .join(" ");
     return (
       <g
         key={p.id}
         className={classes}
-        transform={`translate(${round2(at.x)} ${round2(at.y)}) scale(${PLANET_ZOOM})`}
-        role={ready ? "button" : undefined}
-        tabIndex={ready ? 0 : undefined}
-        aria-label={ready ? `Fly to ${p.id}, ${fmtNum(move.power)} power${test ? ", a possible home" : ""}` : undefined}
-        onClick={() => {
-          if (ready) onLaunch(p.id);
-        }}
+        transform={`translate(${round2(at.x)} ${round2(at.y)}) scale(${zoom})`}
+        role={move ? "button" : undefined}
+        tabIndex={move ? 0 : undefined}
+        aria-disabled={short || undefined}
+        aria-label={
+          ready
+            ? `Fly to ${p.id}, ${fmtNum(move.power)} power${test ? ", a possible home" : ""}`
+            : short
+              ? `${p.id}, ${fmtNum(move.power)} power, ${shortBy(move.power - snap.power)} more than you have`
+              : undefined
+        }
+        onClick={go}
         onKeyDown={(e) => {
-          if (!ready || (e.key !== "Enter" && e.key !== " ")) return;
+          if (!move || (e.key !== "Enter" && e.key !== " ")) return;
           e.preventDefault();
-          onLaunch(p.id);
+          go();
         }}
       >
         <title>
@@ -968,7 +1050,7 @@ function SystemMap({ snap, shipRef, onLaunch, children }) {
           {test ? ", a possible home" : ""}
           {move ? `, ${fmtNum(move.power)} power${ready ? "" : ", not enough power"}` : ""}
         </title>
-        <circle className="hit" r={Math.max(14, face.radius + 3)} />
+        <circle className="hit" r={Math.max(narrow ? 24 : 14, face.radius + 3)} />
         {/* The art is lit from the upper left; turn it so its lit side faces the sun. */}
         <g transform={`rotate(${round2(sunward(at) + 135)})`}>
           <PlanetDot face={face} detail shut={shut.has(p.id)} />
@@ -995,7 +1077,7 @@ function SystemMap({ snap, shipRef, onLaunch, children }) {
         <text className="node-label" y={-(face.radius + 3)} textAnchor="middle" dominantBaseline="text-after-edge">
           {p.id}
         </text>
-        {move ? <CostPill text={fmtNum(move.power)} x={face.radius + 24} y={0} power /> : null}
+        {move ? <CostPill text={fmtNum(move.power)} x={face.radius + 24} y={0} power short={short} /> : null}
       </g>
     );
   };
@@ -1069,7 +1151,7 @@ function FlightEvent({ event, fuel, credits, onPick }) {
   );
 }
 
-function Shop({ credits, fuel, power, world, exitFare, stuck, onBuy, onLeave }) {
+function Shop({ result, credits, fuel, power, world, exitFare, stuck, onBuy, onLeave }) {
   const [counts, setCounts] = useState(() => SHOP_PACKS.map(() => 0));
   const quote = buyPacks({ credits, fuel, power }, counts);
   function canInc(i) {
@@ -1087,6 +1169,16 @@ function Shop({ credits, fuel, power, world, exitFare, stuck, onBuy, onLeave }) 
     <section className="panel">
       <p className="eyebrow">{world}</p>
       <h1>Shop</h1>
+      {result ? (
+        <p className="fuel-result" role="status">
+          Fuel minute: <b>{result.right}</b> right, <b>{result.wrong}</b> wrong.{" "}
+          <b className="earned">
+            +{result.earned} {result.earned === 1 ? "credit" : "credits"}
+          </b>
+          {result.bonus ? ` (${result.bonus} from streaks)` : ""}.
+          {result.pricier ? " Over 1 in 10 wrong, so fuel now costs more." : ""}
+        </p>
+      ) : null}
       <p>
         {credits} {credits === 1 ? "credit" : "credits"}, {fmtNum(fuel)} fuel, {fmtNum(power)} power. Buy as many packs
         as you can pay for.
@@ -1158,21 +1250,31 @@ function Shop({ credits, fuel, power, world, exitFare, stuck, onBuy, onLeave }) 
 function ChoiceButtons({ choices, onPick, render = (choice) => <span>{choice}</span> }) {
   // The next card appears under the pointer, so a double click would answer a card nobody read.
   const shownAt = useRef(0);
+  const pickRef = useRef(null);
+  pickRef.current = (choice) => {
+    if (performance.now() - shownAt.current < 300) return;
+    onPick(choice);
+  };
   useEffect(() => {
     shownAt.current = performance.now();
+  }, [choices]);
+  // The keycaps are real: A to D, or 1 to 4, answer like a tap.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.("input, textarea")) return;
+      const k = e.key.toLowerCase();
+      const i = k >= "a" && k <= "d" && k.length === 1 ? k.charCodeAt(0) - 97 : k >= "1" && k <= "4" && k.length === 1 ? Number(k) - 1 : -1;
+      if (i < 0 || i >= choices.length) return;
+      e.preventDefault();
+      pickRef.current(choices[i]);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [choices]);
   return (
     <div className="choices">
       {choices.map((choice, i) => (
-        <button
-          key={choice}
-          type="button"
-          className="tile choice"
-          onClick={() => {
-            if (performance.now() - shownAt.current < 300) return;
-            onPick(choice);
-          }}
-        >
+        <button key={choice} type="button" className="tile choice" onClick={() => pickRef.current(choice)}>
           <span className="key" aria-hidden="true">
             {String.fromCharCode(65 + i)}
           </span>
@@ -1368,20 +1470,38 @@ function AsteroidTap({ onMark }) {
     }, ROCK_EVERY_MS);
     return () => clearInterval(id);
   }, []);
-  function shoot(e) {
+  function hit(el) {
     const now = performance.now();
     if (now - lastShot.current < SHOT_MS) return;
     lastShot.current = now;
-    const n = Number(e.target.dataset.rock);
+    const n = Number(el?.dataset?.rock);
     if (!n) return;
-    const box = e.target.getBoundingClientRect();
+    const box = el.getBoundingClientRect();
     const area = field.current.getBoundingClientRect();
     onMark("right");
     setRocks((list) => list.filter((r) => r.n !== n));
     setBooms((list) => [...list, { n, x: box.left + box.width / 2 - area.left, y: box.top + box.height / 2 - area.top }]);
   }
+  // Keyboard players fire with Space or Enter at the rock closest to escaping off the left edge.
+  const hitRef = useRef(hit);
+  hitRef.current = hit;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== " " && e.key !== "Enter") return;
+      e.preventDefault();
+      const area = field.current?.getBoundingClientRect();
+      if (!area) return;
+      const lead = [...field.current.querySelectorAll(".rock")]
+        .map((el) => ({ el, box: el.getBoundingClientRect() }))
+        .filter(({ box }) => box.right > area.left && box.left < area.right)
+        .sort((a, b) => a.box.left - b.box.left)[0];
+      if (lead) hitRef.current(lead.el);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   return (
-    <div className="rocks" ref={field} onPointerDown={shoot} aria-label="Asteroid field">
+    <div className="rocks" ref={field} onPointerDown={(e) => hit(e.target)} aria-label="Asteroid field">
       {rocks.map((r) => (
         <span
           key={r.n}
@@ -1500,6 +1620,14 @@ function Game() {
         resume: 0,
       },
     });
+  }
+
+  // A tap on a world you can't afford says what's missing instead of doing nothing.
+  function blocked(name, need, unit) {
+    const g = game.current;
+    if (g.phase !== "map" || tipFor(g)) return;
+    const how = unit === "power" ? "Power recharges while you're in a system." : "Refuel at a planet with a drop.";
+    commit({ note: `${name} needs ${shortBy(need)} more ${unit}. ${how}` });
   }
 
   // A radar sweep from where you are on the star map: the systems one lane away appear.
@@ -1631,7 +1759,13 @@ function Game() {
       card: null,
       credits: result.credits,
       variable: correct ? g.variable : affordableVariable(result.variable, g.fuel, laneExits(g)),
-      landing: { chance: landingChance(elapsed, correct), base: landingChance(elapsed, false), correct, timedOut },
+      landing: {
+        chance: landingChance(elapsed, correct),
+        base: landingChance(elapsed, false),
+        correct,
+        timedOut,
+        answer: g.card?.answer ?? "",
+      },
     });
   }
 
@@ -1663,7 +1797,7 @@ function Game() {
   function leaveScan() {
     const g = game.current;
     if (g.phase !== "scan") return;
-    commit({ phase: "map", scan: null, note: `${g.here} is not habitable. This world is closed.` });
+    commit({ phase: "map", scan: null, note: `${g.here} isn't habitable. You can't land here again.` });
   }
 
   function closeFuelMinute() {
@@ -1674,7 +1808,15 @@ function Game() {
       return;
     }
     const result = fuelMinute(g.variable, g.fuelAnswers);
+    const count = (kind) => g.fuelAnswers.filter((a) => a === kind).length;
     commit({
+      fuelResult: {
+        right: count("right"),
+        wrong: count("wrong"),
+        earned: g.credits - g.creditFloor,
+        bonus: fuelStreak(g.fuelAnswers).bonus,
+        pricier: result.applied,
+      },
       phase: "shop",
       variable: affordableVariable(result.variable, g.fuel, laneExits(g)),
       closed: g.closed.includes(g.here) ? g.closed : [...g.closed, g.here],
@@ -1700,6 +1842,23 @@ function Game() {
       fuelDeck: [card],
       fuelSeen: card ? [...g.fuelSeen, fuelKey(card)] : g.fuelSeen,
       credits,
+    });
+  }
+
+  // Colour clash needs colour vision, so a player can trade it for the next round in their order.
+  function swapFuelRound() {
+    const g = game.current;
+    if (g.phase !== "fuel" || g.fuelRound?.id !== "ink") return;
+    const others = g.fuelOrder.filter((r) => r.id !== "ink");
+    if (!others.length) return;
+    const at = g.fuelOrder.indexOf(g.fuelRound);
+    const next = g.fuelOrder.slice(at + 1).concat(g.fuelOrder.slice(0, at)).find((r) => r.id !== "ink") ?? others[0];
+    const card = drawFuelCard(next, g.fuelSeen);
+    commit({
+      fuelRound: next,
+      fuelDeck: [card],
+      fuelIndex: 0,
+      fuelSeen: card ? [...g.fuelSeen, fuelKey(card)] : g.fuelSeen,
     });
   }
 
@@ -1923,7 +2082,7 @@ function Game() {
       ? runFacts(snap).settled
         ? fmtScore(runPoints(runFacts(snap)))
         : "—"
-      : fmtScore(runPoints({ settled: true, fuel: fuelShown, timeLeft: Math.floor(clockMs / 1000) }));
+      : String(Math.round(runPoints({ settled: true, fuel: fuelShown, timeLeft: Math.floor(clockMs / 1000) })));
   const where =
     snap.phase === "fly" && snap.flight
       ? `En route to ${snap.flight.to === STATION ? "the station" : snap.flight.to}`
@@ -1992,7 +2151,9 @@ function Game() {
           <div className="meter points" title="Points if you land now: 1 per fuel left + 1 per 10 s left">
             <StarIcon />
             <div className="m-text">
-              <small>Points</small>
+              <small>
+                Points<span className="if-land"> if you land</span>
+              </small>
               <b>{pointsShown}</b>
             </div>
           </div>
@@ -2009,6 +2170,18 @@ function Game() {
               ) : (
                 <p className="hint">{mapHint}</p>
               )}
+              <p className="map-key">
+                <span>
+                  <svg viewBox="-5 -6 10 11" aria-hidden="true">
+                    <path d={DROP} />
+                  </svg>
+                  Fuel stop
+                </span>
+                <span>
+                  <b aria-hidden="true">!</b>
+                  Possible home
+                </span>
+              </p>
               <div className="row">
                 {snap.system ? (
                   <button type="button" className="ghost" disabled={snap.phase !== "map" || !!tip} onClick={leaveSystem}>
@@ -2036,11 +2209,11 @@ function Game() {
               </div>
             </div>
             {snap.system ? (
-              <SystemMap snap={snap} shipRef={shipRef} onLaunch={launch}>
+              <SystemMap snap={snap} shipRef={shipRef} onLaunch={launch} onBlocked={blocked}>
                 {tip ? <Tip id={tip} onClose={closeTip} /> : null}
               </SystemMap>
             ) : (
-              <StarMap snap={snap} now={now} shipRef={shipRef} onLaunch={launch} view={view} onView={setView}>
+              <StarMap snap={snap} now={now} shipRef={shipRef} onLaunch={launch} onBlocked={blocked} view={view} onView={setView}>
                 {tip ? (
                   <Tip id={tip} onClose={closeTip} />
                 ) : snap.phase === "fly" && snap.flight?.paused ? (
@@ -2057,7 +2230,7 @@ function Game() {
         {snap.phase === "pick" && !tip ? (
           <section className="panel">
             <p className="eyebrow">{snap.here}</p>
-            <h1>Choose a domain</h1>
+            <h1>Pick a topic</h1>
             <p>One question. Sixty seconds.</p>
             <div className="domains">
               {DOMAINS.map(([id, label]) => {
@@ -2083,7 +2256,6 @@ function Game() {
               </div>
             </div>
             <p className="prompt">{snap.card.prompt}</p>
-            <p>Then you try to land. A right answer adds 10% to the chance and pays 15 credits.</p>
             <ChoiceButtons
               choices={snap.card.choices}
               onPick={(choice) => {
@@ -2091,6 +2263,7 @@ function Game() {
                 resolveQuestion(choice === game.current.card.answer, false);
               }}
             />
+            <p className="hint">Then you try to land. A right answer adds 10% to the chance and pays 15 credits.</p>
           </section>
         ) : null}
 
@@ -2100,6 +2273,11 @@ function Game() {
               {snap.here} · Landing chance {snap.landing.chance}%
             </p>
             <h1>{snap.landing.correct ? "Right answer." : snap.landing.timedOut ? "Time's up." : "Wrong answer."} How will you land?</h1>
+            {!snap.landing.correct && snap.landing.answer ? (
+              <p className="answer-reveal">
+                The answer was <b>{snap.landing.answer}</b>.
+              </p>
+            ) : null}
             <p className="hint">
               {snap.landing.base}% for the time you've flown
               {snap.landing.correct ? `, +${snap.landing.chance - snap.landing.base} for your right answer` : ""}. The chance grows
@@ -2160,6 +2338,11 @@ function Game() {
                   <button type="button" className="ghost" onClick={() => markFuel("skip")}>
                     Skip
                   </button>
+                  {snap.fuelRound.id === "ink" ? (
+                    <button type="button" className="ghost" onClick={swapFuelRound}>
+                      Can't tell colours apart? Swap round
+                    </button>
+                  ) : null}
                 </div>
               </>
             ) : null}
@@ -2168,6 +2351,7 @@ function Game() {
 
         {snap.phase === "shop" ? (
           <Shop
+            result={snap.fuelResult}
             credits={snap.credits}
             fuel={snap.fuel}
             power={snap.power}
@@ -2193,7 +2377,7 @@ function EndScreen({ snap }) {
     snap.postState === "saved"
       ? "Score is on the board."
       : snap.postState === "retry"
-        ? "The board is unreachable. This score stays on the laptop and retries."
+        ? "Couldn't reach the board. Your score is saved here and will send itself."
         : "Sending the score…";
   return (
     <>
@@ -2203,8 +2387,8 @@ function EndScreen({ snap }) {
       <div className="end-hero">
         <div className="end-orb" aria-hidden="true" />
         <div>
-          <p className="eyebrow">Run over</p>
-          <h1>{END_COPY[snap.endReason] || "Run over."}</h1>
+          <p className="eyebrow">{facts.settled ? "Mission complete" : "Run over"}</p>
+          <h1>{END_COPY[snap.endReason]?.(snap.here) || "Run over."}</h1>
           <p className="hint">{post}</p>
         </div>
       </div>
@@ -2229,7 +2413,7 @@ function EndScreen({ snap }) {
           <dd>{facts.worlds}</dd>
         </div>
         <div className="stat">
-          <dt>Fuel score</dt>
+          <dt>Fuel left</dt>
           <dd>{fmtScore(facts.fuel)}</dd>
         </div>
         <div className="stat">
@@ -2237,11 +2421,14 @@ function EndScreen({ snap }) {
           <dd>{facts.settled ? <CountUp value={runPoints(facts)} /> : "—"}</dd>
         </div>
       </dl>
-      <p>
+      <div className="row">
+        <button type="button" onClick={() => window.location.reload()} autoFocus>
+          Next pilot
+        </button>
         <a className="linkbtn" href="/board">
           Open the display board
         </a>
-      </p>
+      </div>
       <BoardTable rows={rows} err={err} />
     </section>
     </>
@@ -2347,12 +2534,36 @@ function Scan({ scan, habitable = false, onDone }) {
   );
 }
 
+function SoundToggle() {
+  const [off, setOff] = useState(isMuted);
+  return (
+    <button
+      type="button"
+      className="ghost sound-toggle"
+      aria-pressed={off}
+      onClick={() => {
+        setMuted(!off);
+        setOff(!off);
+      }}
+    >
+      {off ? "Sound off" : "Sound on"}
+    </button>
+  );
+}
+
 export default function App() {
   const route = window.location.pathname.replace(/\/+$/, "") || "/";
   return (
     <>
       <SpaceBackdrop />
-      {route === "/board" ? <Board /> : <Game />}
+      {route === "/board" ? (
+        <Board />
+      ) : (
+        <>
+          <Game />
+          <SoundToggle />
+        </>
+      )}
     </>
   );
 }
