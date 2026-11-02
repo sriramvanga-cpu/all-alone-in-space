@@ -1207,6 +1207,8 @@ const VALVE_BAND = 0.2;
 // A needle sweeps the gauge back and forth; a tap inside the green band is a hit, anywhere else a miss.
 function Valve({ onMark }) {
   const needle = useRef(null);
+  // Where the needle was last drawn: presses are judged against what the player saw.
+  const drawn = useRef(0);
   const sweep = useRef({ t0: performance.now(), period: 2200 });
   const [band, setBand] = useState(0.5);
   const [flash, setFlash] = useState(null);
@@ -1221,7 +1223,8 @@ function Valve({ onMark }) {
   useEffect(() => {
     let id;
     const step = () => {
-      if (needle.current) needle.current.style.left = `${at() * 100}%`;
+      drawn.current = at();
+      if (needle.current) needle.current.style.left = `${drawn.current * 100}%`;
       id = requestAnimationFrame(step);
     };
     id = requestAnimationFrame(step);
@@ -1229,7 +1232,7 @@ function Valve({ onMark }) {
   }, []);
 
   function vent() {
-    const hit = Math.abs(at() - band) <= VALVE_BAND / 2;
+    const hit = Math.abs(drawn.current - band) <= VALVE_BAND / 2;
     onMark(hit ? "right" : "wrong");
     setFlash((f) => ({ hit, n: (f?.n ?? 0) + 1 }));
     if (!hit) return;
@@ -1250,7 +1253,17 @@ function Valve({ onMark }) {
         <span className="valve-needle" ref={needle} />
       </div>
       <div className="row">
-        <button type="button" onClick={vent} autoFocus>
+        {/* Judge the press, not the release: a click lands ~0.1 s later, when the needle has moved on. */}
+        <button
+          type="button"
+          autoFocus
+          onPointerDown={(e) => e.button === 0 && vent()}
+          onKeyDown={(e) => {
+            if (e.key !== " " && e.key !== "Enter") return;
+            e.preventDefault();
+            if (!e.repeat) vent();
+          }}
+        >
           Vent
         </button>
         {flash ? (
@@ -1263,13 +1276,18 @@ function Valve({ onMark }) {
   );
 }
 
-const PADS = ["#ff5a5a", "#3ddc84", "#4f8bff", "#ffd23f"];
+const LOG_DIRS = [
+  ["←", "Left"],
+  ["↑", "Up"],
+  ["↓", "Down"],
+  ["→", "Right"],
+];
 
-// Simon-style: watch a sequence of pads light up, then tap it back. It grows by one after a
-// success (up to 4) and shrinks by one after a mistake (down to 3). Short codes keep the pay close to
+// Simon-style: arrows flash one at a time, then tap them back in order. The log grows by one after a
+// success (up to 4) and shrinks by one after a mistake (down to 3). Short logs keep the pay close to
 // the other rounds'.
-function ReactorCode({ onMark }) {
-  const [seq, setSeq] = useState(() => codeOf(3));
+function FlightLog({ onMark }) {
+  const [seq, setSeq] = useState(() => logOf(3));
   const [lit, setLit] = useState(-1);
   const [watching, setWatching] = useState(true);
   const [last, setLast] = useState(null);
@@ -1280,20 +1298,20 @@ function ReactorCode({ onMark }) {
     pos.current = 0;
     setGot(0);
     setWatching(true);
-    const timers = seq.flatMap((pad, i) => [
-      setTimeout(() => setLit(pad), 500 + i * 500),
+    const timers = seq.flatMap((dir, i) => [
+      setTimeout(() => setLit(dir), 500 + i * 500),
       setTimeout(() => setLit(-1), 500 + i * 500 + 350),
     ]);
     timers.push(setTimeout(() => setWatching(false), 500 + seq.length * 500));
     return () => timers.forEach(clearTimeout);
   }, [seq]);
 
-  function press(pad) {
+  function press(dir) {
     if (watching) return;
-    if (pad !== seq[pos.current]) {
+    if (dir !== seq[pos.current]) {
       onMark("wrong");
       setLast("wrong");
-      setSeq(codeOf(Math.max(3, seq.length - 1)));
+      setSeq(logOf(Math.max(3, seq.length - 1)));
       return;
     }
     pos.current += 1;
@@ -1301,38 +1319,86 @@ function ReactorCode({ onMark }) {
     if (pos.current === seq.length) {
       onMark("right");
       setLast("right");
-      setSeq(codeOf(Math.min(4, seq.length + 1)));
+      setSeq(logOf(Math.min(4, seq.length + 1)));
     }
   }
 
   const status = watching
-    ? last === "wrong" ? "Wrong code. Watch again." : "Watch the lights."
+    ? last === "wrong" ? "Wrong log. Watch again." : "Watch the arrows."
     : `Your turn: ${got} of ${seq.length}.`;
   return (
-    <div className="code">
+    <div className="log">
       <p className="hint" aria-live="polite">{status}</p>
-      <div className="pads">
-        {PADS.map((color, i) => (
-          <button
-            key={color}
-            type="button"
-            className={lit === i ? "pad lit" : "pad"}
-            style={{ "--pad": color }}
-            aria-label={`Pad ${i + 1}`}
-            aria-disabled={watching}
-            onClick={() => press(i)}
-          />
+      <p className="log-screen" aria-hidden="true">
+        {lit >= 0 ? LOG_DIRS[lit][0] : ""}
+      </p>
+      <div className="log-keys">
+        {LOG_DIRS.map(([arrow, name], i) => (
+          <button key={name} type="button" className="ghost" aria-label={name} aria-disabled={watching} onClick={() => press(i)}>
+            {arrow}
+          </button>
         ))}
       </div>
     </div>
   );
 }
 
-function codeOf(length) {
-  return Array.from({ length }, () => Math.floor(Math.random() * PADS.length));
+function logOf(length) {
+  return Array.from({ length }, () => Math.floor(Math.random() * LOG_DIRS.length));
 }
 
-const FUEL_GAMES = { valve: Valve, code: ReactorCode };
+const ROCK_MS = 850;
+// About 48 rocks a minute for a quick player, so with streak bonuses it pays like the valve.
+const ROCK_GAP_MS = 800;
+
+// An asteroid flashes up in one of nine cells; tap it before it's gone. Tapping empty space while a
+// rock is up is a miss; letting one go only costs time, and taps between rocks are ignored.
+function AsteroidTap({ onMark }) {
+  const [rock, setRock] = useState(-1);
+  const [wave, setWave] = useState(0);
+  const last = useRef(-1);
+  useEffect(() => {
+    const show = setTimeout(() => {
+      let cell = last.current;
+      while (cell === last.current) cell = Math.floor(Math.random() * 9);
+      last.current = cell;
+      setRock(cell);
+    }, ROCK_GAP_MS);
+    const gone = setTimeout(() => {
+      setRock(-1);
+      setWave((w) => w + 1);
+    }, ROCK_GAP_MS + ROCK_MS);
+    return () => {
+      clearTimeout(show);
+      clearTimeout(gone);
+    };
+  }, [wave]);
+  function tap(cell) {
+    if (rock < 0) return;
+    if (cell !== rock) {
+      onMark("wrong");
+      return;
+    }
+    onMark("right");
+    setRock(-1);
+    setWave((w) => w + 1);
+  }
+  return (
+    <div className="rocks">
+      {Array.from({ length: 9 }, (_, i) => (
+        <button
+          key={i}
+          type="button"
+          className={i === rock ? "rock up" : "rock"}
+          aria-label={i === rock ? "Asteroid" : "Empty space"}
+          onClick={() => tap(i)}
+        />
+      ))}
+    </div>
+  );
+}
+
+const FUEL_GAMES = { valve: Valve, log: FlightLog, rocks: AsteroidTap };
 
 const DOMAIN_ICONS = { general: GlobeIcon, mental: BrainIcon, technology: ChipIcon };
 

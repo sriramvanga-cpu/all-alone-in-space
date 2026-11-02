@@ -484,17 +484,15 @@ test("a hop is cheapest when two planets line up and dearest on opposite sides o
 });
 
 test("eight different fuel rounds, and every card has one right answer among four", async () => {
-  const { FUEL_ROUNDS } = await import("./fuelRounds.js");
+  const { FUEL_ROUNDS, RULE_RED } = await import("./fuelRounds.js");
   assert.equal(new Set(FUEL_ROUNDS.map((r) => r.id)).size, 8);
-  const value = (s) => (s.endsWith("%") ? parseFloat(s) / 100 : s.includes("/") ? s.split("/")[0] / s.split("/")[1] : Number(s));
   const checks = {
     ink: (c) => assert.notEqual(c.answer.toUpperCase(), c.prompt),
-    tank: (c) => assert.equal(c.answer, String(Math.max(...c.choices.map(Number)))),
-    odd: (c) => {
-      const rest = c.choices.filter((x) => x !== c.answer).map(value);
-      assert.ok(rest.every((v) => Math.abs(v - rest[0]) < 1e-9), c.choices.join(" "));
-      assert.ok(Math.abs(value(c.answer) - rest[0]) > 1e-9, c.choices.join(" "));
+    rule: (c) => {
+      const opposite = { "←": "→", "→": "←", "↑": "↓", "↓": "↑" };
+      assert.equal(c.answer, c.ink === RULE_RED ? opposite[c.prompt] : c.prompt);
     },
+    tank: (c) => assert.equal(c.answer, String(Math.max(...c.choices.map(Number)))),
   };
   for (const round of FUEL_ROUNDS) {
     assert.ok(Number.isInteger(round.per) && round.per >= 1, round.id);

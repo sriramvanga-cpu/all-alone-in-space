@@ -6,16 +6,6 @@ import { rollInt, shuffleWith } from "./rules.js";
 
 const pick = (list, rng) => list[rollInt(rng, 0, list.length - 1)];
 
-// The answer plus three distinct non-negative numbers near it.
-function nearMisses(answer, rng, spread) {
-  const choices = new Set([answer]);
-  for (let guard = 0; choices.size < 4 && guard < 40; guard++) {
-    const n = answer + rollInt(rng, 1, spread) * (rng() < 0.5 ? -1 : 1);
-    if (n >= 0) choices.add(n);
-  }
-  return shuffleWith([...choices], rng).map(String);
-}
-
 const INKS = [
   ["Red", "#ff5a5a"],
   ["Blue", "#4f8bff"],
@@ -58,16 +48,6 @@ function makeTankCard(rng = Math.random) {
   return { gauge: true, choices: shuffleWith([top, ...gaps.map((g) => top - g)], rng).map(String), answer: String(top) };
 }
 
-function makePatternCard(rng = Math.random) {
-  const a = rollInt(rng, 2, 9);
-  const d = rollInt(rng, 3, 12);
-  const kind = rollInt(rng, 0, 2);
-  // Add d each time, double each time, or squares (4, 9, 16, 25, …).
-  const term = (i) => [a + d * i, a * 2 ** i, (a + i) ** 2][kind];
-  const answer = term(4);
-  return { prompt: `${[0, 1, 2, 3].map(term).join(", ")}, ?`, choices: nearMisses(answer, rng, 9), answer: String(answer) };
-}
-
 const ARROWS = ["←", "→", "↑", "↓"];
 
 function makeArrowCard(rng = Math.random) {
@@ -76,31 +56,25 @@ function makeArrowCard(rng = Math.random) {
   return { prompt: `${flank} ${flank} ${dir} ${flank} ${flank}`, choices: [...ARROWS], answer: dir };
 }
 
-// None of these has both parts even, so the doubled form never matches another fraction's plain form.
-const FRACTIONS = [[1, 2], [1, 4], [3, 4], [1, 5], [2, 5], [3, 5], [4, 5], [1, 10], [3, 10], [7, 10], [1, 8]];
-const FORMS = [
-  ([n, d]) => `${n}/${d}`,
-  ([n, d]) => `${2 * n}/${2 * d}`,
-  ([n, d]) => String(n / d),
-  ([n, d]) => `${(100 * n) / d}%`,
-];
+export const RULE_RED = "#ff5a5a";
+const OPPOSITE = { "←": "→", "→": "←", "↑": "↓", "↓": "↑" };
 
-function makeOddCard(rng = Math.random) {
-  const [f, g] = shuffleWith(FRACTIONS, rng);
-  const odd = rollInt(rng, 0, 3);
-  const choices = FORMS.map((form, i) => form(i === odd ? g : f));
-  return { choices: shuffleWith(choices, rng), answer: choices[odd] };
+// Blue arrow: answer the way it points. Red arrow: the opposite way.
+function makeRuleCard(rng = Math.random) {
+  const dir = pick(ARROWS, rng);
+  const red = rng() < 0.5;
+  return { prompt: dir, ink: red ? RULE_RED : "#4f8bff", choices: [...ARROWS], answer: red ? OPPOSITE[dir] : dir };
 }
 
 export const FUEL_ROUNDS = Object.freeze(
   [
     { id: "valve", title: "Pressure valve", how: "Tap Vent while the needle is in the green.", per: 2 },
-    { id: "code", title: "Reactor code", how: "Watch the lights, then tap them back in order.", per: 1 },
+    { id: "log", title: "Flight log", how: "Watch the arrows, then tap them back in order.", per: 1 },
     { id: "ink", title: "Colour clash", how: "Pick the colour of the ink, not the word.", per: 2, make: makeInkCard },
-    { id: "element", title: "Element check", how: "Name the element from its symbol.", per: 1, make: makeElementCard },
+    { id: "rocks", title: "Asteroid tap", how: "Tap each asteroid before it's gone. Tapping empty space is a miss.", per: 4 },
     { id: "tank", title: "Fullest tank", how: "Pick the fullest tank.", per: 2, make: makeTankCard },
-    { id: "pattern", title: "Number pattern", how: "What comes next?", per: 1, make: makePatternCard },
+    { id: "rule", title: "Rule switch", how: "Blue arrow: tap the way it points. Red arrow: tap the opposite way.", per: 2, make: makeRuleCard },
     { id: "arrows", title: "Flight path", how: "Which way does the middle arrow point?", per: 3, make: makeArrowCard },
-    { id: "odd", title: "Odd one out", how: "Which value is not equal to the other three?", per: 1, make: makeOddCard },
+    { id: "element", title: "Element check", how: "Name the element from its symbol.", per: 1, make: makeElementCard },
   ].map(Object.freeze),
 );
