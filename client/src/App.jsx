@@ -599,6 +599,10 @@ function NameScreen({ onStart }) {
             setError("Enter a phone number.");
             return;
           }
+          // Browsers only allow fullscreen from the click itself, so ask here. Older Safari has only the
+          // webkit name and no promise; iPhones refuse and the game stays in the page.
+          const page = document.documentElement;
+          (page.requestFullscreen ?? page.webkitRequestFullscreen)?.call(page)?.catch?.(() => {});
           onStart({ name: nextName.slice(0, 40), phone: nextPhone });
         }}
       >
