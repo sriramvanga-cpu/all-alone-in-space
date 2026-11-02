@@ -238,6 +238,10 @@ function fresh() {
     // Every event shows once before any repeats.
     eventOrder: shuffle(FLIGHT_EVENTS),
     eventCount: 0,
+    // Tips already shown this run; when the open one appeared; clock time handed back for reading them.
+    tipsSeen: [],
+    tipAt: 0,
+    pausedMs: 0,
     scan: null,
     note: "",
     postState: "",
@@ -514,15 +518,48 @@ function Board() {
 }
 
 const BRIEF = [
-  ["Goal", "Land on a planet that will take you within 15 minutes."],
-  ["Explore", `The star chart starts dark. Scan (${MAP_SCAN_POWER} power) to find the solar systems one lane away, then fly a lane to one. Lanes cost fuel; you start with ${START_FUEL}. Some flights bring a surprise.`],
-  ["Orbit", `Inside a system, planets circle the sun. A hop between them costs power: more when they are far apart, less when they line up. You start with ${START_POWER}; the sun recharges it while you're in a system, and shops sell more.`],
-  ["Test", `On a ! planet, answer one question. Right: 15 credits, then land blind, or pay ${SCAN_POWER} power to scan for a second landing site. Wrong: fuel costs rise.`],
-  ["Go far", "Outer systems are easier to settle but cost more fuel to reach."],
-  ["Refuel", `On a fuel-drop planet, play a one-minute challenge for credits (a new one at every stop; ${STREAK} right in a row earns a bonus), then buy fuel or power.`],
-  ["Once only", "Each planet can be tried once. Run out of fuel or time and the run ends."],
+  ["Goal", "Land on a planet that will take you within 15 minutes, before your fuel runs out."],
   ["Score", "Settling beats every loss. Faster wins with more fuel left rank higher."],
 ];
+
+// The first time each part of the game appears, a tip explains it; the clock waits while it's open.
+const TIPS = {
+  star: [
+    "Star map",
+    `Scan (${MAP_SCAN_POWER} power) to find the solar systems one lane away, then tap one to fly there. Lanes cost fuel. Outer systems are the easiest to settle, and the farthest away.`,
+  ],
+  system: [
+    "Solar system",
+    "Planets circle the sun. Tap one to hop there: a hop costs power, less when the planets line up. Drop planets refuel you, and ! planets could be your new home. Power recharges while you're in a system.",
+  ],
+  fuel: ["Fuel stop", "Play for one minute to earn credits, then spend them in the shop on fuel and power. Too many mistakes make fuel cost more."],
+  test: [
+    "A possible home",
+    "Answer one question. Right: 15 credits and a chance to land. Wrong: fuel costs rise and this planet closes. Each planet can be tried once.",
+  ],
+};
+
+function tipFor(g) {
+  const id = g.phase === "map" ? (g.system ? "system" : "star") : g.phase === "fuel" ? "fuel" : g.phase === "pick" ? "test" : null;
+  return id && !g.tipsSeen.includes(id) ? id : null;
+}
+
+function Tip({ id, onClose }) {
+  const [title, text] = TIPS[id];
+  return (
+    <section className="panel tip" aria-live="polite">
+      <p className="eyebrow">How it works</p>
+      <h1>{title}</h1>
+      <p>{text}</p>
+      <p className="hint">The clock is paused.</p>
+      <div className="row">
+        <button type="button" onClick={onClose} autoFocus>
+          Got it
+        </button>
+      </div>
+    </section>
+  );
+}
 
 function Briefing({ onStart }) {
   return (
@@ -538,6 +575,7 @@ function Briefing({ onStart }) {
             </li>
           ))}
         </ol>
+        <p className="hint">Tips explain each part of the game the first time you meet it. The clock waits while you read them.</p>
         <div className="row">
           <button type="button" onClick={onStart} autoFocus>
             Start the mission
@@ -893,7 +931,7 @@ function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
 
 // A system's planets orbit its sun. A hop costs power by how far apart two planets are right
 // now, so each open planet's price moves with them; a click pays the price on its label.
-function SystemMap({ snap, shipRef, onLaunch }) {
+function SystemMap({ snap, shipRef, onLaunch, children }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     let id = 0;
@@ -1015,6 +1053,7 @@ function SystemMap({ snap, shipRef, onLaunch }) {
           <Ship at={ship} angle={sunward(ship)} />
         )}
       </svg>
+      {children ? <div className="map-overlay">{children}</div> : null}
     </div>
   );
 }
@@ -1228,7 +1267,7 @@ const PADS = ["#ff5a5a", "#3ddc84", "#4f8bff", "#ffd23f"];
 
 // Simon-style: watch a sequence of pads light up, then tap it back. It grows by one after a
 // success (up to 4) and shrinks by one after a mistake (down to 3). Short codes keep the pay close to
-// the maths minute's.
+// the other rounds'.
 function ReactorCode({ onMark }) {
   const [seq, setSeq] = useState(() => codeOf(3));
   const [lit, setLit] = useState(-1);
@@ -1330,6 +1369,7 @@ function Game() {
 
   const snap = game.current;
   void tick;
+  const tip = tipFor(snap);
 
   function dock() {
     if (game.current.phase !== "mission") return;
@@ -1342,7 +1382,7 @@ function Game() {
   // A lane on the star map costs fuel; a hop inside a system costs the power its label shows now.
   function launch(id) {
     const g = game.current;
-    if (g.phase !== "map") return;
+    if (g.phase !== "map" || tipFor(g)) return;
     const now = Date.now();
     if (g.deadline && now >= g.deadline) {
       finish("time");
@@ -1391,7 +1431,7 @@ function Game() {
   // A radar sweep from where you are on the star map: the systems one lane away appear.
   function scanHere() {
     const g = game.current;
-    if (g.phase !== "map" || g.system || g.scanned.includes(g.here) || g.power + 1e-9 < MAP_SCAN_POWER) return;
+    if (g.phase !== "map" || tipFor(g) || g.system || g.scanned.includes(g.here) || g.power + 1e-9 < MAP_SCAN_POWER) return;
     if (g.deadline && Date.now() >= g.deadline) {
       finish("time");
       return;
@@ -1402,13 +1442,13 @@ function Game() {
 
   function enterSystem() {
     const g = game.current;
-    if (g.phase !== "map" || g.system || !system(g.here)) return;
+    if (g.phase !== "map" || tipFor(g) || g.system || !system(g.here)) return;
     commit({ system: g.here, note: "" });
   }
 
   function leaveSystem() {
     const g = game.current;
-    if (g.phase !== "map" || !g.system) return;
+    if (g.phase !== "map" || tipFor(g) || !g.system) return;
     const p = POS[g.system];
     setView((v) => ({ ...v, x: fit(p.x - v.w / 2, v.w), y: fit(p.y - v.h / 2, v.h) }));
     commit({ system: null, here: g.system, note: "" });
@@ -1603,6 +1643,21 @@ function Game() {
     commit({ credits: result.credits, fuel: result.fuel, power: result.power });
   }
 
+  // Closing a tip hands back the time it was open, so reading never costs the player.
+  function closeTip() {
+    const g = game.current;
+    const id = tipFor(g);
+    if (!id) return;
+    const paused = g.tipAt ? Date.now() - g.tipAt : 0;
+    commit({
+      tipsSeen: [...g.tipsSeen, id],
+      tipAt: 0,
+      pausedMs: g.pausedMs + paused,
+      deadline: g.deadline + paused,
+      fuelDeadline: g.fuelDeadline + paused,
+    });
+  }
+
   function leaveShop() {
     const g = game.current;
     if (g.phase !== "shop") return;
@@ -1620,7 +1675,7 @@ function Game() {
 
   useEffect(() => {
     const g = game.current;
-    if (!g.deadline || g.phase === "end" || g.phase === "name" || g.phase === "intro") return;
+    if (!g.deadline || g.phase === "end" || g.phase === "name" || g.phase === "intro" || tip) return;
     const left = g.deadline - Date.now();
     if (left <= 0) {
       finish("time");
@@ -1628,7 +1683,11 @@ function Game() {
     }
     const id = setTimeout(() => finish("time"), left);
     return () => clearTimeout(id);
-  }, [snap.phase, snap.deadline]);
+  }, [snap.phase, snap.deadline, tip]);
+
+  useEffect(() => {
+    if (tip && !game.current.tipAt) commit({ tipAt: Date.now() });
+  }, [tip]);
 
   useEffect(() => {
     if (game.current.phase !== "question") return;
@@ -1645,14 +1704,14 @@ function Game() {
   }, [snap.phase, snap.qDeadline]);
 
   useEffect(() => {
-    if (game.current.phase !== "fuel") return;
+    if (game.current.phase !== "fuel" || tip) return;
     const left = game.current.fuelDeadline - Date.now();
     const id = setTimeout(() => {
       if (game.current.phase !== "fuel") return;
       closeFuelMinute();
     }, Math.max(0, left));
     return () => clearTimeout(id);
-  }, [snap.phase, snap.fuelDeadline]);
+  }, [snap.phase, snap.fuelDeadline, tip]);
 
   useEffect(() => {
     if (game.current.phase === "map" && stuck(game.current)) finish("stranded");
@@ -1663,7 +1722,7 @@ function Game() {
     if (!snap.system) return;
     const id = setInterval(() => {
       const g = game.current;
-      if (!g.system || g.phase === "end" || g.power >= POWER_CAP) return;
+      if (!g.system || g.phase === "end" || tipFor(g) || g.power >= POWER_CAP) return;
       commit({ power: Math.min(POWER_CAP, g.power + 1) });
     }, POWER_TICK_MS);
     return () => clearInterval(id);
@@ -1789,7 +1848,7 @@ function Game() {
   const clockMs =
     snap.phase === "end"
       ? Math.max(0, snap.deadline - (snap.stoppedAt || snap.deadline))
-      : Math.max(0, snap.deadline - now);
+      : Math.max(0, snap.deadline - (tip && snap.tipAt ? snap.tipAt : now));
   const fuelShown = snap.phase === "fly" && flyFuel != null ? flyFuel : snap.fuel;
   const where =
     snap.phase === "fly" && snap.flight
@@ -1854,7 +1913,7 @@ function Game() {
               <small>Clock</small>
               <b>{formatClock(clockMs)}</b>
             </div>
-            <Delta value={snap.deadline / 1000} />
+            <Delta value={(snap.deadline - snap.pausedMs) / 1000} />
           </div>
         </div>
       </header>
@@ -1871,7 +1930,7 @@ function Game() {
               )}
               <div className="row">
                 {snap.system ? (
-                  <button type="button" className="ghost" disabled={snap.phase !== "map"} onClick={leaveSystem}>
+                  <button type="button" className="ghost" disabled={snap.phase !== "map" || !!tip} onClick={leaveSystem}>
                     Star map
                   </button>
                 ) : (
@@ -1880,14 +1939,14 @@ function Game() {
                       <button
                         type="button"
                         className="scan-btn"
-                        disabled={snap.phase !== "map" || snap.power + 1e-9 < MAP_SCAN_POWER}
+                        disabled={snap.phase !== "map" || !!tip || snap.power + 1e-9 < MAP_SCAN_POWER}
                         onClick={scanHere}
                       >
                         Scan nearby systems · {MAP_SCAN_POWER} power
                       </button>
                     )}
                     {system(snap.here) ? (
-                      <button type="button" className="ghost" disabled={snap.phase !== "map"} onClick={enterSystem}>
+                      <button type="button" className="ghost" disabled={snap.phase !== "map" || !!tip} onClick={enterSystem}>
                         Enter {snap.here}
                       </button>
                     ) : null}
@@ -1896,10 +1955,14 @@ function Game() {
               </div>
             </div>
             {snap.system ? (
-              <SystemMap snap={snap} shipRef={shipRef} onLaunch={launch} />
+              <SystemMap snap={snap} shipRef={shipRef} onLaunch={launch}>
+                {tip ? <Tip id={tip} onClose={closeTip} /> : null}
+              </SystemMap>
             ) : (
               <StarMap snap={snap} now={now} shipRef={shipRef} onLaunch={launch} view={view} onView={setView}>
-                {snap.phase === "fly" && snap.flight?.paused ? (
+                {tip ? (
+                  <Tip id={tip} onClose={closeTip} />
+                ) : snap.phase === "fly" && snap.flight?.paused ? (
                   <FlightEvent event={snap.flight.event} fuel={snap.fuel} credits={snap.credits} onPick={resolveEvent} />
                 ) : null}
               </StarMap>
@@ -1907,7 +1970,10 @@ function Game() {
           </>
         ) : null}
 
-        {snap.phase === "pick" ? (
+        {/* Off the map, a tip stands in for the screen it explains, so a fuel round can't start under it. */}
+        {tip && snap.phase !== "map" ? <Tip id={tip} onClose={closeTip} /> : null}
+
+        {snap.phase === "pick" && !tip ? (
           <section className="panel">
             <p className="eyebrow">{snap.here}</p>
             <h1>Choose a domain</h1>
@@ -1968,7 +2034,7 @@ function Game() {
 
         {snap.phase === "scan" && snap.scan ? <Scan scan={snap.scan} onDone={leaveScan} /> : null}
 
-        {snap.phase === "fuel" && snap.fuelRound ? (
+        {snap.phase === "fuel" && snap.fuelRound && !tip ? (
           <section className="panel fuel">
             <div className="qhead">
               <Ring ms={fuelMs} total={QUESTION_MS} />
@@ -1994,15 +2060,6 @@ function Game() {
               <FuelGame key={snap.here} onMark={markFuel} />
             ) : fuelCard ? (
               <>
-                {fuelCard.dots ? (
-                  <div className="cells" role="img" aria-label="Fuel cells to count">
-                    {fuelCard.dots.map(([x, y]) => (
-                      <span key={`${x},${y}`} style={{ left: `${x}%`, top: `${y}%` }}>
-                        <FuelIcon />
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
                 {fuelCard.prompt ? (
                   <p className="prompt" style={fuelCard.ink ? { color: fuelCard.ink } : undefined}>
                     {fuelCard.prompt}

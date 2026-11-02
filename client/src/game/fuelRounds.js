@@ -1,8 +1,8 @@
-// Fuel-stop challenges. Each stop plays the next round in this list, so ten fuel stops never
+// Fuel-stop challenges. Each stop plays the next round in this list, so eight fuel stops never
 // repeat one, and every player meets them in the same order. `per` is how many right answers
-// earn one credit; it evens out fast rounds against the maths minute (~13 credits for a typical
-// player). Rounds without `make` are interactive games drawn in App.jsx.
-import { makeFuelCard, rollInt, shuffleWith } from "./rules.js";
+// earn one credit; it evens out fast rounds so a typical player earns about 13 credits a minute.
+// Rounds without `make` are interactive games drawn in App.jsx.
+import { rollInt, shuffleWith } from "./rules.js";
 
 const pick = (list, rng) => list[rollInt(rng, 0, list.length - 1)];
 
@@ -33,14 +33,6 @@ function makeInkCard(rng = Math.random) {
     choices: shuffleWith([ink, word, a, b], rng).map((c) => c[0]),
     answer: ink[0],
   };
-}
-
-function makeCountCard(rng = Math.random) {
-  const n = rollInt(rng, 7, 15);
-  // One cell per slot of an 8 × 5 grid, nudged off the grid so it doesn't look like one.
-  const slots = shuffleWith([...Array(40).keys()], rng).slice(0, n);
-  const dots = slots.map((i) => [(i % 8) * 12.5 + 6.25 + rollInt(rng, -3, 3), Math.floor(i / 8) * 20 + 10 + rollInt(rng, -4, 4)]);
-  return { dots, choices: nearMisses(n, rng, 3), answer: String(n) };
 }
 
 const ELEMENTS = [
@@ -102,11 +94,9 @@ function makeOddCard(rng = Math.random) {
 
 export const FUEL_ROUNDS = Object.freeze(
   [
-    { id: "maths", title: "Quick maths", how: "Pick the right answer.", per: 1, make: makeFuelCard },
     { id: "valve", title: "Pressure valve", how: "Tap Vent while the needle is in the green.", per: 2 },
     { id: "code", title: "Reactor code", how: "Watch the lights, then tap them back in order.", per: 1 },
     { id: "ink", title: "Colour clash", how: "Pick the colour of the ink, not the word.", per: 2, make: makeInkCard },
-    { id: "count", title: "Cell count", how: "How many fuel cells are there?", per: 1, make: makeCountCard },
     { id: "element", title: "Element check", how: "Name the element from its symbol.", per: 1, make: makeElementCard },
     { id: "tank", title: "Fullest tank", how: "Pick the fullest tank.", per: 2, make: makeTankCard },
     { id: "pattern", title: "Number pattern", how: "What comes next?", per: 1, make: makePatternCard },

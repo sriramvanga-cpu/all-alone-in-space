@@ -16,7 +16,6 @@ import {
   applyMultiplier,
   habitability,
   fuelMinute,
-  makeFuelCard,
   buyPacks,
   scanReadings,
   TOXIC_LIMIT,
@@ -311,22 +310,6 @@ test("toxic reading is over the limit exactly when the world is not habitable", 
   }
 });
 
-test("fuel cards are fresh arithmetic, not one fixed list", () => {
-  const prompts = new Set();
-  for (let i = 0; i < 40; i++) {
-    const card = makeFuelCard();
-    prompts.add(card.prompt);
-    const [left, op, right] = card.prompt.split(" ");
-    const a = Number(left);
-    const b = Number(right);
-    const expect = op === "+" ? a + b : op === "−" ? a - b : a * b;
-    assert.equal(card.answer, String(expect));
-    assert.equal(new Set(card.choices).size, 4);
-    assert.ok(card.choices.includes(card.answer));
-  }
-  assert.ok(prompts.size >= 30, `only ${prompts.size} distinct prompts`);
-});
-
 test("fuel minute: 1 of 8 updates, exactly 10% does not", () => {
   const eight = fuelMinute(
     1,
@@ -500,13 +483,12 @@ test("a hop is cheapest when two planets line up and dearest on opposite sides o
   assert.equal(hopPower(123), 2.5);
 });
 
-test("ten different fuel rounds, and every card has one right answer among four", async () => {
+test("eight different fuel rounds, and every card has one right answer among four", async () => {
   const { FUEL_ROUNDS } = await import("./fuelRounds.js");
-  assert.equal(new Set(FUEL_ROUNDS.map((r) => r.id)).size, 10);
+  assert.equal(new Set(FUEL_ROUNDS.map((r) => r.id)).size, 8);
   const value = (s) => (s.endsWith("%") ? parseFloat(s) / 100 : s.includes("/") ? s.split("/")[0] / s.split("/")[1] : Number(s));
   const checks = {
     ink: (c) => assert.notEqual(c.answer.toUpperCase(), c.prompt),
-    count: (c) => assert.equal(c.dots.length, Number(c.answer)),
     tank: (c) => assert.equal(c.answer, String(Math.max(...c.choices.map(Number)))),
     odd: (c) => {
       const rest = c.choices.filter((x) => x !== c.answer).map(value);

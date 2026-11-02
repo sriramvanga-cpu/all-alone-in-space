@@ -134,39 +134,6 @@ export function shuffleWith(list, rng) {
   return a;
 }
 
-/** A fresh sum, difference, or product. Not drawn from a fixed card list. */
-export function makeFuelCard(rng = Math.random) {
-  const kind = rollInt(rng, 0, 2);
-  let a;
-  let b;
-  let answer;
-  let op;
-  if (kind === 0) {
-    a = rollInt(rng, 12, 89);
-    b = rollInt(rng, 12, 89);
-    answer = a + b;
-    op = "+";
-  } else if (kind === 1) {
-    a = rollInt(rng, 24, 99);
-    b = rollInt(rng, 3, Math.min(40, a - 3));
-    answer = a - b;
-    op = "−";
-  } else {
-    a = rollInt(rng, 3, 12);
-    b = rollInt(rng, 3, 12);
-    answer = a * b;
-    op = "×";
-  }
-  const choices = new Set([String(answer)]);
-  let guard = 0;
-  while (choices.size < 4 && guard < 40) {
-    guard += 1;
-    const n = answer + rollInt(rng, 1, 9) * (rng() < 0.5 ? -1 : 1);
-    if (n >= 0 && n !== answer) choices.add(String(n));
-  }
-  return { prompt: `${a} ${op} ${b}`, choices: shuffleWith([...choices], rng), answer: String(answer) };
-}
-
 /**
  * After a habitability answer. Right: percent −25, +15 credits, variable
  * unchanged. Wrong: percent +25, no credits, one multiplier, and the world

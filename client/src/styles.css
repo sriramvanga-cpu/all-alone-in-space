@@ -701,16 +701,6 @@ input:focus {
 
 /* Fuel-stop rounds */
 .fuel .prompt { margin: 1.1rem 0 0.4rem; text-align: center; font: 700 2.1rem/1.2 var(--font-display); letter-spacing: 0.06em; }
-.cells {
-  position: relative;
-  height: 9.5rem;
-  margin: 1rem 0 0.4rem;
-  background: rgba(5, 9, 20, 0.5);
-  border: 1px solid var(--glass-line);
-  border-radius: 14px;
-}
-.cells span { position: absolute; translate: -50% -50%; color: var(--accent); }
-.cells .icon { display: block; width: 1.8rem; height: 1.8rem; }
 .gauge { flex: 1; height: 0.9rem; overflow: hidden; background: rgba(255, 255, 255, 0.08); border-radius: 99px; }
 .gauge i { display: block; height: 100%; background: linear-gradient(90deg, #4a7cff, #7be0ff); }
 
@@ -819,7 +809,9 @@ input:focus {
   background: rgba(2, 4, 10, 0.35);
   cursor: default;
 }
-.event { width: min(100%, 27rem); }
+.event, .tip { width: min(100%, 27rem); }
+/* A tip on a map sits low and leaves the map undimmed, so the player can see what it explains. */
+.map-overlay:has(.tip) { place-items: end center; background: none; }
 .event .choice { justify-content: space-between; }
 .event .choice small { color: var(--dim); font-size: 0.85rem; text-align: right; }
 
