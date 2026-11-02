@@ -35,6 +35,23 @@ export function PowerIcon(props) {
   );
 }
 
+export function StarIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3.4l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.6l-5.2 2.8 1-5.8-4.2-4.1 5.8-.8Z" />
+    </Icon>
+  );
+}
+
+export function CompassIcon(props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="8.4" />
+      <path d="m15.4 8.6-2 4.8-4.8 2 2-4.8Z" />
+    </Icon>
+  );
+}
+
 export function CreditIcon(props) {
   return (
     <Icon {...props}>

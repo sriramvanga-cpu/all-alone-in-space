@@ -24,9 +24,9 @@ const BOOM = ARRIVE + 1.0;
 const END = BOOM + 3.6;
 
 const CAPTIONS = [
-  { from: 0.7, to: 5.0, title: "Departure", text: "A shuttle lifts off Vulcan. The ground falls away." },
-  { from: 5.6, to: DOCK + 0.4, title: "Docking", text: "The shuttle flies into the starship's hangar." },
-  { from: JUMP + 0.8, to: END - 0.7, title: "Look back", text: "The ship pulls clear. Behind it, Vulcan blows apart. The clock starts with the chart." },
+  { from: 0.7, to: 5.0, title: "Vulcan is dying", text: "Its core is breaking up. The last shuttle lifts off." },
+  { from: 5.6, to: DOCK + 0.4, title: "Reach the starship", text: "Dock before the planet comes apart." },
+  { from: JUMP + 0.8, to: END - 0.7, title: "Vulcan is gone", text: "No world is left to call home. You have 15 minutes to find a new one." },
 ];
 
 const RP = 1000;

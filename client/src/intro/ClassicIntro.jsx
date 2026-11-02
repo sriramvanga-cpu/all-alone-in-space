@@ -22,9 +22,9 @@ const END = INSIDE + 6.4;
 const BRIDGE_X = 13.5;
 
 const CAPTIONS = [
-  { from: 0.7, to: 5.0, title: "Departure", text: "A shuttle lifts off Vulcan. The ground falls away." },
-  { from: 5.6, to: 9.4, title: "Docking", text: "The shuttle locks onto the ship." },
-  { from: INSIDE + 0.4, to: END - 0.7, title: "Look back", text: "Through the window, Vulcan blows apart. The clock starts with the chart." },
+  { from: 0.7, to: 5.0, title: "Vulcan is dying", text: "Its core is breaking up. The last shuttle lifts off." },
+  { from: 5.6, to: 9.4, title: "Reach the starship", text: "Dock before the planet comes apart." },
+  { from: INSIDE + 0.4, to: END - 0.7, title: "Vulcan is gone", text: "No world is left to call home. You have 15 minutes to find a new one." },
 ];
 
 function captionAt(T) {

@@ -51,7 +51,7 @@ import { Starbase } from "./art/Station.jsx";
 import { PlanetDot, faceOf } from "./art/Planet.jsx";
 import { MapDefs, MapBackdrop, StarDot, STAR_NAMES } from "./art/MapArt.jsx";
 import { publishArt, webglAvailable } from "./three/artStore.js";
-import { FuelIcon, PowerIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipIcon } from "./art/icons.jsx";
+import { FuelIcon, PowerIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipIcon, StarIcon, CompassIcon } from "./art/icons.jsx";
 
 const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 const PENDING = "aais-pending-scores";
@@ -91,7 +91,7 @@ const DOMAINS = [
 ];
 
 const END_COPY = {
-  win: "A world will take you.",
+  win: "New home found",
   time: "Fifteen minutes are up.",
   stranded: "No lane you can afford, and no planet left here.",
 };
@@ -521,10 +521,6 @@ function Board() {
   );
 }
 
-const BRIEF = [
-  ["Goal", "Land on a planet that will take you within 15 minutes, before your fuel runs out."],
-  ["Score", "Settling beats every loss. Faster wins with more fuel left rank higher."],
-];
 
 // The first time each part of the game appears, a tip explains it; the clock waits while it's open.
 const TIPS = {
@@ -565,15 +561,23 @@ function Tip({ id, onClose }) {
   );
 }
 
-function Briefing({ onStart }) {
+// The mission card ends the opening film: what to do, how to win, how you score. The clock starts here.
+const MISSION = [
+  [CompassIcon, "Explore", "Scan the star map and fly between solar systems. Fuel flies the lanes; power flies between planets."],
+  [GlobeIcon, "Land", "On a ! planet, answer a question, then try to land. Your chance grows from 5% to 60% as the clock runs, and a right answer adds 10%."],
+  [StarIcon, "Win", "Land before your fuel or the 15-minute clock runs out. Points = fuel left + 1 per 10 s left. Most points tops the board; watch yours in the top bar."],
+];
+
+function Mission({ onStart }) {
   return (
     <main className="screen">
-      <section className="panel wide brief">
-        <p className="eyebrow">Mission briefing</p>
-        <h1>How to play</h1>
-        <ol>
-          {BRIEF.map(([title, text]) => (
+      <section className="panel wide mission">
+        <p className="eyebrow">Your mission</p>
+        <h1>Find a new home</h1>
+        <ol className="mission-steps">
+          {MISSION.map(([StepIcon, title, text]) => (
             <li key={title}>
+              <StepIcon />
               <b>{title}</b>
               <p>{text}</p>
             </li>
@@ -582,29 +586,7 @@ function Briefing({ onStart }) {
         <p className="hint">Tips explain each part of the game the first time you meet it. The clock waits while you read them.</p>
         <div className="row">
           <button type="button" onClick={onStart} autoFocus>
-            Start the mission
-          </button>
-        </div>
-      </section>
-    </main>
-  );
-}
-
-// Shown after the cutscene, before the chart opens and the clock starts.
-function Mission({ onStart }) {
-  return (
-    <main className="screen">
-      <section className="panel mission">
-        <p className="eyebrow">Your mission</p>
-        <h1>Find a new home</h1>
-        <p>
-          Vulcan is gone, and there is no world left to call home. Somewhere in Nova Grid is a planet that can
-          support life. Find it before your fuel or the {ROUND_MS / 60000}-minute clock runs out.
-        </p>
-        <p className="hint">The clock starts when the star chart opens.</p>
-        <div className="row">
-          <button type="button" onClick={onStart} autoFocus>
-            Open the star chart
+            Start the clock
           </button>
         </div>
       </section>
@@ -618,7 +600,10 @@ function NameScreen({ onStart }) {
   const [error, setError] = useState("");
   return (
     <main className="screen">
+      <i className="shooting-star" aria-hidden="true" />
+      <i className="shooting-star" aria-hidden="true" />
       <header className="title-card">
+        <div className="title-planet" aria-hidden="true" />
         <ShipSvg className="ship" />
         <p className="title-big">
           Nova
@@ -1379,7 +1364,7 @@ function AsteroidTap({ onMark }) {
         return `${(50 + d * Math.cos(a)).toFixed(1)}% ${(50 + d * Math.sin(a)).toFixed(1)}%`;
       }).join(", ");
       const size = 2.4 + Math.random() * 1.4;
-      setRocks((list) => [...list, { n, y0, y1, ms: 2600 + Math.random() * 1600, size, squash: 0.7 + Math.random() * 0.3, outline }]);
+      setRocks((list) => [...list, { n, y0, y1, ms: 4200 + Math.random() * 2000, size, squash: 0.7 + Math.random() * 0.3, outline }]);
     }, ROCK_EVERY_MS);
     return () => clearInterval(id);
   }, []);
@@ -1920,9 +1905,8 @@ function Game() {
   }, []);
 
   if (snap.phase === "name") {
-    return <NameScreen onStart={(who) => commit({ ...who, phase: "brief" })} />;
+    return <NameScreen onStart={(who) => commit({ ...who, phase: "intro" })} />;
   }
-  if (snap.phase === "brief") return <Briefing onStart={() => commit({ phase: "intro" })} />;
   if (snap.phase === "intro") {
     return <Intro onDone={() => game.current.phase === "intro" && commit({ phase: "mission" })} />;
   }
@@ -1933,6 +1917,13 @@ function Game() {
       ? Math.max(0, snap.deadline - (snap.stoppedAt || snap.deadline))
       : Math.max(0, snap.deadline - (tip && snap.tipAt ? snap.tipAt : now));
   const fuelShown = snap.phase === "fly" && flyFuel != null ? flyFuel : snap.fuel;
+  // What landing right now would score, the same sum the board ranks by.
+  const pointsShown =
+    snap.phase === "end"
+      ? runFacts(snap).settled
+        ? fmtScore(runPoints(runFacts(snap)))
+        : "—"
+      : fmtScore(runPoints({ settled: true, fuel: fuelShown, timeLeft: Math.floor(clockMs / 1000) }));
   const where =
     snap.phase === "fly" && snap.flight
       ? `En route to ${snap.flight.to === STATION ? "the station" : snap.flight.to}`
@@ -1997,6 +1988,13 @@ function Game() {
               <b>{formatClock(clockMs)}</b>
             </div>
             <Delta value={(snap.deadline - snap.pausedMs) / 1000} />
+          </div>
+          <div className="meter points" title="Points if you land now: 1 per fuel left + 1 per 10 s left">
+            <StarIcon />
+            <div className="m-text">
+              <small>Points</small>
+              <b>{pointsShown}</b>
+            </div>
           </div>
         </div>
       </header>
@@ -2199,6 +2197,7 @@ function EndScreen({ snap }) {
         : "Sending the score…";
   return (
     <>
+    {facts.settled ? <Celebration /> : null}
     {facts.settled && snap.scan ? <Scan scan={snap.scan} habitable /> : null}
     <section className={facts.settled ? "panel wide end won" : "panel wide end lost"}>
       <div className="end-hero">
@@ -2212,7 +2211,7 @@ function EndScreen({ snap }) {
       <dl className="stats">
         <div className="stat rank-stat">
           <dt>Your rank</dt>
-          <dd>
+          <dd key={mine ? "rank" : "wait"} className={mine ? "pop-in" : undefined}>
             {mine ? `#${mine.rank}` : "…"}
             {mine ? <small>of {mine.total}</small> : null}
           </dd>
@@ -2235,7 +2234,7 @@ function EndScreen({ snap }) {
         </div>
         <div className="stat">
           <dt>Points</dt>
-          <dd>{facts.settled ? fmtScore(runPoints(facts)) : "—"}</dd>
+          <dd>{facts.settled ? <CountUp value={runPoints(facts)} /> : "—"}</dd>
         </div>
       </dl>
       <p>
@@ -2247,6 +2246,57 @@ function EndScreen({ snap }) {
     </section>
     </>
   );
+}
+
+// Confetti for a win, laid out once so a re-render doesn't reshuffle it.
+const CONFETTI = Array.from({ length: 36 }, (_, i) => ({
+  left: Math.random() * 100,
+  delay: Math.random() * 0.9,
+  ms: 2200 + Math.random() * 1400,
+  spin: 360 + Math.random() * 720,
+  drift: (Math.random() - 0.5) * 30,
+  wide: i % 3 === 0,
+  color: ["#5ad1ff", "#8a7dff", "#ff79c6", "#ffd23f", "#7df0b4"][i % 5],
+}));
+
+function Celebration() {
+  return (
+    <div className="celebrate" aria-hidden="true">
+      {CONFETTI.map((c, i) => (
+        <i
+          key={i}
+          className={c.wide ? "wide" : undefined}
+          style={{
+            left: `${c.left}%`,
+            background: c.color,
+            animationDelay: `${c.delay}s`,
+            animationDuration: `${c.ms}ms`,
+            "--spin": `${c.spin}deg`,
+            "--drift": `${c.drift}vw`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Counts from 0 up to value over ms, easing out; shows the value at once for reduced motion. */
+function CountUp({ value, ms = 1200 }) {
+  const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const [shown, setShown] = useState(still ? value : 0);
+  useEffect(() => {
+    if (still) return;
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / ms);
+      setShown(value * (1 - (1 - k) ** 3));
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value, ms, still]);
+  return fmtScore(shown);
 }
 
 const SCAN_STEP_MS = 450;
