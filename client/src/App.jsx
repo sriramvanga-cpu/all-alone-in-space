@@ -1466,16 +1466,19 @@ function AsteroidTap({ onMark }) {
         return `${(50 + d * Math.cos(a)).toFixed(1)}% ${(50 + d * Math.sin(a)).toFixed(1)}%`;
       }).join(", ");
       const size = 2.4 + Math.random() * 1.4;
-      setRocks((list) => [...list, { n, y0, y1, ms: 4200 + Math.random() * 2000, size, squash: 0.7 + Math.random() * 0.3, outline }]);
+      setRocks((list) => [...list, { n, y0, y1, ms: 2600 + Math.random() * 1600, size, squash: 0.7 + Math.random() * 0.3, outline }]);
     }, ROCK_EVERY_MS);
     return () => clearInterval(id);
   }, []);
-  function hit(el) {
-    const now = performance.now();
-    if (now - lastShot.current < SHOT_MS) return;
-    lastShot.current = now;
+  // Pointer hits land at once, so a drag can slice through rocks side by side; the key waits SHOT_MS.
+  function hit(el, keyed = false) {
     const n = Number(el?.dataset?.rock);
     if (!n) return;
+    if (keyed) {
+      const now = performance.now();
+      if (now - lastShot.current < SHOT_MS) return;
+      lastShot.current = now;
+    }
     const box = el.getBoundingClientRect();
     const area = field.current.getBoundingClientRect();
     onMark("right");
@@ -1495,13 +1498,24 @@ function AsteroidTap({ onMark }) {
         .map((el) => ({ el, box: el.getBoundingClientRect() }))
         .filter(({ box }) => box.right > area.left && box.left < area.right)
         .sort((a, b) => a.box.left - b.box.left)[0];
-      if (lead) hitRef.current(lead.el);
+      if (lead) hitRef.current(lead.el, true);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  // Press and drag across the field: every rock the pointer passes over is hit. Touch keeps its
+  // first target as e.target, so look up what is under the finger now.
   return (
-    <div className="rocks" ref={field} onPointerDown={(e) => hit(e.target)} aria-label="Asteroid field">
+    <div
+      className="rocks"
+      ref={field}
+      onPointerDown={(e) => hit(e.target)}
+      onPointerMove={(e) => {
+        if (e.pointerType === "mouse" && !(e.buttons & 1)) return;
+        hit(document.elementFromPoint(e.clientX, e.clientY));
+      }}
+      aria-label="Asteroid field"
+    >
       {rocks.map((r) => (
         <span
           key={r.n}
