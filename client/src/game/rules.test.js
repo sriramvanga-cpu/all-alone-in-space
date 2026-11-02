@@ -23,20 +23,22 @@ import {
   STREAK,
   fuelStreak,
   secondSite,
+  START_POWER,
+  hopPower,
 } from "./rules.js";
 import {
-  INNER,
-  MIDDLE,
-  OUTER,
   STATION,
-  DELTA_VEGA,
-  CETI_ALPHA,
-  LINKS,
-  NODES,
-  node,
-  linksFrom,
-  destinations,
-  MAP_SEEDS,
+  SYSTEMS,
+  PLANETS,
+  LANES,
+  JUMP_R,
+  system,
+  planet,
+  planetsOf,
+  lanesFrom,
+  orbitAt,
+  hopDistance,
+  closestHop,
 } from "./map.js";
 
 function scripted(values) {
@@ -366,13 +368,15 @@ test("shop packs are any affordable multiset", () => {
     { credits: 10, fuel: 5 },
     { credits: 18, fuel: 10 },
     { credits: 25, fuel: 15 },
+    { credits: 6, power: 5 },
   ]);
   assert.equal(START_FUEL, 10);
+  assert.equal(START_POWER, 10);
   assert.equal(START_CREDITS, 0);
   assert.equal(START_VARIABLE, 1);
 
   const oneOfEach = buyPacks({ credits: 53, fuel: 1 }, [1, 1, 1]);
-  assert.deepEqual(oneOfEach, { ok: true, credits: 0, fuel: 31, cost: 53 });
+  assert.deepEqual(oneOfEach, { ok: true, credits: 0, fuel: 31, power: 0, cost: 53 });
 
   const twoSmall = buyPacks({ credits: 20, fuel: 0 }, [2, 0, 0]);
   assert.equal(twoSmall.ok, true);
@@ -380,10 +384,13 @@ test("shop packs are any affordable multiset", () => {
   assert.equal(twoSmall.fuel, 10);
 
   const keep = buyPacks({ credits: 7, fuel: 4 }, [0, 0, 0]);
-  assert.deepEqual(keep, { ok: true, credits: 7, fuel: 4, cost: 0 });
+  assert.deepEqual(keep, { ok: true, credits: 7, fuel: 4, power: 0, cost: 0 });
 
   const poor = buyPacks({ credits: 24, fuel: 3 }, [0, 0, 1]);
-  assert.deepEqual(poor, { ok: false, credits: 24, fuel: 3, cost: 25 });
+  assert.deepEqual(poor, { ok: false, credits: 24, fuel: 3, power: 0, cost: 25 });
+
+  const mixed = buyPacks({ credits: 16, fuel: 2, power: 1 }, [1, 0, 0, 1]);
+  assert.deepEqual(mixed, { ok: true, credits: 0, fuel: 7, power: 6, cost: 16 });
 
   const negative = buyPacks({ credits: 100, fuel: 0 }, [-1, 0, 0]);
   assert.equal(negative.ok, false);
@@ -391,235 +398,106 @@ test("shop packs are any affordable multiset", () => {
   assert.equal(negative.fuel, 0);
 });
 
-test("map is a sparse three-shell web", () => {
-  assert.deepEqual(INNER, ["Earth", "Risa", "Andoria", "P'Jem", "Tellar", "Denobula"]);
-  assert.deepEqual(MIDDLE, ["Bajor", "Deneb", "Betazed", "Khitomer", "Trill", "Orion"]);
-  assert.deepEqual(OUTER, ["Qo'noS", "Nimbus", "Romulus", "Remus", "Cardassia", "Ferenginar"]);
-  assert.equal(node("Vulcan"), null);
-
-  const meanR = (shell) => {
-    const rs = NODES.filter((n) => n.shell === shell);
-    return rs.reduce((sum, n) => sum + n.r, 0) / rs.length;
+test("the star map has 20+ systems in three rings, each with 1–3 fuel and 0–2 test planets", () => {
+  assert.ok(SYSTEMS.length >= 20, `${SYSTEMS.length} systems`);
+  const meanR = (ring) => {
+    const rs = SYSTEMS.filter((s) => s.ring === ring);
+    assert.ok(rs.length > 0, ring);
+    return rs.reduce((sum, s) => sum + s.r, 0) / rs.length;
   };
-  const nearMiddle = (meanR("inner") + meanR("middle")) / 2;
-  const nearOuter = (meanR("middle") + meanR("outer")) / 2;
-  const bandOf = (id) => {
-    const n = node(id);
-    if (n.shell === "inner") return 8;
-    if (n.shell === "middle") return 12;
-    if (n.shell === "outer") return 16;
-    if (n.r < nearMiddle) return 8;
-    if (n.r < nearOuter) return 12;
-    return 16;
+  assert.ok(meanR("inner") < meanR("middle") && meanR("middle") < meanR("outer"));
+  for (const s of SYSTEMS) {
+    const planets = planetsOf(s.id);
+    const fuel = planets.filter((p) => p.shell === "fuel").length;
+    assert.ok(fuel >= 1 && fuel <= 3, `${s.id} has ${fuel} fuel planets`);
+    assert.ok(planets.length - fuel <= 2, `${s.id} has ${planets.length - fuel} test planets`);
+    for (const p of planets) if (p.shell !== "fuel") assert.equal(p.shell, s.ring, p.id);
+  }
+  const names = [STATION, ...SYSTEMS.map((s) => s.id), ...PLANETS.map((p) => p.id)];
+  assert.equal(new Set(names).size, names.length);
+  assert.equal(system(STATION), null);
+  assert.equal(planet(SYSTEMS[0].id), null);
+});
+
+test("lanes join every system without crossing, and cost fuel by the farther ring", () => {
+  const xy = (id) => {
+    const s = system(id);
+    return s ? { x: s.r * Math.cos(s.angle), y: s.r * Math.sin(s.angle) } : { x: 0, y: 0 };
   };
-  const hopOf = (a, b) => {
-    if (a === STATION || b === STATION) {
-      const other = a === STATION ? b : a;
-      return other === "Earth" || other === "Andoria" || other === "Denobula" ? 10 : bandOf(other);
-    }
-    return node(a).r >= node(b).r ? bandOf(a) : bandOf(b);
-  };
-
-  const station = linksFrom(STATION);
-  const homes = station.filter((next) => node(next.id).shell === "inner");
-  const pumps = station.filter((next) => node(next.id).shell === "fuel");
-  assert.deepEqual(homes.map((next) => next.id).sort(), ["Andoria", "Denobula", "Earth"]);
-  for (const next of homes) assert.equal(next.distance, 10);
-  assert.equal(pumps.length, 3);
-  for (const next of pumps) assert.equal(next.distance, hopOf(STATION, next.id), next.id);
-
-  for (const [names, distance] of [
-    [INNER, 8],
-    [MIDDLE, 12],
-    [OUTER, 16],
-  ]) {
-    let gaps = 0;
-    for (let i = 0; i < names.length; i++) {
-      const next = linksFrom(names[i]).find((hop) => hop.id === names[(i + 1) % names.length]);
-      if (!next) gaps += 1;
-      else assert.equal(next.distance, distance, `${names[i]} ring`);
-    }
-    assert.equal(gaps, 1, names[0]);
-  }
-
-  for (const id of [...INNER, ...MIDDLE, ...OUTER]) {
-    const degree = linksFrom(id).length;
-    assert.ok(degree >= 2 && degree <= 4, `${id} ${degree}`);
-    const fuels = linksFrom(id).filter((next) => node(next.id).shell === "fuel");
-    assert.equal(fuels.length, 1, id);
-    assert.equal(fuels[0].distance, hopOf(id, fuels[0].id), id);
-  }
-
-  for (const id of [DELTA_VEGA, CETI_ALPHA]) {
-    assert.equal(node(id).shell, "fuel");
-    assert.ok(node(id).r > 1 && node(id).r < 4.05, id);
-  }
-
-  const crosses = LINKS.filter((edge) => {
-    const shells = [node(edge.a).shell, node(edge.b).shell];
-    return shells.every((shell) => shell === "inner" || shell === "middle" || shell === "outer") && shells[0] !== shells[1];
-  });
-  assert.equal(crosses.length, 5);
-  for (const edge of crosses) {
-    const shells = [node(edge.a).shell, node(edge.b).shell].sort();
-    assert.equal(edge.distance, shells[1] === "outer" ? 16 : 12, `${edge.a}-${edge.b}`);
-  }
-  assert.equal(new Set(crosses.map((edge) => edge.distance)).size, 2);
-
-  const fuels = NODES.filter((n) => n.shell === "fuel");
-  assert.equal(fuels.length, 36);
-  assert.equal(INNER.length + MIDDLE.length + OUTER.length, 18);
-  for (const fuel of fuels) {
-    const hops = linksFrom(fuel.id);
-    assert.ok(hops.length >= 2 && hops.length <= 4, `${fuel.id} ${hops.length}`);
-    for (const hop of hops) assert.equal(hop.distance, hopOf(fuel.id, hop.id), `${fuel.id}-${hop.id}`);
-  }
-
-  const radii = new Set(fuels.map((n) => n.r.toFixed(2)));
-  assert.ok(radii.size > 8, "fuel worlds sit on a pattern");
-  for (const fuel of fuels) {
-    assert.ok(fuel.r > 1 && fuel.r < 4.05, fuel.id);
-    const nearest = Math.min(
-      ...[...INNER, ...MIDDLE, ...OUTER].map((id) => {
-        const home = node(id);
-        const dx = fuel.r * Math.cos(fuel.angle) - home.r * Math.cos(home.angle);
-        const dy = fuel.r * Math.sin(fuel.angle) - home.r * Math.sin(home.angle);
-        return Math.hypot(dx, dy);
-      }),
-    );
-    assert.ok(nearest < 0.96, `${fuel.id} is outside the habitable gaps`);
-  }
-
-  const tank = new Map([[STATION, START_FUEL]]);
-  const fuelQueue = [STATION];
-  while (fuelQueue.length) {
-    const id = fuelQueue.pop();
-    let have = tank.get(id);
-    if (node(id).shell === "fuel") have = Math.max(have, START_FUEL);
-    for (const hop of linksFrom(id)) {
-      const cost = fuelCost(1, hop.distance);
-      if (have + 1e-9 < cost) continue;
-      let arrive = have - cost;
-      if (node(hop.id).shell === "fuel") arrive = Math.max(arrive, START_FUEL);
-      if ((tank.get(hop.id) ?? -1) >= arrive) continue;
-      tank.set(hop.id, arrive);
-      fuelQueue.push(hop.id);
+  const side = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  for (const [i, e] of LANES.entries()) {
+    for (const f of LANES.slice(i + 1)) {
+      assert.ok(!(e.a === f.a && e.b === f.b) && !(e.a === f.b && e.b === f.a), `${e.a}-${e.b} twice`);
+      if ([e.a, e.b].includes(f.a) || [e.a, e.b].includes(f.b)) continue;
+      const [a, b, c, d] = [e.a, e.b, f.a, f.b].map(xy);
+      assert.ok(!(side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0), `${e.a}-${e.b} crosses ${f.a}-${f.b}`);
     }
   }
-  for (const place of NODES) assert.ok(tank.has(place.id), `${place.id} is not visitable`);
-
-  for (const edge of LINKS) {
-    const forward = linksFrom(edge.a).find((next) => next.id === edge.b);
-    const back = linksFrom(edge.b).find((next) => next.id === edge.a);
-    assert.equal(forward.distance, edge.distance);
-    assert.equal(back.distance, edge.distance);
+  const band = { inner: 16, middle: 24, outer: 32 };
+  for (const lane of LANES) {
+    const out = lane.a === STATION || lane.b === STATION;
+    const length = out ? 10 : Math.max(band[system(lane.a).ring], band[system(lane.b).ring]);
+    assert.equal(lane.distance, length, `${lane.a}-${lane.b}`);
   }
-
-  function walk(steps) {
-    for (let i = 0; i < steps.length - 1; i++) {
-      assert.ok(linksFrom(steps[i]).some((next) => next.id === steps[i + 1]), `${steps[i]}–${steps[i + 1]}`);
-    }
+  const spokes = lanesFrom(STATION);
+  assert.equal(spokes.length, 3);
+  for (const hop of spokes) assert.equal(system(hop.id).ring, "inner");
+  for (const s of SYSTEMS) {
+    const n = lanesFrom(s.id).length;
+    assert.ok(n >= 2 && n <= 4, `${s.id} has ${n} lanes`);
   }
-  walk([STATION, "Denobula", "Orion", "Ferenginar"]);
-  walk([STATION, "Andoria", "P'Jem", "Betazed", "Khitomer", "Remus"]);
-
   const seen = new Set([STATION]);
   const queue = [STATION];
   while (queue.length) {
-    const id = queue.pop();
-    for (const next of linksFrom(id)) {
-      if (seen.has(next.id)) continue;
-      seen.add(next.id);
-      queue.push(next.id);
+    for (const hop of lanesFrom(queue.pop())) {
+      if (seen.has(hop.id)) continue;
+      seen.add(hop.id);
+      queue.push(hop.id);
     }
   }
-  for (const place of NODES) assert.ok(seen.has(place.id), place.id);
-
-  const open = destinations(STATION, ["Earth"]);
-  const openIds = open.map((next) => next.id);
-  assert.ok(openIds.includes("Andoria") && openIds.includes("Denobula"));
-  assert.equal(openIds.filter((id) => node(id).shell === "fuel").length, 3);
-  assert.equal(openIds.includes("Earth"), false);
+  assert.equal(seen.size, SYSTEMS.length + 1);
 });
 
-test("every map in the set is equally fair", async () => {
+test("every load is the same chart, turned and renamed", async () => {
   const real = Math.random;
-  const maps = [];
-  for (let i = 0; i < MAP_SEEDS.length; i++) {
-    Math.random = () => (i + 0.5) / MAP_SEEDS.length; // the load-time pick lands on seed i
+  const loads = [];
+  for (const [i, value] of [0.2, 0.7].entries()) {
+    Math.random = () => value;
     try {
-      maps.push(await import(`./map.js?m=${i}`));
+      loads.push(await import(`./map.js?load=${i}`));
     } finally {
       Math.random = real;
     }
   }
-  assert.equal(new Set(maps.map((m) => JSON.stringify(m.LINKS))).size, MAP_SEEDS.length);
-  for (const [i, m] of maps.entries()) {
-    const seed = MAP_SEEDS[i];
-    // Cheapest route from the station to the outer ring, refuelling only at fuel worlds.
-    const cost = new Map([[m.STATION, 0]]);
-    const hops = new Map([[m.STATION, 0]]);
-    const todo = new Set([m.STATION]);
-    let outer = null;
-    while (todo.size) {
-      const id = [...todo].reduce((a, b) => (cost.get(a) <= cost.get(b) ? a : b));
-      todo.delete(id);
-      const shell = m.shellOf(id);
-      if (shell === "outer") {
-        outer = id;
-        break;
-      }
-      if (id !== m.STATION && shell !== "fuel") continue;
-      for (const hop of m.linksFrom(id)) {
-        const c = cost.get(id) + fuelCost(1, hop.distance);
-        if (cost.has(hop.id) && cost.get(hop.id) <= c) continue;
-        cost.set(hop.id, c);
-        hops.set(hop.id, hops.get(id) + 1);
-        todo.add(hop.id);
-      }
-    }
-    assert.ok(outer, `seed ${seed} reaches the outer ring`);
-    assert.equal(hops.get(outer) - 1, 3, `seed ${seed} fuel stops`);
-    assert.ok(cost.get(outer) >= 24 && cost.get(outer) <= 26, `seed ${seed} costs ${cost.get(outer)}`);
-
-    const seen = new Set([m.STATION]);
-    const queue = [m.STATION];
-    while (queue.length) {
-      for (const next of m.linksFrom(queue.pop())) {
-        if (!seen.has(next.id)) {
-          seen.add(next.id);
-          queue.push(next.id);
-        }
-      }
-    }
-    assert.equal(seen.size, m.NODES.length, `seed ${seed} reaches every world`);
-  }
+  const shape = (m) => ({
+    systems: m.SYSTEMS.map((s) => [s.ring, s.r, m.planetsOf(s.id).map((p) => [p.shell, p.orbit])]),
+    lanes: m.LANES.map((lane) => [m.system(lane.a)?.slot ?? -1, m.system(lane.b).slot, lane.distance]),
+  });
+  assert.deepEqual(shape(loads[0]), shape(loads[1]));
+  assert.notEqual(loads[0].SYSTEMS[0].angle, loads[1].SYSTEMS[0].angle);
+  assert.notDeepEqual(loads[0].SYSTEMS.map((s) => s.id), loads[1].SYSTEMS.map((s) => s.id));
 });
 
-test("planets keep shells and sit off perfect circles", () => {
-  const radii = (names) => names.map((id) => node(id).r);
-  const avg = (xs) => xs.reduce((sum, n) => sum + n, 0) / xs.length;
-  for (const [names, shell] of [
-    [INNER, "inner"],
-    [MIDDLE, "middle"],
-    [OUTER, "outer"],
-  ]) {
-    for (const id of names) assert.equal(node(id).shell, shell);
-    const rs = radii(names);
-    assert.ok(Math.max(...rs) - Math.min(...rs) > 0.2, shell);
-    const angles = names.map((id) => node(id).angle);
-    assert.ok(
-      angles.some((angle, i) => angle !== -Math.PI / 2 + (i * Math.PI) / 2),
-      shell,
-    );
+test("a hop is cheapest when two planets line up and dearest on opposite sides of the sun", () => {
+  const p = PLANETS.find((x) => planetsOf(x.system).length >= 2);
+  const q = planetsOf(p.system).find((x) => x.id !== p.id);
+  const start = orbitAt(p, 0);
+  const round = orbitAt(p, p.period);
+  assert.ok(Math.abs(start.x - round.x) < 1e-6 && Math.abs(start.y - round.y) < 1e-6, "an orbit repeats after one period");
+  assert.ok(Math.abs(Math.hypot(start.x, start.y) - p.orbit) < 1e-9);
+  assert.equal(closestHop(p.id, q.id), Math.abs(p.orbit - q.orbit));
+  assert.equal(closestHop(p.system, q.id), JUMP_R - q.orbit);
+  let lo = Infinity;
+  let hi = 0;
+  for (let ms = 0; ms < 400_000; ms += 250) {
+    const d = hopDistance(p.id, q.id, ms);
+    lo = Math.min(lo, d);
+    hi = Math.max(hi, d);
   }
-  assert.ok(avg(radii(INNER)) < avg(radii(MIDDLE)));
-  assert.ok(avg(radii(MIDDLE)) < avg(radii(OUTER)));
-  assert.equal(node(STATION).r, 0);
-  assert.equal(node(STATION).shell, "station");
-  assert.equal(node(DELTA_VEGA).shell, "fuel");
-  assert.equal(node(CETI_ALPHA).shell, "fuel");
-  assert.equal(NODES.length, 55);
+  assert.ok(lo >= Math.abs(p.orbit - q.orbit) - 1e-9 && lo < Math.abs(p.orbit - q.orbit) + 5, `closest ${lo}`);
+  assert.ok(hi <= p.orbit + q.orbit + 1e-9 && hi > p.orbit + q.orbit - 5, `farthest ${hi}`);
+  assert.equal(hopPower(220), 4.4);
+  assert.equal(hopPower(123), 2.5);
 });
 
 test("ten different fuel rounds, and every card has one right answer among four", async () => {

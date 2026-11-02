@@ -1,328 +1,153 @@
-// Undirected star web. Each world is hand-placed: x = r*cos(angle),
-// y = r*sin(angle), SVG y-down. Shell is the habitability draw, not a shared orbit.
-// Names in a shell run around the chart; the wrap-around is the one gap.
-// The station sits at the origin.
+import { shuffleWith } from "./rules.js";
 
-export const INNER = Object.freeze([
-  "Earth",
-  "Risa",
-  "Andoria",
-  "P'Jem",
-  "Tellar",
-  "Denobula",
-]);
-export const MIDDLE = Object.freeze([
-  "Bajor",
-  "Deneb",
-  "Betazed",
-  "Khitomer",
-  "Trill",
-  "Orion",
-]);
-export const OUTER = Object.freeze([
-  "Qo'noS",
-  "Nimbus",
-  "Romulus",
-  "Remus",
-  "Cardassia",
-  "Ferenginar",
-]);
+// Two maps. The star map holds the station and solar systems, joined by lanes that cost fuel.
+// Inside a system, planets orbit a sun, and a hop between two of them costs power by how far
+// apart they are right now. A system's ring sets its test planets' habitability band and
+// question level, so the outer systems settle most often but cost the most fuel to reach.
 
 export const STATION = "station";
-export const DELTA_VEGA = "Delta Vega";
-export const CETI_ALPHA = "Ceti Alpha";
 
-const MORE_FUEL = Object.freeze([
-  DELTA_VEGA, CETI_ALPHA,
-  "Talos", "Organia", "Cestus", "Regula", "Deneva", "Tarsus", "Janus", "Sherman", "Mudd",
-  "Capella", "Ardana", "Eminiar", "Neural", "Ekos", "Gideon", "Scalos", "Sarpeidon",
-  "Argelius", "Melkot", "Minara", "Aldebaran", "Berengaria", "Izar", "Elas", "Troyius",
-  "Cheron", "Coridan", "Rigel", "Altair", "Antares", "Vega", "Maluria", "Holberg", "Platonius",
-]);
+// One fixed chart, so every run is equally fair: [ring, r, angle, planets from the sun outward],
+// F a fuel planet and T a test planet. x = r*cos(angle), y = r*sin(angle), SVG y-down.
+// 14 test planets (4 inner, 4 middle, 6 outer) keep a simulated typical player winning about half
+// their runs; more of them, or cheaper lanes, make the game much easier.
+const CHART = [
+  ["inner", 0.74, -2.55, "FTF"],
+  ["inner", 1.2, -1.5, "FF"],
+  ["inner", 0.86, -0.45, "FFT"],
+  ["inner", 1.3, 0.6, "FTFF"],
+  ["inner", 0.96, 1.65, "FF"],
+  ["inner", 1.12, 2.7, "TFF"],
+  ["middle", 1.95, -2.1, "FF"],
+  ["middle", 2.5, -1.2, "TF"],
+  ["middle", 2.07, -0.3, "FF"],
+  ["middle", 2.6, 0.59, "FTF"],
+  ["middle", 2.15, 1.49, "FFT"],
+  ["middle", 2.45, 2.39, "TF"],
+  ["middle", 2.3, 3.29, "FFF"],
+  ["outer", 3.48, -2.33, "TF"],
+  ["outer", 4.2, -1.54, "FF"],
+  ["outer", 3.65, -0.76, "FTF"],
+  ["outer", 4.28, 0.03, "FF"],
+  ["outer", 3.78, 0.81, "FTT"],
+  ["outer", 4.05, 1.6, "FT"],
+  ["outer", 3.6, 2.38, "TF"],
+  ["outer", 4.15, 3.17, "FF"],
+];
 
-function at(id, shell, r, angle) {
-  return Object.freeze({ id, shell, r, angle });
+// Lanes by CHART row; -1 is the station. Each ring is joined with one gap, plus a few lanes between rings.
+const LANE_ROWS = [
+  [-1, 0], [-1, 2], [-1, 5],
+  [0, 1], [1, 2], [2, 3], [3, 4], [4, 5],
+  [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 12],
+  [13, 14], [14, 15], [15, 16], [16, 17], [17, 18], [18, 19], [19, 20],
+  [1, 7], [3, 9], [4, 10],
+  [6, 13], [9, 17], [11, 19], [12, 20],
+];
+
+// Lane length: 10 out of the station, otherwise by the farther ring. Fuel = variable × length × 0.5,
+// so lanes cost 8, 12 or 16 fuel: refuelling inside a system is cheap, so the lanes carry the cost.
+const BAND = { inner: 16, middle: 24, outer: 32 };
+
+const STARS = [
+  "Sirius", "Procyon", "Arcturus", "Polaris", "Canopus", "Achernar", "Fomalhaut", "Spica",
+  "Kochab", "Castor", "Pollux", "Mira", "Alcyone", "Bellatrix", "Mintaka", "Shaula",
+  "Hadar", "Mimosa", "Algol", "Mizar", "Thuban", "Albireo", "Merak", "Wolf 359",
+];
+const TEST_NAMES = [
+  "Earth", "Risa", "Andoria", "P'Jem", "Tellar", "Denobula", "Bajor", "Deneb", "Betazed", "Khitomer",
+  "Trill", "Orion", "Qo'noS", "Nimbus", "Romulus", "Remus", "Cardassia", "Ferenginar", "Ocampa", "Talax",
+];
+const FUEL_NAMES = [
+  "Delta Vega", "Ceti Alpha", "Talos", "Organia", "Cestus", "Regula", "Deneva", "Tarsus", "Janus",
+  "Sherman", "Mudd", "Capella", "Ardana", "Eminiar", "Neural", "Ekos", "Gideon", "Scalos", "Sarpeidon",
+  "Argelius", "Melkot", "Minara", "Aldebaran", "Berengaria", "Izar", "Elas", "Troyius", "Cheron",
+  "Coridan", "Rigel", "Altair", "Antares", "Vega", "Maluria", "Holberg", "Platonius", "Excalbia", "Gothos",
+];
+
+// Each load turns the chart, mirrors it half the time and shuffles the names: the same map
+// to play, but a route can't be passed from one player to the next.
+const turn = Math.random() * 2 * Math.PI;
+const flip = Math.random() < 0.5 ? -1 : 1;
+const stars = shuffleWith(STARS, Math.random);
+const tests = shuffleWith(TEST_NAMES, Math.random);
+const fuels = shuffleWith(FUEL_NAMES, Math.random);
+
+export const SYSTEMS = Object.freeze(
+  CHART.map(([ring, r, angle], slot) => Object.freeze({ id: stars[slot], ring, r, angle: flip * angle + turn, slot })),
+);
+
+// Orbits are 50 apart, starting 70 from the sun; inner planets go round faster.
+export const PLANETS = Object.freeze(
+  CHART.flatMap(([ring, , , kinds], slot) =>
+    [...kinds].map((kind, i) => {
+      const orbit = 70 + 50 * i;
+      return Object.freeze({
+        id: kind === "T" ? tests.pop() : fuels.pop(),
+        system: SYSTEMS[slot].id,
+        shell: kind === "T" ? ring : "fuel",
+        orbit,
+        period: 24_000 * (orbit / 70) ** 1.5,
+        phase: Math.random() * 2 * Math.PI,
+      });
+    }),
+  ),
+);
+
+const idOf = (row) => (row < 0 ? STATION : SYSTEMS[row].id);
+export const LANES = Object.freeze(
+  LANE_ROWS.map(([a, b]) =>
+    Object.freeze({
+      a: idOf(a),
+      b: idOf(b),
+      distance: a < 0 ? 10 : Math.max(BAND[CHART[a][0]], BAND[CHART[b][0]]),
+    }),
+  ),
+);
+
+export function system(id) {
+  return SYSTEMS.find((s) => s.id === id) ?? null;
 }
 
-function dist2(a, b) {
-  const dx = a.r * Math.cos(a.angle) - b.r * Math.cos(b.angle);
-  const dy = a.r * Math.sin(a.angle) - b.r * Math.sin(b.angle);
-  return dx * dx + dy * dy;
+export function planet(id) {
+  return PLANETS.find((p) => p.id === id) ?? null;
 }
 
-const HABITABLE = [
-  ["Earth", "inner", 0.74, -2.55],
-  ["Risa", "inner", 1.2, -1.5],
-  ["Andoria", "inner", 0.86, -0.45],
-  ["P'Jem", "inner", 1.3, 0.6],
-  ["Tellar", "inner", 0.96, 1.65],
-  ["Denobula", "inner", 1.12, 2.7],
-  ["Bajor", "middle", 1.95, -2.1],
-  ["Deneb", "middle", 2.5, -1.05],
-  ["Betazed", "middle", 2.07, 0],
-  ["Khitomer", "middle", 2.63, 1.05],
-  ["Trill", "middle", 2.15, 2.1],
-  ["Orion", "middle", 2.45, 3.15],
-  ["Qo'noS", "outer", 3.48, -2.33],
-  ["Nimbus", "outer", 4.2, -1.28],
-  ["Romulus", "outer", 3.65, -0.23],
-  ["Remus", "outer", 4.28, 0.82],
-  ["Cardassia", "outer", 3.78, 1.87],
-  ["Ferenginar", "outer", 4.05, 2.92],
-].map(([id, shell, r, angle]) => at(id, shell, r, angle));
-
-const meanR = (shell) => {
-  const worlds = HABITABLE.filter((world) => world.shell === shell);
-  return worlds.reduce((sum, world) => sum + world.r, 0) / worlds.length;
-};
-const nearMiddle = (meanR("inner") + meanR("middle")) / 2;
-const nearOuter = (meanR("middle") + meanR("outer")) / 2;
-
-// Each load picks one of a few seeded maps that simulate the same (outer ring 24–26 fuel and
-// 3 fuel stops out, equal win rates and finish times), so runs on the board stay comparable.
-// Add a seed only after the same check.
-export const MAP_SEEDS = Object.freeze([45, 68, 85, 104, 139]);
-const MAP_SEED = MAP_SEEDS[Math.floor(Math.random() * MAP_SEEDS.length)];
-
-function scatterFuel() {
-  let seed = MAP_SEED;
-  const random = () => {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-  const placed = [];
-  let guard = 0;
-  while (placed.length < MORE_FUEL.length && guard < 8000) {
-    guard += 1;
-    const a = HABITABLE[Math.floor(random() * HABITABLE.length)];
-    let b = HABITABLE[Math.floor(random() * HABITABLE.length)];
-    if (a.id === b.id) continue;
-    const t = 0.28 + random() * 0.44;
-    const ax = a.r * Math.cos(a.angle);
-    const ay = a.r * Math.sin(a.angle);
-    const bx = b.r * Math.cos(b.angle);
-    const by = b.r * Math.sin(b.angle);
-    const dx = bx - ax;
-    const dy = by - ay;
-    const len = Math.hypot(dx, dy) || 1;
-    const j = (random() - 0.5) * 0.45;
-    const x = ax + dx * t + (-dy / len) * j;
-    const y = ay + dy * t + (dx / len) * j;
-    const spot = { r: Math.hypot(x, y), angle: Math.atan2(y, x) };
-    if (spot.r < 1.02 || spot.r > 4.02) continue;
-    const near = Math.min(...HABITABLE.map((h) => dist2(spot, h)));
-    if (near < 0.26 * 0.26 || near > 0.95 * 0.95) continue;
-    if (placed.some((p) => dist2(spot, p) < 0.42 * 0.42)) continue;
-    placed.push(at(MORE_FUEL[placed.length], "fuel", spot.r, spot.angle));
-  }
-  if (placed.length !== MORE_FUEL.length) throw new Error("could not place fuel worlds");
-  return placed;
+export function planetsOf(id) {
+  return PLANETS.filter((p) => p.system === id);
 }
 
-const extraFuel = scatterFuel();
-
-export const NODES = Object.freeze([at(STATION, "station", 0, 0), ...HABITABLE, ...extraFuel]);
-
-const atNode = new Map(NODES.map((n) => [n.id, n]));
-
-const STATION_HOMES = ["Earth", "Andoria", "Denobula"];
-const links = [];
-
-function band(id) {
-  if (INNER.includes(id)) return 8;
-  if (MIDDLE.includes(id)) return 12;
-  if (OUTER.includes(id)) return 16;
-  const r = atNode.get(id).r;
-  if (r < nearMiddle) return 8;
-  if (r < nearOuter) return 12;
-  return 16;
-}
-
-function hopDistance(a, b) {
-  const spoke = a === STATION ? b : b === STATION ? a : null;
-  if (spoke) return STATION_HOMES.includes(spoke) ? 10 : band(spoke);
-  const farther = atNode.get(a).r >= atNode.get(b).r ? a : b;
-  return band(farther);
-}
-
-function link(a, b) {
-  links.push(Object.freeze({ a, b, distance: hopDistance(a, b) }));
-}
-
-function brokenRing(names) {
-  for (let i = 0; i < names.length - 1; i++) link(names[i], names[i + 1]);
-}
-
-for (const planet of STATION_HOMES) link(STATION, planet);
-brokenRing(INNER);
-brokenRing(MIDDLE);
-brokenRing(OUTER);
-for (const [a, b] of [
-  ["P'Jem", "Betazed"],
-  ["Denobula", "Orion"],
-  ["Bajor", "Qo'noS"],
-  ["Khitomer", "Remus"],
-  ["Orion", "Ferenginar"],
-]) {
-  link(a, b);
-}
-
-const fuelDegree = new Map(extraFuel.map((n) => [n.id, 0]));
-function xy(id) {
-  const n = atNode.get(id);
-  return { x: n.r * Math.cos(n.angle), y: n.r * Math.sin(n.angle) };
-}
-function blocks(aId, bId) {
-  const a = xy(aId);
-  const b = xy(bId);
-  return links.some((edge) => {
-    if (edge.a === aId || edge.b === aId || edge.a === bId || edge.b === bId) return false;
-    const c = xy(edge.a);
-    const d = xy(edge.b);
-    const o1 = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-    const o2 = (b.x - a.x) * (d.y - a.y) - (b.y - a.y) * (d.x - a.x);
-    const o3 = (d.x - c.x) * (a.y - c.y) - (d.y - c.y) * (a.x - c.x);
-    const o4 = (d.x - c.x) * (b.y - c.y) - (d.y - c.y) * (b.x - c.x);
-    return o1 * o2 < 0 && o3 * o4 < 0;
-  });
-}
-function join(a, b) {
-  link(a, b);
-  if (fuelDegree.has(a)) fuelDegree.set(a, fuelDegree.get(a) + 1);
-  if (fuelDegree.has(b)) fuelDegree.set(b, fuelDegree.get(b) + 1);
-}
-
-const parent = new Map(extraFuel.map((n) => [n.id, n.id]));
-function find(id) {
-  let root = id;
-  while (parent.get(root) !== root) root = parent.get(root);
-  return root;
-}
-function unite(a, b) {
-  parent.set(find(a), find(b));
-}
-
-const pairs = [];
-for (let i = 0; i < extraFuel.length; i++) {
-  for (let j = i + 1; j < extraFuel.length; j++) {
-    pairs.push([dist2(extraFuel[i], extraFuel[j]), extraFuel[i], extraFuel[j]]);
-  }
-}
-pairs.sort((a, b) => a[0] - b[0]);
-for (const [, a, b] of pairs) {
-  if (find(a.id) === find(b.id)) continue;
-  if (fuelDegree.get(a.id) >= 2 || fuelDegree.get(b.id) >= 2) continue;
-  if (blocks(a.id, b.id)) continue;
-  join(a.id, b.id);
-  unite(a.id, b.id);
-}
-for (const [, a, b] of pairs) {
-  if (find(a.id) === find(b.id)) continue;
-  if (fuelDegree.get(a.id) >= 3 || fuelDegree.get(b.id) >= 3) continue;
-  if (blocks(a.id, b.id)) continue;
-  join(a.id, b.id);
-  unite(a.id, b.id);
-}
-for (const [, a, b] of pairs) {
-  if (find(a.id) === find(b.id)) continue;
-  if (fuelDegree.get(a.id) >= 3 || fuelDegree.get(b.id) >= 3) continue;
-  join(a.id, b.id);
-  unite(a.id, b.id);
-}
-
-const usedFuel = new Set();
-const homes = [...HABITABLE].sort((a, b) => a.id.localeCompare(b.id));
-for (const home of homes) {
-  let best = null;
-  let bestScore = Infinity;
-  for (const fuel of extraFuel) {
-    if (usedFuel.has(fuel.id) || fuelDegree.get(fuel.id) >= 3 || blocks(home.id, fuel.id)) continue;
-    const score = dist2(home, fuel);
-    if (score < bestScore) {
-      bestScore = score;
-      best = fuel;
-    }
-  }
-  if (!best) {
-    for (const fuel of extraFuel) {
-      if (usedFuel.has(fuel.id) || fuelDegree.get(fuel.id) >= 3) continue;
-      const score = dist2(home, fuel);
-      if (score < bestScore) {
-        bestScore = score;
-        best = fuel;
-      }
-    }
-  }
-  if (!best) throw new Error(`no fuel stop for ${home.id}`);
-  usedFuel.add(best.id);
-  join(home.id, best.id);
-}
-
-function alreadyLinked(a, b) {
-  return links.some((edge) => (edge.a === a && edge.b === b) || (edge.a === b && edge.b === a));
-}
-for (const fuel of extraFuel) {
-  if (fuelDegree.get(fuel.id) >= 2) continue;
-  let best = null;
-  let bestD = Infinity;
-  for (const other of extraFuel) {
-    if (other.id === fuel.id || alreadyLinked(fuel.id, other.id) || fuelDegree.get(other.id) >= 3) continue;
-    if (blocks(fuel.id, other.id)) continue;
-    const d = dist2(fuel, other);
-    if (d < bestD) {
-      bestD = d;
-      best = other;
-    }
-  }
-  if (!best) {
-    for (const other of extraFuel) {
-      if (other.id === fuel.id || alreadyLinked(fuel.id, other.id) || fuelDegree.get(other.id) >= 3) continue;
-      const d = dist2(fuel, other);
-      if (d < bestD) {
-        bestD = d;
-        best = other;
-      }
-    }
-  }
-  if (!best) throw new Error(`fuel stop ${fuel.id} is stranded`);
-  join(fuel.id, best.id);
-}
-
-const gates = [...extraFuel].sort((a, b) => a.r - b.r);
-const firstFuel = [];
-for (const fuel of gates) {
-  if (firstFuel.length === 3) break;
-  if (blocks(STATION, fuel.id)) continue;
-  firstFuel.push(fuel);
-}
-for (const fuel of gates) {
-  if (firstFuel.length === 3) break;
-  if (firstFuel.includes(fuel)) continue;
-  firstFuel.push(fuel);
-}
-for (const fuel of firstFuel) link(STATION, fuel.id);
-
-export const LINKS = Object.freeze(links);
-
-export function node(id) {
-  return NODES.find((n) => n.id === id) ?? null;
-}
-
-export function shellOf(id) {
-  return node(id)?.shell ?? null;
-}
-
-export function linksFrom(id) {
+export function lanesFrom(id) {
   const out = [];
-  for (const edge of LINKS) {
-    if (edge.a === id) out.push({ id: edge.b, distance: edge.distance });
-    else if (edge.b === id) out.push({ id: edge.a, distance: edge.distance });
+  for (const lane of LANES) {
+    if (lane.a === id) out.push({ id: lane.b, distance: lane.distance });
+    else if (lane.b === id) out.push({ id: lane.a, distance: lane.distance });
   }
   return out;
 }
 
-/** Open destinations. A closed planet cannot be chosen; other links stay. */
-export function destinations(from, closed = []) {
-  const shut = new Set(closed);
-  return linksFrom(from).filter((next) => !shut.has(next.id));
+// Inside a system the ship arrives at a jump point this far left of the sun.
+export const JUMP_R = 290;
+
+/** Where a planet is at wall-clock time ms, in system units around its sun. */
+export function orbitAt(p, ms) {
+  const a = p.phase - (2 * Math.PI * ms) / p.period;
+  return { x: p.orbit * Math.cos(a), y: p.orbit * Math.sin(a) };
+}
+
+/** A planet's spot at ms, or the jump point for a system id. */
+export function positionAt(id, ms) {
+  const p = planet(id);
+  return p ? orbitAt(p, ms) : { x: -JUMP_R, y: 0 };
+}
+
+export function hopDistance(from, to, ms) {
+  const a = positionAt(from, ms);
+  const b = positionAt(to, ms);
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/** The shortest a hop gets, when the two line up on the same side of the sun. */
+export function closestHop(from, to) {
+  return Math.abs((planet(from)?.orbit ?? JUMP_R) - planet(to).orbit);
 }

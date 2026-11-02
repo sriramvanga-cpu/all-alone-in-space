@@ -17,21 +17,30 @@ import {
   TOXIC_LIMIT,
   STREAK,
   fuelStreak,
-  SCAN_FUEL,
+  SCAN_POWER,
   secondSite,
+  START_POWER,
+  POWER_CAP,
+  POWER_TICK_MS,
+  MAP_SCAN_POWER,
+  hopPower,
 } from "./game/rules.js";
 import { FUEL_ROUNDS } from "./game/fuelRounds.js";
 import { EVENT_CHANCE, FLIGHT_EVENTS, canTake } from "./game/events.js";
 import { engine, sfx } from "./sound.js";
 import {
-  INNER,
-  MIDDLE,
-  OUTER,
   STATION,
-  LINKS,
-  NODES,
-  shellOf,
-  destinations,
+  SYSTEMS,
+  PLANETS,
+  LANES,
+  JUMP_R,
+  system,
+  planet,
+  planetsOf,
+  lanesFrom,
+  orbitAt,
+  positionAt,
+  hopDistance,
 } from "./game/map.js";
 import bank from "./data/questions.json";
 import SpaceBackdrop from "./art/SpaceBackdrop.jsx";
@@ -39,21 +48,26 @@ import { SAUCER_X, ShipShapes, ShipSvg } from "./art/Ship.jsx";
 import Intro from "./intro/Intro.jsx";
 import { Starbase } from "./art/Station.jsx";
 import { PlanetDot, faceOf } from "./art/Planet.jsx";
-import { MapDefs, MapBackdrop } from "./art/MapArt.jsx";
+import { MapDefs, MapBackdrop, StarDot } from "./art/MapArt.jsx";
 import { publishArt, webglAvailable } from "./three/artStore.js";
-import { FuelIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipIcon } from "./art/icons.jsx";
+import { FuelIcon, PowerIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipIcon } from "./art/icons.jsx";
 
 const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 const PENDING = "aais-pending-scores";
 const SCALE = 190;
 const FLIGHT_MS = 2400;
+const HOP_MS = 1600;
 const VIEW_W = 720;
 const VIEW_H = 640;
+const SWEEP_MS = 1200;
+const STAR_R = 11;
+const SUN_R = 34;
 const WORLD = 900;
 const ROUND_MS = 15 * 60 * 1000;
 const QUESTION_MS = 60_000;
-const FUEL_WORLDS = new Set(NODES.filter((n) => n.shell === "fuel").map((n) => n.id));
-const FACES = new Map(NODES.filter((n) => n.id !== STATION).map((n) => [n.id, faceOf(n)]));
+const FUEL_WORLDS = new Set(PLANETS.filter((p) => p.shell === "fuel").map((p) => p.id));
+const FACES = new Map(PLANETS.map((p) => [p.id, faceOf(p)]));
+const DROP = "M0 -4.8C2.7 -1 4 1 4 2.7A4 4 0 0 1 -4 2.7C-4 1 -2.7 -1 0 -4.8Z";
 // Realistic map art renders in the background; the map shows vector art until it lands.
 if (webglAvailable()) {
   // While the realistic ship renders, show no ship rather than flash the old vector one.
@@ -65,8 +79,6 @@ if (webglAvailable()) {
       publishArt({ loading: false });
     });
 }
-// Zoomed out past this width, planets drop to simple lit discs so panning stays smooth.
-const DETAIL_W = 1100;
 
 const DOMAINS = [
   ["general", "General knowledge"],
@@ -77,8 +89,7 @@ const DOMAINS = [
 const END_COPY = {
   win: "A world will take you.",
   time: "Fifteen minutes are up.",
-  stranded: "No open route you can afford.",
-  closed: "Every route from here leads to a closed world.",
+  stranded: "No lane you can afford, and no planet left here.",
 };
 // A reload in these phases throws the run away, so the browser asks first.
 const LIVE_PHASES = new Set(["map", "fly", "pick", "question", "land", "scan", "fuel", "shop"]);
@@ -143,17 +154,12 @@ function bend(a, b) {
   };
 }
 
-const POS = Object.fromEntries(
-  NODES.map((n) => [
-    n.id,
-    {
-      x: round2(n.r * SCALE * Math.cos(n.angle)),
-      y: round2(n.r * SCALE * Math.sin(n.angle)),
-    },
-  ]),
-);
+const POS = Object.fromEntries([
+  [STATION, { x: 0, y: 0 }],
+  ...SYSTEMS.map((s) => [s.id, { x: round2(s.r * SCALE * Math.cos(s.angle)), y: round2(s.r * SCALE * Math.sin(s.angle)) }]),
+]);
 
-const ROUTES = LINKS.map((edge) => ({ ...edge, ...bend(POS[edge.a], POS[edge.b]) }));
+const ROUTES = LANES.map((edge) => ({ ...edge, ...bend(POS[edge.a], POS[edge.b]) }));
 
 function routePath(from, to) {
   const edge = ROUTES.find(
@@ -169,13 +175,31 @@ function heading(id) {
   return Math.round((Math.atan2(p.y, p.x) * 180) / Math.PI);
 }
 
-function linkOpen(edge, here, closed) {
-  const shut = new Set(closed);
-  const a = shut.has(edge.a);
-  const b = shut.has(edge.b);
-  if (!a && !b) return true;
-  if (a && b) return false;
-  return (a && edge.a === here) || (b && edge.b === here);
+// Where a click can fly at time ms: inside a system, its open planets, priced in power by how far
+// apart they are right then; on the star map, the lanes a scan has revealed, priced in fuel.
+function moves(g, ms = Date.now()) {
+  if (g.system) {
+    return planetsOf(g.system)
+      .filter((p) => p.id !== g.here && !g.closed.includes(p.id))
+      .map((p) => ({ id: p.id, power: hopPower(hopDistance(g.here, p.id, ms)) }));
+  }
+  const seen = new Set(g.scanned);
+  return lanesFrom(g.here)
+    .filter((hop) => seen.has(g.here) || seen.has(hop.id))
+    .map((hop) => ({ id: hop.id, distance: hop.distance, fuel: fare(g.variable, hop.distance) }));
+}
+
+// Lane lengths out of the system you're at or in.
+function laneExits(g) {
+  return lanesFrom(g.system ?? g.here).map((hop) => hop.distance);
+}
+
+// Out of moves: no lane is affordable (hidden ones count, since a scan or a recharge is always
+// possible) and no planet is left open here. Power never strands you: a system recharges it.
+function stuck(g) {
+  const at = g.system ?? g.here;
+  if (laneExits(g).some((d) => fare(g.variable, d) <= g.fuel + 1e-9)) return false;
+  return !planetsOf(at).some((p) => p.id !== g.here && !g.closed.includes(p.id));
 }
 
 function fresh() {
@@ -184,7 +208,13 @@ function fresh() {
     name: "",
     phone: "",
     here: STATION,
+    // The system you're inside (its planetary map is showing), or null on the star map.
+    system: null,
+    // Star-map spots you've scanned from; the systems one lane from them are on the chart.
+    scanned: [],
+    scanAt: 0,
     fuel: START_FUEL,
+    power: START_POWER,
     credits: START_CREDITS,
     variable: START_VARIABLE,
     closed: [],
@@ -485,10 +515,11 @@ function Board() {
 
 const BRIEF = [
   ["Goal", "Land on a planet that will take you within 15 minutes."],
-  ["Fly", `Tap a glowing planet. You start with ${START_FUEL} fuel; each route shows its cost. Some flights bring a surprise.`],
-  ["Test", `On a ! planet, answer one question. Right: 15 credits, then land blind, or pay ${SCAN_FUEL} fuel to scan for a second landing site. Wrong: fuel costs rise.`],
-  ["Go far", "Outer planets are easier to settle but cost more fuel to reach."],
-  ["Refuel", `On a fuel-drop planet, play a one-minute challenge for credits (a new one at every stop; ${STREAK} right in a row earns a bonus), then buy fuel.`],
+  ["Explore", `The star chart starts dark. Scan (${MAP_SCAN_POWER} power) to find the solar systems one lane away, then fly a lane to one. Lanes cost fuel; you start with ${START_FUEL}. Some flights bring a surprise.`],
+  ["Orbit", `Inside a system, planets circle the sun. A hop between them costs power: more when they are far apart, less when they line up. You start with ${START_POWER}; the sun recharges it while you're in a system, and shops sell more.`],
+  ["Test", `On a ! planet, answer one question. Right: 15 credits, then land blind, or pay ${SCAN_POWER} power to scan for a second landing site. Wrong: fuel costs rise.`],
+  ["Go far", "Outer systems are easier to settle but cost more fuel to reach."],
+  ["Refuel", `On a fuel-drop planet, play a one-minute challenge for credits (a new one at every stop; ${STREAK} right in a row earns a bonus), then buy fuel or power.`],
   ["Once only", "Each planet can be tried once. Run out of fuel or time and the run ends."],
   ["Score", "Settling beats every loss. Faster wins with more fuel left rank higher."],
 ];
@@ -613,18 +644,42 @@ function fit(origin, size) {
   return Math.max(-WORLD, Math.min(hi, origin));
 }
 
-function MapView({ snap, shipRef, onLaunch, view, onView, children }) {
+function Ship({ at, angle }) {
+  return (
+    <g transform={`translate(${round2(at.x)} ${round2(at.y)}) rotate(${Math.round(angle)})`}>
+      <svg className="ship" viewBox="-24 -11 46 22" x="-22" y="-11" width="44" height="22" overflow="visible">
+        <ShipShapes />
+      </svg>
+    </g>
+  );
+}
+
+function CostPill({ text, x, y, power = false }) {
+  const w = 14 + text.length * 7;
+  return (
+    <g className={power ? "cost hot power" : "cost hot"} transform={`translate(${x} ${y})`}>
+      <rect x={-w / 2} y="-9" width={w} height="18" rx="9" />
+      <text y="4" textAnchor="middle">
+        {text}
+      </text>
+    </g>
+  );
+}
+
+// The star map: the station and the systems you have found. A scan reveals the systems one
+// lane away and the lanes to them; whatever you have found stays on the chart.
+function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
   const stageRef = useRef(null);
   const drag = useRef(null);
   const moved = useRef(false);
   const viewRef = useRef(view);
   viewRef.current = view;
-  const viewer = snap.phase === "fly" && snap.flight ? snap.flight.from : snap.here;
-  const options = destinations(viewer, snap.closed);
-  const byId = new Map(options.map((d) => [d.id, d]));
-  const shut = new Set(snap.closed);
   const flying = snap.phase === "fly" && snap.flight;
-  const detail = view.w <= DETAIL_W;
+  const viewer = flying ? snap.flight.from : snap.here;
+  const scanned = new Set(snap.scanned);
+  const shown = new Set([STATION, snap.here, ...snap.scanned.flatMap((id) => [id, ...lanesFrom(id).map((hop) => hop.id)])]);
+  const options = snap.phase === "map" ? moves(snap) : [];
+  const byId = new Map(options.map((m) => [m.id, m]));
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -696,16 +751,13 @@ function MapView({ snap, shipRef, onLaunch, view, onView, children }) {
       {flying ? (
         <path id="flight" d={snap.flight.d} fill="none" stroke="none" pointerEvents="none" />
       ) : null}
-      {ROUTES.map((edge) => {
-        const open = linkOpen(edge, viewer, snap.closed);
-        const hot = open && (edge.a === viewer || edge.b === viewer);
+      {ROUTES.filter((edge) => scanned.has(edge.a) || scanned.has(edge.b)).map((edge) => {
+        const hot = edge.a === viewer || edge.b === viewer;
         const onRoute =
           snap.flight &&
           ((edge.a === snap.flight.from && edge.b === snap.flight.to) ||
             (edge.a === snap.flight.to && edge.b === snap.flight.from));
-        const cls = ["link", `d${edge.distance}`, open ? "" : "shut", hot ? "hot" : "", onRoute ? "onroute" : ""]
-          .filter(Boolean)
-          .join(" ");
+        const cls = ["link", `d${edge.distance}`, hot ? "hot" : "", onRoute ? "onroute" : ""].filter(Boolean).join(" ");
         const outward = edge.a === viewer ? edge.d : edge.rev;
         return (
           <g key={`${edge.a}-${edge.b}`}>
@@ -720,35 +772,33 @@ function MapView({ snap, shipRef, onLaunch, view, onView, children }) {
           className="streak"
           d={snap.flight.d}
           pathLength="100"
-          style={{ animationDuration: `${FLIGHT_MS}ms`, animationPlayState: snap.flight.paused ? "paused" : undefined }}
+          style={{ animationDuration: `${snap.flight.ms}ms`, animationPlayState: snap.flight.paused ? "paused" : undefined }}
         />
       ) : null}
-      {NODES.map((n) => {
-        const p = POS[n.id];
-        const dest = byId.get(n.id);
-        const cost = dest ? fare(snap.variable, dest.distance) : null;
-        const ready = snap.phase === "map" && cost != null && cost <= snap.fuel + 1e-9;
-        const face = n.id === STATION ? null : FACES.get(n.id);
-        const hab = HAB_LEVEL[n.shell];
-        const classes = [
-          "node",
-          `node-${n.shell}`,
-          n.id === viewer ? "here" : "",
-          shut.has(n.id) ? "shut" : "",
-          ready ? "ready" : "",
-        ]
+      {now - snap.scanAt < SWEEP_MS ? (
+        <circle key={snap.scanAt} className="sweep" cx={POS[snap.here].x} cy={POS[snap.here].y} r="420" />
+      ) : null}
+      {[STATION, ...SYSTEMS.map((s) => s.id)].filter((id) => shown.has(id)).map((id) => {
+        const p = POS[id];
+        const s = system(id);
+        const move = byId.get(id);
+        const ready = move != null && move.fuel <= snap.fuel + 1e-9;
+        const planets = s ? planetsOf(id) : [];
+        const hab = planets.some((pl) => pl.shell !== "fuel") ? HAB_LEVEL[s.ring] : null;
+        const name = id === STATION ? "Station" : id;
+        const classes = ["node", s ? `node-${s.ring} system` : "node-station", id === viewer ? "here" : "", ready ? "ready" : ""]
           .filter(Boolean)
           .join(" ");
         return (
           <g
-            key={n.id}
+            key={id}
             className={classes}
             transform={`translate(${p.x} ${p.y})`}
             role={ready ? "button" : undefined}
             tabIndex={ready ? 0 : undefined}
             aria-label={
               ready
-                ? `Fly to ${n.id === STATION ? "the station" : n.id}, ${fmtNum(cost)} fuel${hab ? `, habitability ${hab}` : ""}`
+                ? `Fly to ${id === STATION ? "the station" : id}, ${fmtNum(move.fuel)} fuel${hab ? `, habitability ${hab}` : ""}`
                 : undefined
             }
             onClick={() => {
@@ -756,96 +806,211 @@ function MapView({ snap, shipRef, onLaunch, view, onView, children }) {
                 moved.current = false;
                 return;
               }
-              if (ready) onLaunch(dest);
+              if (ready) onLaunch(id);
             }}
             onKeyDown={(e) => {
               if (!ready || (e.key !== "Enter" && e.key !== " ")) return;
               e.preventDefault();
-              onLaunch(dest);
+              onLaunch(id);
             }}
           >
             <title>
-              {n.id === STATION ? "Station" : n.id}
+              {name}
               {hab ? `, habitability ${hab}` : ""}
-              {cost != null ? `, ${fmtNum(cost)} fuel${ready ? "" : ", not enough fuel"}` : ""}
+              {move ? `, ${fmtNum(move.fuel)} fuel${ready ? "" : ", not enough fuel"}` : ""}
             </title>
-            {n.id === STATION ? (
+            {id === STATION ? (
               <>
                 <circle className="hit" r="30" />
                 <Starbase x="-32" y="-32" width="64" height="64" />
-                {n.id === viewer ? <circle className="here-ring" r="37" /> : null}
+                {id === viewer ? <circle className="here-ring" r="37" /> : null}
                 {ready ? <circle className="ready-ring" r="38" /> : null}
               </>
             ) : (
               <>
-                <circle className="hit" r={Math.max(14, face.radius + 3)} />
-                <PlanetDot face={face} detail={detail} shut={shut.has(n.id)} />
-                {n.id === viewer ? <circle className="here-ring" r={face.radius + 5} /> : null}
-                {ready ? <circle className="ready-ring" r={face.radius + 7} /> : null}
+                <circle className="hit" r={STAR_R + 12} />
+                <StarDot name={id} r={STAR_R} />
+                {id === viewer ? <circle className="here-ring" r={STAR_R + 8} /> : null}
+                {ready ? <circle className="ready-ring" r={STAR_R + 10} /> : null}
+                <g className="sys-planets" transform={`translate(0 ${STAR_R + 16})`} aria-hidden="true">
+                  {planets.map((pl, i) => (
+                    <g
+                      key={pl.id}
+                      className={snap.closed.includes(pl.id) ? "used" : undefined}
+                      transform={`translate(${(i - (planets.length - 1) / 2) * 14} 0)`}
+                    >
+                      {pl.shell === "fuel" ? (
+                        <path className="fuel-badge" d={DROP} transform="scale(1.15)" />
+                      ) : (
+                        <>
+                          <circle className="beacon-bg" r="5.6" />
+                          <text className="beacon-mark" y="3.2" textAnchor="middle">
+                            !
+                          </text>
+                        </>
+                      )}
+                    </g>
+                  ))}
+                </g>
                 {hab ? (
-                  <text className={`hab-tag hab-${hab.toLowerCase()}`} y={face.radius + 15} textAnchor="middle" aria-hidden="true">
+                  <text className={`hab-tag hab-${hab.toLowerCase()}`} y={STAR_R + 36} textAnchor="middle" aria-hidden="true">
                     Habitability: {hab}
                   </text>
-                ) : null}
-                {hab ? (
-                  <g className="beacon" transform={`translate(0 ${-(face.radius + 25)})`} aria-hidden="true">
-                    <circle className="beacon-pulse" r="6.5" />
-                    <circle className="beacon-bg" r="6.5" />
-                    <text className="beacon-mark" y="3.3" textAnchor="middle">
-                      !
-                    </text>
-                  </g>
-                ) : null}
-                {n.shell === "fuel" ? (
-                  <path
-                    className="fuel-badge"
-                    transform={`translate(${face.radius * 0.72 + 4} ${-(face.radius * 0.72 + 4)})`}
-                    d="M0 -4.8C2.7 -1 4 1 4 2.7A4 4 0 0 1 -4 2.7C-4 1 -2.7 -1 0 -4.8Z"
-                    aria-hidden="true"
-                  />
                 ) : null}
               </>
             )}
             <text
               className="node-label"
-              y={-(n.id === STATION ? 26 : face.radius + 3)}
+              y={-(id === STATION ? 26 : STAR_R + 5)}
               textAnchor="middle"
               dominantBaseline="text-after-edge"
             >
-              {n.id === STATION ? "Station" : n.id}
+              {name}
             </text>
           </g>
         );
       })}
-      {snap.phase === "map"
-        ? ROUTES.map((edge) => {
-            const open = linkOpen(edge, snap.here, snap.closed);
-            if (!open || (edge.a !== snap.here && edge.b !== snap.here)) return null;
-            const text = fmtNum(fare(snap.variable, edge.distance));
-            const w = 14 + text.length * 7;
-            return (
-              <g key={`cost-${edge.a}-${edge.b}`} className="cost hot" transform={`translate(${edge.mid.x} ${edge.mid.y})`}>
-                <rect x={-w / 2} y="-9" width={w} height="18" rx="9" />
-                <text y="4" textAnchor="middle">
-                  {text}
-                </text>
-              </g>
-            );
-          })
-        : null}
+      {options.map((m) => {
+        const edge = ROUTES.find((r) => (r.a === snap.here && r.b === m.id) || (r.b === snap.here && r.a === m.id));
+        return <CostPill key={`cost-${m.id}`} text={fmtNum(m.fuel)} x={edge.mid.x} y={edge.mid.y} />;
+      })}
       {flying ? (
         <g ref={shipRef} className="ship">
           <ShipShapes />
         </g>
       ) : (
-        <g transform={`translate(${POS[snap.here].x} ${POS[snap.here].y}) rotate(${heading(snap.here)})`}>
-          <svg className="ship" viewBox="-24 -11 46 22" x="-22" y="-11" width="44" height="22" overflow="visible">
-            <ShipShapes />
-          </svg>
-        </g>
+        <Ship at={POS[snap.here]} angle={heading(snap.here)} />
       )}
     </svg>
     {children ? <div className="map-overlay">{children}</div> : null}
+    </div>
+  );
+}
+
+// A system's planets orbit its sun. A hop costs power by how far apart two planets are right
+// now, so each open planet's price moves with them; a click pays the price on its label.
+function SystemMap({ snap, shipRef, onLaunch }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    let id = 0;
+    const tick = () => {
+      setNow(Date.now());
+      id = requestAnimationFrame(tick);
+    };
+    id = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const flying = snap.phase === "fly" && snap.flight;
+  const options = snap.phase === "map" ? moves(snap, now) : [];
+  const byId = new Map(options.map((m) => [m.id, m]));
+  const shut = new Set(snap.closed);
+  const planets = planetsOf(snap.system);
+  const ship = positionAt(snap.here, now);
+  // Facing the sun, in degrees.
+  const sunward = (at) => (Math.atan2(-at.y, -at.x) * 180) / Math.PI;
+  // Fit the view to this system: the jump point on the left, the outer orbit with its labels on the right.
+  const reach = Math.max(...planets.map((p) => p.orbit));
+  const box = [-JUMP_R - 40, -reach - 55, JUMP_R + reach + 110, 2 * reach + 95];
+  return (
+    <div className="map-stage system-stage">
+      <svg
+        className={flying ? "map-svg flying" : "map-svg"}
+        viewBox={box.join(" ")}
+        role="img"
+        aria-label={`${snap.system} system`}
+      >
+        <MapDefs />
+        {planets.map((p) => (
+          <circle key={p.id} className="orbit" r={p.orbit} />
+        ))}
+        <g className="sun">
+          <StarDot name={snap.system} r={SUN_R} />
+        </g>
+        <g className="jump" transform={`translate(${-JUMP_R} 0)`}>
+          <circle r="15" />
+          <text className="node-label" y="-21" textAnchor="middle">
+            Jump point
+          </text>
+        </g>
+        {flying ? <path id="flight" d={snap.flight.d} fill="none" stroke="none" pointerEvents="none" /> : null}
+        {flying ? (
+          <path className="streak" d={snap.flight.d} pathLength="100" style={{ animationDuration: `${snap.flight.ms}ms` }} />
+        ) : null}
+        {planets.map((p) => {
+          const at = orbitAt(p, now);
+          const move = byId.get(p.id);
+          const ready = move != null && move.power <= snap.power + 1e-9;
+          const face = FACES.get(p.id);
+          const hab = HAB_LEVEL[p.shell];
+          const classes = ["node", `node-${p.shell}`, p.id === snap.here ? "here" : "", shut.has(p.id) ? "shut" : "", ready ? "ready" : ""]
+            .filter(Boolean)
+            .join(" ");
+          return (
+            <g
+              key={p.id}
+              className={classes}
+              transform={`translate(${round2(at.x)} ${round2(at.y)})`}
+              role={ready ? "button" : undefined}
+              tabIndex={ready ? 0 : undefined}
+              aria-label={ready ? `Fly to ${p.id}, ${fmtNum(move.power)} power${hab ? `, habitability ${hab}` : ""}` : undefined}
+              onClick={() => {
+                if (ready) onLaunch(p.id);
+              }}
+              onKeyDown={(e) => {
+                if (!ready || (e.key !== "Enter" && e.key !== " ")) return;
+                e.preventDefault();
+                onLaunch(p.id);
+              }}
+            >
+              <title>
+                {p.id}
+                {hab ? `, habitability ${hab}` : ""}
+                {move ? `, ${fmtNum(move.power)} power${ready ? "" : ", not enough power"}` : ""}
+              </title>
+              <circle className="hit" r={Math.max(14, face.radius + 3)} />
+              {/* The art is lit from the upper left; turn it so its lit side faces the sun. */}
+              <g transform={`rotate(${round2(sunward(at) + 135)})`}>
+                <PlanetDot face={face} detail shut={shut.has(p.id)} />
+              </g>
+              {p.id === snap.here ? <circle className="here-ring" r={face.radius + 5} /> : null}
+              {ready ? <circle className="ready-ring" r={face.radius + 7} /> : null}
+              {hab ? (
+                <text className={`hab-tag hab-${hab.toLowerCase()}`} y={face.radius + 15} textAnchor="middle" aria-hidden="true">
+                  Habitability: {hab}
+                </text>
+              ) : null}
+              {hab ? (
+                <g className="beacon" transform={`translate(0 ${-(face.radius + 25)})`} aria-hidden="true">
+                  <circle className="beacon-pulse" r="6.5" />
+                  <circle className="beacon-bg" r="6.5" />
+                  <text className="beacon-mark" y="3.3" textAnchor="middle">
+                    !
+                  </text>
+                </g>
+              ) : null}
+              {p.shell === "fuel" ? (
+                <path
+                  className="fuel-badge"
+                  transform={`translate(${face.radius * 0.72 + 4} ${-(face.radius * 0.72 + 4)})`}
+                  d={DROP}
+                  aria-hidden="true"
+                />
+              ) : null}
+              <text className="node-label" y={-(face.radius + 3)} textAnchor="middle" dominantBaseline="text-after-edge">
+                {p.id}
+              </text>
+              {move ? <CostPill text={fmtNum(move.power)} x={face.radius + 24} y={0} power /> : null}
+            </g>
+          );
+        })}
+        {flying ? (
+          <g ref={shipRef} className="ship">
+            <ShipShapes />
+          </g>
+        ) : (
+          <Ship at={ship} angle={sunward(ship)} />
+        )}
+      </svg>
     </div>
   );
 }
@@ -880,26 +1045,32 @@ function FlightEvent({ event, fuel, credits, onPick }) {
   );
 }
 
-function Shop({ credits, fuel, world, exitFare, onBuy, onLeave }) {
-  const stuck = fuel + 1e-9 < exitFare;
-  const [counts, setCounts] = useState([0, 0, 0]);
-  const quote = buyPacks({ credits, fuel }, counts);
+function Shop({ credits, fuel, power, world, exitFare, stuck, onBuy, onLeave }) {
+  const [counts, setCounts] = useState(() => SHOP_PACKS.map(() => 0));
+  const quote = buyPacks({ credits, fuel, power }, counts);
   function canInc(i) {
     const next = counts.slice();
     next[i] += 1;
-    return buyPacks({ credits, fuel }, next).ok;
+    return buyPacks({ credits, fuel, power }, next).ok;
   }
+  const gains = [
+    quote.fuel > fuel ? `${fmtNum(quote.fuel - fuel)} fuel` : "",
+    quote.power > power ? `${fmtNum(quote.power - power)} power` : "",
+  ]
+    .filter(Boolean)
+    .join(" and ");
   return (
     <section className="panel">
       <p className="eyebrow">{world}</p>
       <h1>Shop</h1>
       <p>
-        {credits} {credits === 1 ? "credit" : "credits"}, {fmtNum(fuel)} fuel. Buy as many packs as you can pay for.
+        {credits} {credits === 1 ? "credit" : "credits"}, {fmtNum(fuel)} fuel, {fmtNum(power)} power. Buy as many packs
+        as you can pay for.
       </p>
       {SHOP_PACKS.map((pack, i) => (
-        <div className="pack" key={pack.credits}>
+        <div className={pack.power ? "pack power" : "pack"} key={pack.credits}>
           <span className="pack-name">
-            <b>{pack.fuel}</b> fuel
+            <b>{pack.fuel ?? pack.power}</b> {pack.fuel ? "fuel" : "power"}
             <em>for {pack.credits} credits</em>
           </span>
           <button
@@ -911,7 +1082,7 @@ function Shop({ credits, fuel, world, exitFare, onBuy, onLeave }) {
               setCounts(next);
             }}
             disabled={counts[i] === 0}
-            aria-label={`Fewer packs of ${pack.fuel} fuel`}
+            aria-label={`Fewer packs of ${pack.fuel ?? pack.power} ${pack.fuel ? "fuel" : "power"}`}
           >
             −
           </button>
@@ -925,22 +1096,19 @@ function Shop({ credits, fuel, world, exitFare, onBuy, onLeave }) {
               setCounts(next);
             }}
             disabled={!canInc(i)}
-            aria-label={`More packs of ${pack.fuel} fuel`}
+            aria-label={`More packs of ${pack.fuel ?? pack.power} ${pack.fuel ? "fuel" : "power"}`}
           >
             +
           </button>
         </div>
       ))}
       <p>
-        {quote.cost > 0
-          ? `${quote.cost} credits for ${quote.fuel - fuel} fuel.`
-          : "Choose a pack, or leave."}
+        {quote.cost > 0 ? `${quote.cost} credits for ${gains}.` : "Choose a pack, or leave."}
       </p>
       {stuck ? (
         <p className="error">
-          {Number.isFinite(exitFare)
-            ? `The cheapest route from here costs ${fmtNum(exitFare)} fuel. Buy fuel first, or leaving ends your run.`
-            : "Every route from here leads to a closed world. Leaving ends your run."}
+          The cheapest lane from here costs {fmtNum(exitFare)} fuel, and no planet is left in this system. Buy fuel first,
+          or leaving ends your run.
         </p>
       ) : null}
       <div className="row">
@@ -950,7 +1118,7 @@ function Shop({ credits, fuel, world, exitFare, onBuy, onLeave }) {
           onClick={() => {
             if (!quote.ok || quote.cost <= 0) return;
             onBuy(counts);
-            setCounts([0, 0, 0]);
+            setCounts(SHOP_PACKS.map(() => 0));
           }}
         >
           Buy
@@ -1160,45 +1328,84 @@ function Game() {
   function dock() {
     if (game.current.phase !== "mission") return;
     const percents = {};
-    for (const id of [...INNER, ...MIDDLE, ...OUTER]) {
-      percents[id] = drawPercent(shellOf(id));
-    }
+    for (const p of PLANETS) if (p.shell !== "fuel") percents[p.id] = drawPercent(p.shell);
     percentRef.current = percents;
     commit({ phase: "map", deadline: Date.now() + ROUND_MS });
   }
 
-  function launch(dest) {
+  // A lane on the star map costs fuel; a hop inside a system costs the power its label shows now.
+  function launch(id) {
     const g = game.current;
-    if (g.phase !== "map" || !dest) return;
-    if (g.deadline && Date.now() >= g.deadline) {
+    if (g.phase !== "map") return;
+    const now = Date.now();
+    if (g.deadline && now >= g.deadline) {
       finish("time");
       return;
     }
-    if (!destinations(g.here, g.closed).some((d) => d.id === dest.id)) return;
-    const actual = fare(g.variable, dest.distance);
-    if (actual > g.fuel + 1e-9) return;
-    const ideal = idealCost(dest.distance);
+    const move = moves(g, now).find((m) => m.id === id);
+    if (!move) return;
+    setFlyFuel(g.fuel);
+    if (g.system) {
+      if (move.power > g.power + 1e-9) return;
+      // Aim for where the planet will be when the ship gets there.
+      const { d } = bend(positionAt(g.here, now), positionAt(id, now + HOP_MS));
+      commit({
+        phase: "fly",
+        here: id,
+        power: g.power - move.power,
+        note: "",
+        flight: { from: g.here, to: id, d, ms: HOP_MS, fromFuel: g.fuel, actual: 0, event: null, paused: false, resume: 0 },
+      });
+      return;
+    }
+    if (move.fuel > g.fuel + 1e-9) return;
     // Never on the first flight, so the player has seen a plain one first.
     const event = g.path.length && Math.random() < EVENT_CHANCE ? g.eventOrder[g.eventCount % g.eventOrder.length] : null;
-    setFlyFuel(g.fuel);
     commit({
       phase: "fly",
-      here: dest.id,
-      path: [...g.path, { ideal, actual }],
-      fuel: g.fuel - actual,
+      here: id,
+      path: [...g.path, { ideal: idealCost(move.distance), actual: move.fuel }],
+      fuel: g.fuel - move.fuel,
       note: "",
       eventCount: g.eventCount + (event ? 1 : 0),
       flight: {
         from: g.here,
-        to: dest.id,
-        d: routePath(g.here, dest.id),
+        to: id,
+        d: routePath(g.here, id),
+        ms: FLIGHT_MS,
         fromFuel: g.fuel,
-        actual,
+        actual: move.fuel,
         event,
         paused: false,
         resume: 0,
       },
     });
+  }
+
+  // A radar sweep from where you are on the star map: the systems one lane away appear.
+  function scanHere() {
+    const g = game.current;
+    if (g.phase !== "map" || g.system || g.scanned.includes(g.here) || g.power + 1e-9 < MAP_SCAN_POWER) return;
+    if (g.deadline && Date.now() >= g.deadline) {
+      finish("time");
+      return;
+    }
+    sfx("scan");
+    commit({ power: g.power - MAP_SCAN_POWER, scanned: [...g.scanned, g.here], scanAt: Date.now(), note: "" });
+  }
+
+  function enterSystem() {
+    const g = game.current;
+    if (g.phase !== "map" || g.system || !system(g.here)) return;
+    commit({ system: g.here, note: "" });
+  }
+
+  function leaveSystem() {
+    const g = game.current;
+    if (g.phase !== "map" || !g.system) return;
+    const p = POS[g.system];
+    setView((v) => ({ ...v, x: fit(p.x - v.w / 2, v.w), y: fit(p.y - v.h / 2, v.h) }));
+    commit({ system: null, here: g.system, note: "" });
   }
 
   // The flight pauses halfway while an event is open; the pick applies, then the flight resumes.
@@ -1223,11 +1430,12 @@ function Game() {
       return;
     }
     const id = g.flight.to;
-    const visited = id === STATION || g.visited.includes(id) ? g.visited : [...g.visited, id];
-    if (id === STATION) {
-      commit({ phase: "map", flight: null });
+    if (!g.system) {
+      // A lane flight: a system opens its planetary map; the station stays on the star map.
+      commit({ phase: "map", flight: null, system: id === STATION ? null : id });
       return;
     }
+    const visited = g.visited.includes(id) ? g.visited : [...g.visited, id];
     if (FUEL_WORLDS.has(id)) {
       // Fuel worlds close after one visit, so this counts earlier fuel stops.
       const stops = g.visited.filter((v) => FUEL_WORLDS.has(v)).length;
@@ -1276,7 +1484,7 @@ function Game() {
       finish("time");
       return;
     }
-    const card = takeCard(domain, RING_LEVEL[shellOf(g.here)]);
+    const card = takeCard(domain, RING_LEVEL[planet(g.here).shell]);
     if (!card) return;
     commit({
       phase: "question",
@@ -1304,10 +1512,14 @@ function Game() {
       commit({ phase: "land", card: null, credits: result.credits, landing: { won: result.won, percent: result.percent } });
       return;
     }
-    const closed = [...g.closed, g.here];
-    const exits = destinations(g.here, closed).map((hop) => hop.distance);
     const scan = { world: g.here, readings: scanReadings(false), note: timedOut ? "Time's up." : "Wrong answer." };
-    commit({ variable: affordableVariable(result.variable, g.fuel, exits), closed, phase: "scan", card: null, scan });
+    commit({
+      variable: affordableVariable(result.variable, g.fuel, laneExits(g)),
+      closed: [...g.closed, g.here],
+      phase: "scan",
+      card: null,
+      scan,
+    });
   }
 
   function land(scanned) {
@@ -1317,8 +1529,8 @@ function Game() {
       finish("time");
       return;
     }
-    if (scanned && g.fuel + 1e-9 < SCAN_FUEL) return;
-    const fuel = scanned ? g.fuel - SCAN_FUEL : g.fuel;
+    if (scanned && g.power + 1e-9 < SCAN_POWER) return;
+    const power = scanned ? g.power - SCAN_POWER : g.power;
     const second = scanned && !g.landing.won;
     const won = g.landing.won || (second && secondSite(g.landing.percent));
     const scan = {
@@ -1327,13 +1539,11 @@ function Game() {
       note: second ? "Site 1 was toxic, so the scanner checked a second site." : scanned ? "Scanned from orbit." : "Landed blind.",
     };
     if (won) {
-      game.current = { ...g, fuel, scan, landing: null };
+      game.current = { ...g, power, scan, landing: null };
       finish("win");
       return;
     }
-    const closed = [...g.closed, g.here];
-    const exits = destinations(g.here, closed).map((hop) => hop.distance);
-    commit({ fuel, variable: affordableVariable(g.variable, fuel, exits), closed, phase: "scan", scan, landing: null });
+    commit({ power, closed: [...g.closed, g.here], phase: "scan", scan, landing: null });
   }
 
   function leaveScan() {
@@ -1350,10 +1560,9 @@ function Game() {
       return;
     }
     const result = fuelMinute(g.variable, g.fuelAnswers);
-    const exits = destinations(g.here, g.closed).map((hop) => hop.distance);
     commit({
       phase: "shop",
-      variable: affordableVariable(result.variable, g.fuel, exits),
+      variable: affordableVariable(result.variable, g.fuel, laneExits(g)),
       closed: g.closed.includes(g.here) ? g.closed : [...g.closed, g.here],
     });
   }
@@ -1383,9 +1592,9 @@ function Game() {
   function purchase(counts) {
     const g = game.current;
     if (g.phase !== "shop") return;
-    const result = buyPacks({ credits: g.credits, fuel: g.fuel }, counts);
+    const result = buyPacks({ credits: g.credits, fuel: g.fuel, power: g.power }, counts);
     if (!result.ok) return;
-    commit({ credits: result.credits, fuel: result.fuel });
+    commit({ credits: result.credits, fuel: result.fuel, power: result.power });
   }
 
   function leaveShop() {
@@ -1440,12 +1649,19 @@ function Game() {
   }, [snap.phase, snap.fuelDeadline]);
 
   useEffect(() => {
-    if (game.current.phase !== "map") return;
-    const g = game.current;
-    const open = destinations(g.here, g.closed);
-    const can = open.some((d) => fare(g.variable, d.distance) <= g.fuel + 1e-9);
-    if (!can) finish(open.length ? "stranded" : "closed");
-  }, [snap.phase, snap.here, snap.fuel, snap.variable, snap.closed]);
+    if (game.current.phase === "map" && stuck(game.current)) finish("stranded");
+  }, [snap.phase, snap.here, snap.fuel, snap.variable, snap.closed, snap.system]);
+
+  // Inside a system its sun recharges power, a whole unit at a time, up to the cap.
+  useEffect(() => {
+    if (!snap.system) return;
+    const id = setInterval(() => {
+      const g = game.current;
+      if (!g.system || g.phase === "end" || g.power >= POWER_CAP) return;
+      commit({ power: Math.min(POWER_CAP, g.power + 1) });
+    }, POWER_TICK_MS);
+    return () => clearInterval(id);
+  }, [snap.system]);
 
   const live = LIVE_PHASES.has(snap.phase);
   useEffect(() => {
@@ -1464,9 +1680,9 @@ function Game() {
     const pathEl = document.getElementById("flight");
     if (!el || !pathEl) return;
     const len = pathEl.getTotalLength();
-    const { fromFuel, actual, event, paused, resume } = snap.flight;
+    const { fromFuel, actual, event, paused, resume, ms } = snap.flight;
     const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
-    const started = performance.now() - resume * FLIGHT_MS;
+    const started = performance.now() - resume * ms;
     let dead = false;
     let raf = 0;
     const place = (u) => {
@@ -1487,7 +1703,7 @@ function Game() {
     }
     const frame = (now) => {
       if (dead) return;
-      const t = Math.min(1, (now - started) / FLIGHT_MS);
+      const t = Math.min(1, (now - started) / ms);
       if (event && t >= 0.5) {
         halfway();
         engine(0);
@@ -1574,7 +1790,16 @@ function Game() {
       ? `En route to ${snap.flight.to === STATION ? "the station" : snap.flight.to}`
       : snap.here === STATION
         ? "Station"
-        : snap.here;
+        : snap.system && snap.here !== snap.system
+          ? `${snap.here} · ${snap.system}`
+          : `${snap.here} system`;
+  const mapHint = snap.system
+    ? "Planets orbit the sun. A hop costs power by how far apart they are right now."
+    : snap.scanned.includes(snap.here)
+      ? "Lanes from here show the fuel they cost."
+      : snap.power + 1e-9 < MAP_SCAN_POWER
+        ? "Not enough power to scan. Enter the system: its sun recharges you."
+        : "Scan to find the solar systems around you.";
   const domainLabel = DOMAINS.find((d) => d[0] === snap.domain)?.[1] || "";
   const fuelCard = snap.fuelDeck[snap.fuelIndex] ?? null;
   const FuelGame = snap.fuelRound && FUEL_GAMES[snap.fuelRound.id];
@@ -1601,6 +1826,14 @@ function Game() {
             </div>
             <Delta value={snap.fuel} />
           </div>
+          <div className="meter power">
+            <PowerIcon />
+            <div className="m-text">
+              <small>Power</small>
+              <b>{fmtNum(snap.power)}</b>
+            </div>
+            <Delta value={snap.power} />
+          </div>
           <div className="meter credits">
             <CreditIcon />
             <div className="m-text">
@@ -1622,18 +1855,49 @@ function Game() {
       <div className="play-body">
         {snap.phase === "map" || snap.phase === "fly" ? (
           <>
-            {snap.note ? (
-              <p className="note" aria-live="polite">
-                {snap.note}
-              </p>
+            <div className="map-bar">
+              {snap.note ? (
+                <p className="note" aria-live="polite">
+                  {snap.note}
+                </p>
+              ) : (
+                <p className="hint">{mapHint}</p>
+              )}
+              <div className="row">
+                {snap.system ? (
+                  <button type="button" className="ghost" disabled={snap.phase !== "map"} onClick={leaveSystem}>
+                    Star map
+                  </button>
+                ) : (
+                  <>
+                    {snap.scanned.includes(snap.here) ? null : (
+                      <button
+                        type="button"
+                        className="scan-btn"
+                        disabled={snap.phase !== "map" || snap.power + 1e-9 < MAP_SCAN_POWER}
+                        onClick={scanHere}
+                      >
+                        Scan nearby systems · {MAP_SCAN_POWER} power
+                      </button>
+                    )}
+                    {system(snap.here) ? (
+                      <button type="button" className="ghost" disabled={snap.phase !== "map"} onClick={enterSystem}>
+                        Enter {snap.here}
+                      </button>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            </div>
+            {snap.system ? (
+              <SystemMap snap={snap} shipRef={shipRef} onLaunch={launch} />
             ) : (
-              <p className="hint">Routes from here show the fuel they cost.</p>
+              <StarMap snap={snap} now={now} shipRef={shipRef} onLaunch={launch} view={view} onView={setView}>
+                {snap.phase === "fly" && snap.flight?.paused ? (
+                  <FlightEvent event={snap.flight.event} fuel={snap.fuel} credits={snap.credits} onPick={resolveEvent} />
+                ) : null}
+              </StarMap>
             )}
-            <MapView snap={snap} shipRef={shipRef} onLaunch={launch} view={view} onView={setView}>
-              {snap.phase === "fly" && snap.flight?.paused ? (
-                <FlightEvent event={snap.flight.event} fuel={snap.fuel} credits={snap.credits} onPick={resolveEvent} />
-              ) : null}
-            </MapView>
           </>
         ) : null}
 
@@ -1680,12 +1944,12 @@ function Game() {
         {snap.phase === "land" ? (
           <section className="panel">
             <p className="eyebrow">
-              {snap.here} · Habitability {HAB_LEVEL[shellOf(snap.here)]}
+              {snap.here} · Habitability {HAB_LEVEL[planet(snap.here)?.shell]}
             </p>
             <h1>Right answer. How will you land?</h1>
             <div className="domains land">
-              <button type="button" className="tile domain" disabled={snap.fuel + 1e-9 < SCAN_FUEL} onClick={() => land(true)}>
-                Scan first · {SCAN_FUEL} fuel
+              <button type="button" className="tile domain" disabled={snap.power + 1e-9 < SCAN_POWER} onClick={() => land(true)}>
+                Scan first · {SCAN_POWER} power
                 <small>If the first landing site is toxic, the scanner checks a second one.</small>
               </button>
               <button type="button" className="tile domain" onClick={() => land(false)}>
@@ -1757,8 +2021,10 @@ function Game() {
           <Shop
             credits={snap.credits}
             fuel={snap.fuel}
+            power={snap.power}
             world={snap.here}
-            exitFare={Math.min(...destinations(snap.here, snap.closed).map((d) => fare(snap.variable, d.distance)))}
+            exitFare={Math.min(...laneExits(snap).map((d) => fare(snap.variable, d)))}
+            stuck={stuck(snap)}
             onBuy={purchase}
             onLeave={leaveShop}
           />

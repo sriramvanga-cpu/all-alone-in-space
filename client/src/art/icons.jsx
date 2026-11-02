@@ -26,6 +26,15 @@ export function FuelIcon(props) {
   );
 }
 
+export function PowerIcon(props) {
+  return (
+    <Icon {...props}>
+      <rect x="3.6" y="7.2" width="14.8" height="9.6" rx="2" />
+      <path d="M20.6 10.6v2.8M11.8 9l-2.2 3.2h3.2l-2.2 3.2" />
+    </Icon>
+  );
+}
+
 export function CreditIcon(props) {
   return (
     <Icon {...props}>

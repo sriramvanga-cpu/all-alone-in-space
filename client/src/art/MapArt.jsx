@@ -1,9 +1,30 @@
-import { NODES } from "../game/map.js";
+import { SYSTEMS } from "../game/map.js";
+import { hashId } from "./Planet.jsx";
 import { ShipDefs } from "./Ship.jsx";
 import { StationDefs } from "./Station.jsx";
 
 // Shared defs and backdrop for the star chart. Scale matches App.jsx's SCALE.
 const SCALE = 190;
+
+// Star colours: centre, body, limb.
+const STAR_TINTS = {
+  yellow: ["#fffbe8", "#ffd86a", "#e89a2a"],
+  orange: ["#fff1de", "#ffad5c", "#d8702a"],
+  red: ["#ffe6dc", "#ff7f5c", "#b8442e"],
+  blue: ["#f6f9ff", "#b4ceff", "#6688ff"],
+};
+const TINTS = Object.keys(STAR_TINTS);
+
+/** A star: a bright core in a soft glow, its colour fixed by its name. Small on the star map, big as a sun. */
+export function StarDot({ name, r }) {
+  const tint = TINTS[hashId(name) % TINTS.length];
+  return (
+    <g className="star" aria-hidden="true">
+      <circle className="star-glow" r={r * 2.6} fill={`url(#star-${tint}-glow)`} />
+      <circle r={r} fill={`url(#star-${tint})`} />
+    </g>
+  );
+}
 
 // Day/night shading shared by every planet. Unit space, light from the upper left.
 export function MapDefs() {
@@ -50,15 +71,29 @@ export function MapDefs() {
         <stop offset="0" stopColor="#ffe08a" />
         <stop offset="1" stopColor="#ff8a1f" />
       </linearGradient>
+      {TINTS.map((tint) => {
+        const [centre, body, limb] = STAR_TINTS[tint];
+        return [
+          <radialGradient key={tint} id={`star-${tint}`} cx="0.42" cy="0.4" r="0.62">
+            <stop offset="0" stopColor={centre} />
+            <stop offset="0.55" stopColor={body} />
+            <stop offset="1" stopColor={limb} />
+          </radialGradient>,
+          <radialGradient key={`${tint}-glow`} id={`star-${tint}-glow`}>
+            <stop offset="0.3" stopColor={body} stopOpacity="0.5" />
+            <stop offset="1" stopColor={body} stopOpacity="0" />
+          </radialGradient>,
+        ];
+      })}
       <ShipDefs />
       <StationDefs />
     </defs>
   );
 }
 
-function meanRadius(shell) {
-  const worlds = NODES.filter((n) => n.shell === shell);
-  return (worlds.reduce((sum, n) => sum + n.r, 0) / worlds.length) * SCALE;
+function meanRadius(ring) {
+  const systems = SYSTEMS.filter((s) => s.ring === ring);
+  return (systems.reduce((sum, s) => sum + s.r, 0) / systems.length) * SCALE;
 }
 
 const SHELL_RINGS = ["inner", "middle", "outer"].map((shell) => ({ shell, r: meanRadius(shell) }));

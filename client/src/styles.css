@@ -16,6 +16,7 @@
   --accent: #5ad1ff;
   --accent-2: #8a7dff;
   --fuel: #ffb020;
+  --power: #7df0b4;
   --gold: #ffe08a;
   --danger: #ff7a8a;
   --ok: #7ddec0;
@@ -394,6 +395,7 @@ input:focus {
 .meter b { font: 700 1.2rem var(--font-display); letter-spacing: 0.02em; color: var(--ink); }
 .meter.fuel { color: var(--fuel); }
 .meter.credits { color: var(--gold); }
+.meter.power { color: var(--power); }
 .meter.clock { color: var(--accent); }
 .meter.clock.urgent {
   color: var(--danger);
@@ -478,7 +480,7 @@ input:focus {
 
 .map-svg.flying { pointer-events: none; }
 
-.map-bg, .link, .link-glow, .link-flow, .streak, .cost, .beacon, .fuel-badge { pointer-events: none; }
+.map-bg, .link, .link-glow, .link-flow, .streak, .cost, .beacon, .fuel-badge, .star, .orbit, .sweep, .jump, .sys-planets { pointer-events: none; }
 
 .shell-ring {
   fill: none;
@@ -520,6 +522,8 @@ input:focus {
 /* Fuel cost chips on the routes out of the current world */
 .cost rect { fill: rgba(7, 11, 24, 0.92); stroke: rgba(255, 176, 32, 0.75); stroke-width: 1; }
 .cost text { fill: #ffd27a; font: 700 11px var(--font-display); letter-spacing: 0.03em; }
+.cost.power rect { stroke: rgba(125, 240, 180, 0.75); }
+.cost.power text { fill: var(--power); }
 
 /* Worlds */
 .node { transition: opacity 0.2s; }
@@ -764,6 +768,44 @@ input:focus {
 .combo b { font-size: 1.15rem; color: var(--ink); }
 .combo.hot { color: var(--gold); border-color: rgba(255, 224, 138, 0.5); }
 
+/* Above the map: the hint, and Scan / Enter / Star map */
+.map-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.3rem 1rem; }
+.map-bar .hint, .map-bar .note { margin: 0.3rem 0; }
+.map-bar .row { margin: 0; }
+.map-bar button { min-height: 40px; padding: 0.5rem 1rem; }
+.scan-btn:not(:disabled) { animation: callout 1.8s ease-in-out infinite; }
+@keyframes callout {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 rgba(125, 240, 180, 0); }
+  50% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 22px rgba(125, 240, 180, 0.55); }
+}
+
+/* Star map: systems fade in as a scan finds them; the sweep rings out from the ship */
+.node.system { animation: appear 0.7s var(--ease) both; }
+@keyframes appear { from { opacity: 0; } }
+.sweep {
+  fill: none;
+  stroke: var(--power);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sweep 1.2s ease-out forwards;
+}
+@keyframes sweep {
+  from { transform: scale(0.04); opacity: 0.9; }
+  to { transform: scale(1); opacity: 0; }
+}
+.sys-planets .beacon-bg { stroke-width: 1.2; }
+.sys-planets .beacon-mark { font-size: 8px; }
+.sys-planets .used { opacity: 0.3; }
+
+/* Planetary map */
+.system-stage, .system-stage:active { cursor: default; }
+.orbit { fill: none; stroke: rgba(150, 185, 255, 0.34); stroke-width: 1.2; }
+.sun .star-glow { transform-box: fill-box; transform-origin: center; animation: corona 4s ease-in-out infinite alternate; }
+@keyframes corona { to { transform: scale(1.1); opacity: 0.8; } }
+.jump circle { fill: rgba(90, 209, 255, 0.06); stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 3 4; }
+
 /* Landing choice after a right answer */
 .land small { font: 400 0.88rem/1.35 var(--font-body); letter-spacing: 0; text-transform: none; color: var(--dim); }
 
@@ -806,6 +848,7 @@ input:focus {
   font-variant-numeric: tabular-nums;
 }
 .pack-name b { font: 700 1.15rem var(--font-display); color: var(--fuel); }
+.pack.power .pack-name b { color: var(--power); }
 .pack-name em { display: block; font-style: normal; font-size: 0.85rem; color: var(--gold); }
 .pack .count { text-align: center; font: 700 1.1rem var(--font-display); }
 .pack button { min-width: 44px; padding: 0.3rem 0.6rem; font-size: 1.1rem; border-radius: 50%; }
@@ -1112,6 +1155,7 @@ input:focus {
 
 @media (prefers-reduced-motion: reduce) {
   .streak, .link-flow, .ready-ring, .beacon-pulse, .navlight, .plume, .exhaust, .end-orb, .live::before,
+  .scan-btn, .node.system, .sun .star-glow, .sweep,
   .starbase .spin, .starbase .core, .reading, .scan-bar i {
     animation: none !important;
   }
@@ -1128,7 +1172,7 @@ input:focus {
   .prompt { font-size: 1.2rem; }
   .hud { gap: 0.4rem; margin: 0.4rem 0.4rem 0; padding: 0.5rem 0.6rem; top: 0.4rem; }
   .hud .where { font-size: 0.95rem; }
-  .meters { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; gap: 0.4rem; }
+  .meters { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; gap: 0.4rem; }
   .meter { min-width: 0; gap: 0.35rem; padding: 0.3rem 0.5rem; }
   .meter .icon { width: 1.1rem; height: 1.1rem; }
   .meter b { font-size: 1rem; }

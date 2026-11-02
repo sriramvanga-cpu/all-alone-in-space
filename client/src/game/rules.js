@@ -4,10 +4,27 @@ export const START_FUEL = 10;
 export const START_CREDITS = 0;
 export const START_VARIABLE = 1;
 
+// Power pays for scans and for hops between planets; fuel only flies the lanes between systems.
+// Inside a system the sun recharges power by 1 every POWER_TICK_MS, up to POWER_CAP.
+export const START_POWER = 10;
+export const POWER_CAP = 10;
+export const POWER_TICK_MS = 20_000;
+// A star-map scan, which reveals the systems one lane away.
+export const MAP_SCAN_POWER = 1;
+// Power per unit of distance between two planets (orbits sit 50 units apart): a hop costs about
+// 1–10, 4 on average. Dearer hops or slower recharge leave players waiting rather than playing.
+export const HOP_K = 0.02;
+
+/** Power for a hop of this many system units, to one decimal so the live label stays readable. */
+export function hopPower(distance) {
+  return Math.round(distance * HOP_K * 10) / 10;
+}
+
 export const SHOP_PACKS = Object.freeze([
   Object.freeze({ credits: 10, fuel: 5 }),
   Object.freeze({ credits: 18, fuel: 10 }),
   Object.freeze({ credits: 25, fuel: 15 }),
+  Object.freeze({ credits: 6, power: 5 }),
 ]);
 
 export function rollInt(rng, lo, hi) {
@@ -19,9 +36,8 @@ export function rollInt(rng, lo, hi) {
 // Each shell draws from its own band, so a right answer rarely settles an inner
 // world and settles an outer one most often. With the 25-point answer shift and a
 // 0–100 roll, landing blind after a right answer settles about: inner 5%, middle
-// 25%, outer 30%; a scan's second site lifts those to 10%, 43% and 50%. With the
-// scan, streak bonus and flight events, these odds keep a simulated typical player
-// winning about half their runs. Percent can exceed 100; the roll still has to beat it.
+// 25%, outer 30%; a scan's second site (it costs power) lifts those to 10%, 43% and 50%.
+// Percent can exceed 100; the roll still has to beat it.
 const SHELL_BANDS = Object.freeze({
   inner: [108, 125],
   middle: [85, 115],
@@ -233,8 +249,8 @@ export function fuelStreak(answers) {
   return { streak, bonus };
 }
 
-// A scan from orbit costs this much fuel and checks a second landing site when the first is toxic.
-export const SCAN_FUEL = 1;
+// A scan from orbit costs this much power and checks a second landing site when the first is toxic.
+export const SCAN_POWER = 1;
 
 /** The second site of a scan: same percent, its own roll. */
 export function secondSite(percent, rng = Math.random) {
@@ -244,20 +260,22 @@ export function secondSite(percent, rng = Math.random) {
 /**
  * Buy a multiset of shop packs. `counts[i]` is how many of SHOP_PACKS[i].
  * Any multiset whose credit cost is within budget is allowed.
- * On success, `credits` is the new balance and `fuel` is the new tank.
+ * On success, `credits` is the new balance and `fuel` and `power` are the new tanks.
  */
 export function buyPacks(state, counts) {
-  const { credits, fuel } = state;
-  const refuse = (cost = 0) => ({ ok: false, credits, fuel, cost });
+  const { credits, fuel, power = 0 } = state;
+  const refuse = (cost = 0) => ({ ok: false, credits, fuel, power, cost });
   if (!Array.isArray(counts) || counts.length > SHOP_PACKS.length) return refuse();
   let cost = 0;
   let gained = 0;
+  let charged = 0;
   for (let i = 0; i < counts.length; i++) {
     const n = counts[i];
     if (!Number.isInteger(n) || n < 0) return refuse();
     cost += SHOP_PACKS[i].credits * n;
-    gained += SHOP_PACKS[i].fuel * n;
+    gained += (SHOP_PACKS[i].fuel ?? 0) * n;
+    charged += (SHOP_PACKS[i].power ?? 0) * n;
   }
   if (cost > credits) return refuse(cost);
-  return { ok: true, credits: credits - cost, fuel: fuel + gained, cost };
+  return { ok: true, credits: credits - cost, fuel: fuel + gained, power: power + charged, cost };
 }

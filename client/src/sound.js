@@ -40,6 +40,11 @@ const SOUNDS = {
   wrong: () => tone(196, 110, 0.32, { type: "square", gain: 0.06 }),
   credit: () => tone(1320, 1980, 0.08, { type: "triangle", gain: 0.1 }),
   bonus: () => [880, 1109, 1319, 1760].forEach((f, i) => tone(f, f, 0.14, { type: "triangle", gain: 0.11, delay: i * 0.06 })),
+  // A sonar ping: a rising sweep, then the echo.
+  scan: () => {
+    tone(420, 1260, 0.5, { gain: 0.1 });
+    tone(1260, 1260, 0.6, { gain: 0.05, delay: 0.5 });
+  },
   alert: () => [0, 0.18].forEach((delay) => tone(880, 660, 0.14, { type: "square", gain: 0.05, delay })),
   // The landing chime: a rising major arpeggio that rings out.
   win: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, f, i === 4 ? 1.4 : 0.5, { type: "triangle", gain: 0.16, delay: i * 0.13 })),
