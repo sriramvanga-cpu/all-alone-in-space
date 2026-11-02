@@ -4,12 +4,13 @@ import {
   START_CREDITS,
   START_VARIABLE,
   SHOP_PACKS,
-  drawPercent,
   fuelCost,
   idealCost,
   compareRuns,
   runPoints,
-  habitability,
+  landingChance,
+  siteSettles,
+  answerPlanet,
   affordableVariable,
   fuelMinute,
   buyPacks,
@@ -18,7 +19,6 @@ import {
   STREAK,
   fuelStreak,
   SCAN_POWER,
-  secondSite,
   START_POWER,
   POWER_CAP,
   POWER_TICK_MS,
@@ -97,8 +97,6 @@ const END_COPY = {
 };
 // A reload in these phases throws the run away, so the browser asks first.
 const LIVE_PHASES = new Set(["map", "fly", "pick", "question", "land", "scan", "fuel", "shop"]);
-// Follows SHELL_BANDS in rules.js: a blind landing after a right answer settles ~5% inner, ~25% middle, ~30% outer.
-const HAB_LEVEL = { inner: "Low", middle: "Medium", outer: "High" };
 const RING_LEVEL = { inner: "hard", middle: "medium", outer: "easy" };
 
 function round2(v) {
@@ -532,7 +530,7 @@ const BRIEF = [
 const TIPS = {
   star: [
     "Star map",
-    `Scan (${MAP_SCAN_POWER} power) to find the solar systems one lane away, then tap one to fly there. Lanes cost fuel. Outer systems are the easiest to settle, and the farthest away.`,
+    `Scan (${MAP_SCAN_POWER} power) to find the solar systems one lane away, then tap one to fly there. Lanes cost fuel. Outer systems ask easier questions, but they are the farthest away.`,
   ],
   system: [
     "Solar system",
@@ -541,7 +539,7 @@ const TIPS = {
   fuel: ["Fuel stop", "Play for one minute to earn credits, then spend them in the shop on fuel and power. Too many mistakes make fuel cost more."],
   test: [
     "A possible home",
-    "Answer one question. Right: 15 credits and a chance to land. Wrong: fuel costs rise and this planet closes. Each planet can be tried once.",
+    "Answer one question, then try to land. The chance grows with time: 5% at the start, 60% after 10 minutes. A right answer adds 10% and pays 15 credits; a wrong one makes fuel cost more. Each planet can be tried once.",
   ],
 };
 
@@ -832,7 +830,6 @@ function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
         const move = byId.get(id);
         const ready = move != null && move.fuel <= snap.fuel + 1e-9;
         const planets = s ? planetsOf(id) : [];
-        const hab = planets.some((pl) => pl.shell !== "fuel") ? HAB_LEVEL[s.ring] : null;
         const name = id === STATION ? "Station" : id;
         const classes = ["node", s ? `node-${s.ring} system` : "node-station", id === viewer ? "here" : "", ready ? "ready" : ""]
           .filter(Boolean)
@@ -846,7 +843,7 @@ function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
             tabIndex={ready ? 0 : undefined}
             aria-label={
               ready
-                ? `Fly to ${id === STATION ? "the station" : id}, ${fmtNum(move.fuel)} fuel${hab ? `, habitability ${hab}` : ""}`
+                ? `Fly to ${id === STATION ? "the station" : id}, ${fmtNum(move.fuel)} fuel`
                 : undefined
             }
             onClick={() => {
@@ -865,7 +862,6 @@ function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
             <title>
               {name}
               {s ? `, ${STAR_NAMES[s.star]}` : ""}
-              {hab ? `, habitability ${hab}` : ""}
               {move ? `, ${fmtNum(move.fuel)} fuel${ready ? "" : ", not enough fuel"}` : ""}
             </title>
             {id === STATION ? (
@@ -901,11 +897,6 @@ function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
                     </g>
                   ))}
                 </g>
-                {hab ? (
-                  <text className={`hab-tag hab-${hab.toLowerCase()}`} y={STAR_R + 36} textAnchor="middle" aria-hidden="true">
-                    Habitability: {hab}
-                  </text>
-                ) : null}
               </>
             )}
             <text
@@ -966,7 +957,7 @@ function SystemMap({ snap, shipRef, onLaunch, children }) {
     const move = byId.get(p.id);
     const ready = move != null && move.power <= snap.power + 1e-9;
     const face = FACES.get(p.id);
-    const hab = HAB_LEVEL[p.shell];
+    const test = p.shell !== "fuel";
     const classes = ["node", `node-${p.shell}`, p.id === snap.here ? "here" : "", shut.has(p.id) ? "shut" : "", ready ? "ready" : ""]
       .filter(Boolean)
       .join(" ");
@@ -977,7 +968,7 @@ function SystemMap({ snap, shipRef, onLaunch, children }) {
         transform={`translate(${round2(at.x)} ${round2(at.y)}) scale(${PLANET_ZOOM})`}
         role={ready ? "button" : undefined}
         tabIndex={ready ? 0 : undefined}
-        aria-label={ready ? `Fly to ${p.id}, ${fmtNum(move.power)} power${hab ? `, habitability ${hab}` : ""}` : undefined}
+        aria-label={ready ? `Fly to ${p.id}, ${fmtNum(move.power)} power${test ? ", a possible home" : ""}` : undefined}
         onClick={() => {
           if (ready) onLaunch(p.id);
         }}
@@ -989,7 +980,7 @@ function SystemMap({ snap, shipRef, onLaunch, children }) {
       >
         <title>
           {p.id}
-          {hab ? `, habitability ${hab}` : ""}
+          {test ? ", a possible home" : ""}
           {move ? `, ${fmtNum(move.power)} power${ready ? "" : ", not enough power"}` : ""}
         </title>
         <circle className="hit" r={Math.max(14, face.radius + 3)} />
@@ -999,12 +990,7 @@ function SystemMap({ snap, shipRef, onLaunch, children }) {
         </g>
         {p.id === snap.here ? <circle className="here-ring" r={face.radius + 5} /> : null}
         {ready ? <circle className="ready-ring" r={face.radius + 7} /> : null}
-        {hab ? (
-          <text className={`hab-tag hab-${hab.toLowerCase()}`} y={face.radius + 15} textAnchor="middle" aria-hidden="true">
-            Habitability: {hab}
-          </text>
-        ) : null}
-        {hab ? (
+        {test ? (
           <g className="beacon" transform={`translate(0 ${-(face.radius + 25)})`} aria-hidden="true">
             <circle className="beacon-pulse" r="6.5" />
             <circle className="beacon-bg" r="6.5" />
@@ -1455,7 +1441,6 @@ function Game() {
     return { x: -w / 2, y: -h / 2, w, h };
   });
   const shipRef = useRef(null);
-  const percentRef = useRef({});
   const usedRef = useRef({ general: new Set(), mental: new Set(), technology: new Set() });
 
   function commit(patch) {
@@ -1480,9 +1465,6 @@ function Game() {
 
   function dock() {
     if (game.current.phase !== "mission") return;
-    const percents = {};
-    for (const p of PLANETS) if (p.shell !== "fuel") percents[p.id] = drawPercent(p.shell);
-    percentRef.current = percents;
     commit({ phase: "map", deadline: Date.now() + ROUND_MS });
   }
 
@@ -1654,24 +1636,17 @@ function Game() {
       finish("time");
       return;
     }
-    const result = habitability(
-      { percent: percentRef.current[g.here], credits: g.credits, variable: g.variable },
-      correct,
-    );
-    percentRef.current[g.here] = result.percent;
+    const result = answerPlanet({ credits: g.credits, variable: g.variable }, correct);
     sfx(correct ? "right" : "wrong");
-    if (correct) {
-      // The first site is already rolled; the player now picks a blind landing or a scan.
-      commit({ phase: "land", card: null, credits: result.credits, landing: { won: result.won, percent: result.percent } });
-      return;
-    }
-    const scan = { world: g.here, readings: scanReadings(false), note: timedOut ? "Time's up." : "Wrong answer." };
+    // Right or wrong, the player now tries to land; the odds come from the time flown (the clock's
+    // view of it, so paused tips don't count), plus 10 for a right answer.
+    const elapsed = ROUND_MS - (g.deadline - Date.now());
     commit({
-      variable: affordableVariable(result.variable, g.fuel, laneExits(g)),
-      closed: [...g.closed, g.here],
-      phase: "scan",
+      phase: "land",
       card: null,
-      scan,
+      credits: result.credits,
+      variable: correct ? g.variable : affordableVariable(result.variable, g.fuel, laneExits(g)),
+      landing: { chance: landingChance(elapsed, correct), base: landingChance(elapsed, false), correct, timedOut },
     });
   }
 
@@ -1684,8 +1659,9 @@ function Game() {
     }
     if (scanned && g.power + 1e-9 < SCAN_POWER) return;
     const power = scanned ? g.power - SCAN_POWER : g.power;
-    const second = scanned && !g.landing.won;
-    const won = g.landing.won || (second && secondSite(g.landing.percent));
+    const first = siteSettles(g.landing.chance);
+    const second = scanned && !first;
+    const won = first || (second && siteSettles(g.landing.chance));
     const scan = {
       world: g.here,
       readings: scanReadings(won),
@@ -2109,7 +2085,7 @@ function Game() {
               </div>
             </div>
             <p className="prompt">{snap.card.prompt}</p>
-            <p>A right answer might settle you. A miss closes this world.</p>
+            <p>Then you try to land. A right answer adds 10% to the chance and pays 15 credits.</p>
             <ChoiceButtons
               choices={snap.card.choices}
               onPick={(choice) => {
@@ -2123,9 +2099,14 @@ function Game() {
         {snap.phase === "land" ? (
           <section className="panel">
             <p className="eyebrow">
-              {snap.here} · Habitability {HAB_LEVEL[planet(snap.here)?.shell]}
+              {snap.here} · Landing chance {snap.landing.chance}%
             </p>
-            <h1>Right answer. How will you land?</h1>
+            <h1>{snap.landing.correct ? "Right answer." : snap.landing.timedOut ? "Time's up." : "Wrong answer."} How will you land?</h1>
+            <p className="hint">
+              {snap.landing.base}% for the time you've flown
+              {snap.landing.correct ? `, +${snap.landing.chance - snap.landing.base} for your right answer` : ""}. The chance grows
+              as the clock runs.
+            </p>
             <div className="domains land">
               <button type="button" className="tile domain" disabled={snap.power + 1e-9 < SCAN_POWER} onClick={() => land(true)}>
                 Scan first · {SCAN_POWER} power

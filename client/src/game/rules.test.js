@@ -6,7 +6,6 @@ import {
   START_CREDITS,
   START_VARIABLE,
   SHOP_PACKS,
-  drawPercent,
   fuelCost,
   idealCost,
   score,
@@ -15,14 +14,15 @@ import {
   affordableVariable,
   drawMultiplier,
   applyMultiplier,
-  habitability,
+  landingChance,
+  siteSettles,
+  answerPlanet,
   fuelMinute,
   buyPacks,
   scanReadings,
   TOXIC_LIMIT,
   STREAK,
   fuelStreak,
-  secondSite,
   START_POWER,
   hopPower,
 } from "./rules.js";
@@ -120,84 +120,24 @@ test("a penalty discounts to the cheapest exit but not below 1", () => {
   assert.equal(affordableVariable(2, 2, [8]), 1);
 });
 
-test("each shell draws from its own band and keeps max, min, or average", () => {
-  // +0.5 keeps each value inside its slot so float error cannot floor it down.
-  const rolls = (lo, hi, x, y) => scripted([unit(x - lo + 0.5, hi - lo + 1), unit(y - lo + 0.5, hi - lo + 1)]);
-  assert.equal(drawPercent("inner", rolls(108, 125, 110, 120)), 120);
-  assert.equal(drawPercent("inner", rolls(108, 125, 108, 125)), 125);
-  assert.equal(drawPercent("middle", rolls(85, 115, 85, 96)), 91);
-  assert.equal(drawPercent("middle", rolls(85, 115, 90, 110)), 100);
-  assert.equal(drawPercent("outer", rolls(83, 120, 95, 85)), 85);
-  assert.equal(drawPercent("outer", rolls(83, 120, 83, 120)), 83);
-  assert.throws(() => drawPercent("fuel"));
+test("the landing chance grows from 5% to 60% over 10 minutes; a right answer adds 10, up to 65", () => {
+  const min = 60_000;
+  assert.equal(landingChance(0, false), 5);
+  assert.equal(landingChance(0, true), 15);
+  assert.equal(landingChance(5 * min, false), 33);
+  assert.equal(landingChance(10 * min, false), 60);
+  assert.equal(landingChance(14 * min, false), 60);
+  assert.equal(landingChance(9 * min, true), 65);
+  assert.equal(landingChance(10 * min, true), 65);
+  assert.equal(landingChance(-1000, true), 15);
 });
 
-test("a right answer settles rarely near the station and most often far out, and a scan lifts the odds", () => {
-  let s = 99;
-  const rng = () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-  const rate = (shell, scanned) => {
-    let wins = 0;
-    for (let i = 0; i < 4000; i++) {
-      const result = habitability({ percent: drawPercent(shell, rng), credits: 0, variable: 1 }, true, rng);
-      if (result.won || (scanned && secondSite(result.percent, rng))) wins++;
-    }
-    return wins / 4000;
-  };
-  const inner = rate("inner");
-  const middle = rate("middle");
-  const outer = rate("outer");
-  const outerScan = rate("outer", true);
-  assert.ok(inner < 0.1, `inner ${inner}`);
-  assert.ok(middle > inner + 0.15 && middle < outer, `middle ${middle}`);
-  assert.ok(outer > 0.25 && outer < 0.35, `outer ${outer}`);
-  assert.ok(outerScan > 0.45 && outerScan < 0.55, `outer with a scan ${outerScan}`);
-});
-
-test("a careful player settles more often than a guesser", () => {
-  function mulberry(seed) {
-    let s = seed >>> 0;
-    return () => {
-      s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-      return s / 4294967296;
-    };
-  }
-  function settleRate(skill, seed) {
-    const rng = mulberry(seed);
-    const shells = ["outer", "outer", "outer", "middle", "middle", "inner"];
-    let wins = 0;
-    const games = 800;
-    for (let i = 0; i < games; i++) {
-      let fuel = START_FUEL;
-      let variable = 1;
-      let settled = false;
-      for (const shell of shells) {
-        const cost = fuelCost(variable, 10);
-        if (fuel + 1e-9 < cost) break;
-        fuel -= cost;
-        const correct = rng() < skill;
-        const result = habitability(
-          { percent: drawPercent(shell, rng), credits: 0, variable },
-          correct,
-          rng,
-        );
-        variable = result.variable;
-        if (result.won) {
-          settled = true;
-          break;
-        }
-      }
-      if (settled) wins++;
-    }
-    return wins / games;
-  }
-  const skilled = settleRate(0.85, 7);
-  const guesser = settleRate(0.25, 7);
-  assert.ok(skilled > 0.35, `skilled ${skilled}`);
-  assert.ok(guesser < 0.2, `guesser ${guesser}`);
-  assert.ok(skilled - guesser > 0.25, `${skilled} vs ${guesser}`);
+test("a landing site settles when its roll of 0–99 comes in under the chance", () => {
+  const roll = (k) => () => (k + 0.5) / 100;
+  assert.equal(siteSettles(30, roll(29)), true);
+  assert.equal(siteSettles(30, roll(30)), false);
+  assert.equal(siteSettles(5, roll(0)), true);
+  assert.equal(siteSettles(65, roll(99)), false);
 });
 
 test("multiplier band is 0–1 only on roll 1", () => {
@@ -224,82 +164,11 @@ test("applyMultiplier floors at 1", () => {
   assert.equal(applyMultiplier(0.4, 0.2), 1);
 });
 
-test("roll equal to percent does not win", () => {
-  const state = { percent: 50, credits: 0, variable: 2 };
-  const lost = habitability(state, true, scripted([unit(25, 101)]));
-  assert.equal(state.percent, 50);
-  assert.equal(lost.percent, 25);
-  assert.equal(lost.roll, 25);
-  assert.equal(lost.won, false);
-  assert.equal(lost.closed, true);
-  assert.equal(lost.credits, 15);
-  assert.equal(lost.variable, 2);
-  assert.equal(lost.multiplier, null);
-
-  const won = habitability(
-    { percent: 50, credits: 3, variable: 2 },
-    true,
-    scripted([unit(26, 101)]),
-  );
-  assert.equal(won.roll, 26);
-  assert.equal(won.won, true);
-  assert.equal(won.closed, false);
-  assert.equal(won.credits, 18);
-});
-
-test("percent is not capped", () => {
-  const alwaysLose = habitability(
-    { percent: 95, credits: 5, variable: 1 },
-    false,
-    scripted([unit(5, 10), 0, unit(100, 101)]),
-  );
-  assert.equal(alwaysLose.percent, 120);
-  assert.equal(alwaysLose.roll, 100);
-  assert.equal(alwaysLose.won, false);
-  assert.equal(alwaysLose.credits, 5);
-  assert.equal(alwaysLose.variable, 1);
-
-  const alwaysWin = habitability(
-    { percent: 5, credits: 0, variable: 3 },
-    true,
-    scripted([unit(0, 101)]),
-  );
-  assert.equal(alwaysWin.percent, -20);
-  assert.equal(alwaysWin.roll, 0);
-  assert.equal(alwaysWin.won, true);
-  assert.equal(alwaysWin.variable, 3);
-
-  const zeroLoses = habitability(
-    { percent: 25, credits: 0, variable: 1 },
-    true,
-    scripted([unit(0, 101)]),
-  );
-  assert.equal(zeroLoses.percent, 0);
-  assert.equal(zeroLoses.roll, 0);
-  assert.equal(zeroLoses.won, false);
-
-  const zeroWins = habitability(
-    { percent: 25, credits: 0, variable: 1 },
-    true,
-    scripted([unit(1, 101)]),
-  );
-  assert.equal(zeroWins.roll, 1);
-  assert.equal(zeroWins.won, true);
-});
-
-test("wrong answer applies one multiplier and pays nothing", () => {
-  const result = habitability(
-    { percent: 40, credits: 20, variable: 1 },
-    false,
-    scripted([unit(0, 10), 0.5, unit(100, 101)]),
-  );
-  assert.equal(result.percent, 65);
-  assert.equal(result.credits, 20);
-  assert.equal(result.multiplier, 0.5);
-  assert.equal(result.variable, 1);
-  assert.equal(result.roll, 100);
-  assert.equal(result.won, false);
-  assert.equal(result.closed, true);
+test("a wrong answer applies one multiplier and pays nothing; a right one pays 15", () => {
+  const wrong = answerPlanet({ credits: 20, variable: 1 }, false, scripted([unit(1, 10), 0.5]));
+  assert.deepEqual(wrong, { credits: 20, variable: 1.5, multiplier: 1.5 });
+  const right = answerPlanet({ credits: 3, variable: 2 }, true, scripted([]));
+  assert.deepEqual(right, { credits: 18, variable: 2, multiplier: null });
 });
 
 test("toxic reading is over the limit exactly when the world is not habitable", () => {
@@ -517,13 +386,6 @@ test("a streak pays 1 bonus credit for every 5 right in a row; a wrong answer re
   assert.deepEqual(fuelStreak(r(11)), { streak: 11, bonus: 2 });
   assert.deepEqual(fuelStreak([...r(4), "wrong", ...r(4)]), { streak: 4, bonus: 0 });
   assert.deepEqual(fuelStreak([...r(3), "skip", ...r(2), "wrong"]), { streak: 0, bonus: 1 });
-});
-
-test("a scan's second site settles only when its roll beats the percent", () => {
-  const half = () => 0.5; // rollInt(0, 100) → 50
-  assert.equal(secondSite(49, half), true);
-  assert.equal(secondSite(50, half), false);
-  assert.equal(secondSite(-5, () => 0), true);
 });
 
 test("every flight event has two options, and one of them is always open", async () => {

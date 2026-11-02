@@ -33,27 +33,24 @@ export function rollInt(rng, lo, hi) {
   return lo + Math.min(span - 1, Math.max(0, pick));
 }
 
-// Each shell draws from its own band, so a right answer rarely settles an inner
-// world and settles an outer one most often. With the 25-point answer shift and a
-// 0–100 roll, landing blind after a right answer settles about: inner 5%, middle
-// 25%, outer 30%; a scan's second site (it costs power) lifts those to 10%, 43% and 50%.
-// Percent can exceed 100; the roll still has to beat it.
-const SHELL_BANDS = Object.freeze({
-  inner: [108, 125],
-  middle: [85, 115],
-  outer: [83, 120],
-});
-const ANSWER_SHIFT = 25;
+// Landing odds grow with the time flown and are the same for every planet: 5% when the clock starts,
+// rising evenly to 60% after 10 minutes (5 left). A right answer adds 10 for that landing, up to 65.
+export const HAB_START = 5;
+export const HAB_TOP = 60;
+export const HAB_RAMP_MS = 10 * 60 * 1000;
+export const HAB_RIGHT = 10;
+export const HAB_CAP = 65;
 
-/** Two ints in the shell's band. Inner keeps max, outer keeps min, middle keeps half-up average. */
-export function drawPercent(shell, rng = Math.random) {
-  const band = SHELL_BANDS[shell];
-  if (!band) throw new Error(`unknown shell: ${shell}`);
-  const a = rollInt(rng, band[0], band[1]);
-  const b = rollInt(rng, band[0], band[1]);
-  if (shell === "inner") return Math.max(a, b);
-  if (shell === "outer") return Math.min(a, b);
-  return Math.round((a + b) / 2);
+/** The landing chance in whole percent, elapsedMs into the run. A right answer adds HAB_RIGHT, up to HAB_CAP. */
+export function landingChance(elapsedMs, correct) {
+  const t = Math.min(1, Math.max(0, elapsedMs / HAB_RAMP_MS));
+  const base = Math.round(HAB_START + (HAB_TOP - HAB_START) * t);
+  return Math.min(HAB_CAP, base + (correct ? HAB_RIGHT : 0));
+}
+
+/** One landing site: it settles when a roll of 0–99 comes in under the chance. */
+export function siteSettles(chance, rng = Math.random) {
+  return rollInt(rng, 0, 99) < chance;
 }
 
 export function fuelCost(variable, distance) {
@@ -135,27 +132,20 @@ export function shuffleWith(list, rng) {
 }
 
 /**
- * After a habitability answer. Right: percent −25, +15 credits, variable
- * unchanged. Wrong: percent +25, no credits, one multiplier, and the world
- * never settles. Then a secret int 0–100. A right answer settles only when
- * roll > percent (equal loses and closes the planet). Percent is not capped.
- * Wrong consumes two rng() samples for the multiplier, then one for the roll.
- * Right consumes only the roll sample.
+ * After a habitability answer. Right: +15 credits, variable unchanged. Wrong: no credits and one
+ * multiplier on the variable. Either way the player then tries to land (landingChance).
+ * Wrong consumes two rng() samples for the multiplier; right consumes none.
  */
-export function habitability(state, correct, rng = Math.random) {
-  let { percent, credits, variable } = state;
+export function answerPlanet(state, correct, rng = Math.random) {
+  let { credits, variable } = state;
   let multiplier = null;
   if (correct) {
-    percent -= ANSWER_SHIFT;
     credits += 15;
   } else {
-    percent += ANSWER_SHIFT;
     multiplier = drawMultiplier(rng);
     variable = applyMultiplier(variable, multiplier);
   }
-  const roll = rollInt(rng, 0, 100);
-  const won = correct && roll > percent;
-  return { percent, credits, variable, roll, multiplier, won, closed: !won };
+  return { credits, variable, multiplier };
 }
 
 export const TOXIC_LIMIT = 50;
@@ -218,11 +208,6 @@ export function fuelStreak(answers) {
 
 // A scan from orbit costs this much power and checks a second landing site when the first is toxic.
 export const SCAN_POWER = 1;
-
-/** The second site of a scan: same percent, its own roll. */
-export function secondSite(percent, rng = Math.random) {
-  return rollInt(rng, 0, 100) > percent;
-}
 
 /**
  * Buy a multiset of shop packs. `counts[i]` is how many of SHOP_PACKS[i].

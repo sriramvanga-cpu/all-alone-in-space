@@ -544,21 +544,6 @@ input:focus {
 .node .planet-art { transition: transform 0.18s var(--ease); }
 .node.ready:hover .planet-art, .node.ready:focus-visible .planet-art { transform: scale(1.1); }
 .node.shut { opacity: 0.55; }
-.hab-tag {
-  font: 700 10.5px var(--font-display);
-  letter-spacing: 0.06em;
-  stroke: rgba(4, 7, 16, 0.92);
-  stroke-width: 3.2px;
-  stroke-linejoin: round;
-  paint-order: stroke;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.node:hover .hab-tag, .node:focus-visible .hab-tag { opacity: 1; }
-.hab-low { fill: var(--danger); }
-.hab-medium { fill: #ffd27a; }
-.hab-high { fill: var(--ok); }
 
 .here-ring { fill: none; stroke: #fff; stroke-width: 1.4; opacity: 0.85; pointer-events: none; }
 .ready-ring {
