@@ -1196,7 +1196,8 @@ function Valve({ onMark }) {
     if (!hit) return;
     // Speed up, keeping the needle where it is; then move the band well away.
     const p = phase();
-    const period = Math.max(1100, sweep.current.period * 0.94);
+    // It never gets faster than this, so a late hit is still a fair timing test.
+    const period = Math.max(1500, sweep.current.period * 0.94);
     sweep.current = { t0: performance.now() - p * period, period };
     let next = band;
     while (Math.abs(next - band) < 0.25) next = 0.15 + Math.random() * 0.7;
@@ -1226,7 +1227,8 @@ function Valve({ onMark }) {
 const PADS = ["#ff5a5a", "#3ddc84", "#4f8bff", "#ffd23f"];
 
 // Simon-style: watch a sequence of pads light up, then tap it back. It grows by one after a
-// success (up to 6) and shrinks by one after a mistake (down to 3).
+// success (up to 4) and shrinks by one after a mistake (down to 3). Short codes keep the pay close to
+// the maths minute's.
 function ReactorCode({ onMark }) {
   const [seq, setSeq] = useState(() => codeOf(3));
   const [lit, setLit] = useState(-1);
@@ -1240,10 +1242,10 @@ function ReactorCode({ onMark }) {
     setGot(0);
     setWatching(true);
     const timers = seq.flatMap((pad, i) => [
-      setTimeout(() => setLit(pad), 600 + i * 600),
-      setTimeout(() => setLit(-1), 600 + i * 600 + 400),
+      setTimeout(() => setLit(pad), 500 + i * 500),
+      setTimeout(() => setLit(-1), 500 + i * 500 + 350),
     ]);
-    timers.push(setTimeout(() => setWatching(false), 600 + seq.length * 600));
+    timers.push(setTimeout(() => setWatching(false), 500 + seq.length * 500));
     return () => timers.forEach(clearTimeout);
   }, [seq]);
 
@@ -1260,7 +1262,7 @@ function ReactorCode({ onMark }) {
     if (pos.current === seq.length) {
       onMark("right");
       setLast("right");
-      setSeq(codeOf(Math.min(6, seq.length + 1)));
+      setSeq(codeOf(Math.min(4, seq.length + 1)));
     }
   }
 

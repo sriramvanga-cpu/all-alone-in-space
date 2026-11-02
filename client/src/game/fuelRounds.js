@@ -103,7 +103,7 @@ function makeOddCard(rng = Math.random) {
 export const FUEL_ROUNDS = Object.freeze(
   [
     { id: "maths", title: "Quick maths", how: "Pick the right answer.", per: 1, make: makeFuelCard },
-    { id: "valve", title: "Pressure valve", how: "Tap Vent while the needle is in the green.", per: 3 },
+    { id: "valve", title: "Pressure valve", how: "Tap Vent while the needle is in the green.", per: 2 },
     { id: "code", title: "Reactor code", how: "Watch the lights, then tap them back in order.", per: 1 },
     { id: "ink", title: "Colour clash", how: "Pick the colour of the ink, not the word.", per: 2, make: makeInkCard },
     { id: "count", title: "Cell count", how: "How many fuel cells are there?", per: 1, make: makeCountCard },
