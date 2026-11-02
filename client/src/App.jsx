@@ -34,6 +34,7 @@ import {
   PLANETS,
   LANES,
   JUMP_R,
+  TILT,
   system,
   planet,
   planetsOf,
@@ -48,7 +49,7 @@ import { SAUCER_X, ShipShapes, ShipSvg } from "./art/Ship.jsx";
 import Intro from "./intro/Intro.jsx";
 import { Starbase } from "./art/Station.jsx";
 import { PlanetDot, faceOf } from "./art/Planet.jsx";
-import { MapDefs, MapBackdrop, StarDot } from "./art/MapArt.jsx";
+import { MapDefs, MapBackdrop, StarDot, STAR_NAMES } from "./art/MapArt.jsx";
 import { publishArt, webglAvailable } from "./three/artStore.js";
 import { FuelIcon, PowerIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipIcon } from "./art/icons.jsx";
 
@@ -61,7 +62,10 @@ const VIEW_W = 720;
 const VIEW_H = 640;
 const SWEEP_MS = 1200;
 const STAR_R = 11;
-const SUN_R = 34;
+const SUN_R = 40;
+// Planets on the planetary map are drawn this much bigger than on the old chart, since the oval
+// orbits spread wider.
+const PLANET_ZOOM = 1.2;
 const WORLD = 900;
 const ROUND_MS = 15 * 60 * 1000;
 const QUESTION_MS = 60_000;
@@ -237,6 +241,8 @@ function fresh() {
     landing: null,
     // Every event shows once before any repeats.
     eventOrder: shuffle(FLIGHT_EVENTS),
+    // Each player meets the fuel games in their own order; none repeats until all have been played.
+    fuelOrder: shuffle(FUEL_ROUNDS),
     eventCount: 0,
     // Tips already shown this run; when the open one appeared; clock time handed back for reading them.
     tipsSeen: [],
@@ -858,6 +864,7 @@ function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
           >
             <title>
               {name}
+              {s ? `, ${STAR_NAMES[s.star]}` : ""}
               {hab ? `, habitability ${hab}` : ""}
               {move ? `, ${fmtNum(move.fuel)} fuel${ready ? "" : ", not enough fuel"}` : ""}
             </title>
@@ -871,7 +878,7 @@ function StarMap({ snap, now, shipRef, onLaunch, view, onView, children }) {
             ) : (
               <>
                 <circle className="hit" r={STAR_R + 12} />
-                <StarDot name={id} r={STAR_R} />
+                <StarDot kind={s.star} r={STAR_R} />
                 {id === viewer ? <circle className="here-ring" r={STAR_R + 8} /> : null}
                 {ready ? <circle className="ready-ring" r={STAR_R + 10} /> : null}
                 <g className="sys-planets" transform={`translate(0 ${STAR_R + 16})`} aria-hidden="true">
@@ -952,7 +959,75 @@ function SystemMap({ snap, shipRef, onLaunch, children }) {
   const sunward = (at) => (Math.atan2(-at.y, -at.x) * 180) / Math.PI;
   // Fit the view to this system: the jump point on the left, the outer orbit with its labels on the right.
   const reach = Math.max(...planets.map((p) => p.orbit));
-  const box = [-JUMP_R - 40, -reach - 55, JUMP_R + reach + 110, 2 * reach + 95];
+  const box = [-JUMP_R - 40, -reach * TILT - 65, JUMP_R + reach + 120, 2 * reach * TILT + 115];
+  const placed = planets.map((p) => ({ p, at: orbitAt(p, now) }));
+  // Planets on the far side of the star are drawn before it, the near side after, so they pass behind it.
+  const drawPlanet = ({ p, at }) => {
+    const move = byId.get(p.id);
+    const ready = move != null && move.power <= snap.power + 1e-9;
+    const face = FACES.get(p.id);
+    const hab = HAB_LEVEL[p.shell];
+    const classes = ["node", `node-${p.shell}`, p.id === snap.here ? "here" : "", shut.has(p.id) ? "shut" : "", ready ? "ready" : ""]
+      .filter(Boolean)
+      .join(" ");
+    return (
+      <g
+        key={p.id}
+        className={classes}
+        transform={`translate(${round2(at.x)} ${round2(at.y)}) scale(${PLANET_ZOOM})`}
+        role={ready ? "button" : undefined}
+        tabIndex={ready ? 0 : undefined}
+        aria-label={ready ? `Fly to ${p.id}, ${fmtNum(move.power)} power${hab ? `, habitability ${hab}` : ""}` : undefined}
+        onClick={() => {
+          if (ready) onLaunch(p.id);
+        }}
+        onKeyDown={(e) => {
+          if (!ready || (e.key !== "Enter" && e.key !== " ")) return;
+          e.preventDefault();
+          onLaunch(p.id);
+        }}
+      >
+        <title>
+          {p.id}
+          {hab ? `, habitability ${hab}` : ""}
+          {move ? `, ${fmtNum(move.power)} power${ready ? "" : ", not enough power"}` : ""}
+        </title>
+        <circle className="hit" r={Math.max(14, face.radius + 3)} />
+        {/* The art is lit from the upper left; turn it so its lit side faces the sun. */}
+        <g transform={`rotate(${round2(sunward(at) + 135)})`}>
+          <PlanetDot face={face} detail shut={shut.has(p.id)} />
+        </g>
+        {p.id === snap.here ? <circle className="here-ring" r={face.radius + 5} /> : null}
+        {ready ? <circle className="ready-ring" r={face.radius + 7} /> : null}
+        {hab ? (
+          <text className={`hab-tag hab-${hab.toLowerCase()}`} y={face.radius + 15} textAnchor="middle" aria-hidden="true">
+            Habitability: {hab}
+          </text>
+        ) : null}
+        {hab ? (
+          <g className="beacon" transform={`translate(0 ${-(face.radius + 25)})`} aria-hidden="true">
+            <circle className="beacon-pulse" r="6.5" />
+            <circle className="beacon-bg" r="6.5" />
+            <text className="beacon-mark" y="3.3" textAnchor="middle">
+              !
+            </text>
+          </g>
+        ) : null}
+        {p.shell === "fuel" ? (
+          <path
+            className="fuel-badge"
+            transform={`translate(${face.radius * 0.72 + 4} ${-(face.radius * 0.72 + 4)})`}
+            d={DROP}
+            aria-hidden="true"
+          />
+        ) : null}
+        <text className="node-label" y={-(face.radius + 3)} textAnchor="middle" dominantBaseline="text-after-edge">
+          {p.id}
+        </text>
+        {move ? <CostPill text={fmtNum(move.power)} x={face.radius + 24} y={0} power /> : null}
+      </g>
+    );
+  };
   return (
     <div className="map-stage system-stage">
       <svg
@@ -963,11 +1038,13 @@ function SystemMap({ snap, shipRef, onLaunch, children }) {
       >
         <MapDefs />
         {planets.map((p) => (
-          <circle key={p.id} className="orbit" r={p.orbit} />
+          <ellipse key={p.id} className="orbit" rx={p.orbit} ry={p.orbit * TILT} />
         ))}
+        {placed.filter(({ at }) => at.y < 0).map(drawPlanet)}
         <g className="sun">
-          <StarDot name={snap.system} r={SUN_R} />
+          <StarDot kind={system(snap.system).star} r={SUN_R} sun />
         </g>
+        {placed.filter(({ at }) => at.y >= 0).map(drawPlanet)}
         <g className="jump" transform={`translate(${-JUMP_R} 0)`}>
           <circle r="15" />
           <text className="node-label" y="-21" textAnchor="middle">
@@ -978,73 +1055,6 @@ function SystemMap({ snap, shipRef, onLaunch, children }) {
         {flying ? (
           <path className="streak" d={snap.flight.d} pathLength="100" style={{ animationDuration: `${snap.flight.ms}ms` }} />
         ) : null}
-        {planets.map((p) => {
-          const at = orbitAt(p, now);
-          const move = byId.get(p.id);
-          const ready = move != null && move.power <= snap.power + 1e-9;
-          const face = FACES.get(p.id);
-          const hab = HAB_LEVEL[p.shell];
-          const classes = ["node", `node-${p.shell}`, p.id === snap.here ? "here" : "", shut.has(p.id) ? "shut" : "", ready ? "ready" : ""]
-            .filter(Boolean)
-            .join(" ");
-          return (
-            <g
-              key={p.id}
-              className={classes}
-              transform={`translate(${round2(at.x)} ${round2(at.y)})`}
-              role={ready ? "button" : undefined}
-              tabIndex={ready ? 0 : undefined}
-              aria-label={ready ? `Fly to ${p.id}, ${fmtNum(move.power)} power${hab ? `, habitability ${hab}` : ""}` : undefined}
-              onClick={() => {
-                if (ready) onLaunch(p.id);
-              }}
-              onKeyDown={(e) => {
-                if (!ready || (e.key !== "Enter" && e.key !== " ")) return;
-                e.preventDefault();
-                onLaunch(p.id);
-              }}
-            >
-              <title>
-                {p.id}
-                {hab ? `, habitability ${hab}` : ""}
-                {move ? `, ${fmtNum(move.power)} power${ready ? "" : ", not enough power"}` : ""}
-              </title>
-              <circle className="hit" r={Math.max(14, face.radius + 3)} />
-              {/* The art is lit from the upper left; turn it so its lit side faces the sun. */}
-              <g transform={`rotate(${round2(sunward(at) + 135)})`}>
-                <PlanetDot face={face} detail shut={shut.has(p.id)} />
-              </g>
-              {p.id === snap.here ? <circle className="here-ring" r={face.radius + 5} /> : null}
-              {ready ? <circle className="ready-ring" r={face.radius + 7} /> : null}
-              {hab ? (
-                <text className={`hab-tag hab-${hab.toLowerCase()}`} y={face.radius + 15} textAnchor="middle" aria-hidden="true">
-                  Habitability: {hab}
-                </text>
-              ) : null}
-              {hab ? (
-                <g className="beacon" transform={`translate(0 ${-(face.radius + 25)})`} aria-hidden="true">
-                  <circle className="beacon-pulse" r="6.5" />
-                  <circle className="beacon-bg" r="6.5" />
-                  <text className="beacon-mark" y="3.3" textAnchor="middle">
-                    !
-                  </text>
-                </g>
-              ) : null}
-              {p.shell === "fuel" ? (
-                <path
-                  className="fuel-badge"
-                  transform={`translate(${face.radius * 0.72 + 4} ${-(face.radius * 0.72 + 4)})`}
-                  d={DROP}
-                  aria-hidden="true"
-                />
-              ) : null}
-              <text className="node-label" y={-(face.radius + 3)} textAnchor="middle" dominantBaseline="text-after-edge">
-                {p.id}
-              </text>
-              {move ? <CostPill text={fmtNum(move.power)} x={face.radius + 24} y={0} power /> : null}
-            </g>
-          );
-        })}
         {flying ? (
           <g ref={shipRef} className="ship">
             <ShipShapes />
@@ -1323,6 +1333,18 @@ function FlightLog({ onMark }) {
     }
   }
 
+  // The keyboard's arrow keys work like the buttons, in LOG_DIRS order.
+  useEffect(() => {
+    const keys = { ArrowLeft: 0, ArrowUp: 1, ArrowDown: 2, ArrowRight: 3 };
+    const onKey = (e) => {
+      if (!(e.key in keys)) return;
+      e.preventDefault();
+      if (!e.repeat) press(keys[e.key]);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [watching, seq]);
+
   const status = watching
     ? last === "wrong" ? "Wrong log. Watch again." : "Watch the arrows."
     : `Your turn: ${got} of ${seq.length}.`;
@@ -1347,51 +1369,70 @@ function logOf(length) {
   return Array.from({ length }, () => Math.floor(Math.random() * LOG_DIRS.length));
 }
 
-const ROCK_MS = 850;
-// About 48 rocks a minute for a quick player, so with streak bonuses it pays like the valve.
-const ROCK_GAP_MS = 800;
+// Asteroids drift across a scanner screen; tap one to blast it. A miss costs nothing, but the cannon
+// takes a moment to recharge, so tapping everywhere doesn't pay. One rock a second keeps the pay
+// close to the valve's.
+const ROCK_EVERY_MS = 1000;
+const SHOT_MS = 250;
 
-// An asteroid flashes up in one of nine cells; tap it before it's gone. Tapping empty space while a
-// rock is up is a miss; letting one go only costs time, and taps between rocks are ignored.
 function AsteroidTap({ onMark }) {
-  const [rock, setRock] = useState(-1);
-  const [wave, setWave] = useState(0);
-  const last = useRef(-1);
+  const [rocks, setRocks] = useState([]);
+  const [booms, setBooms] = useState([]);
+  const field = useRef(null);
+  const lastShot = useRef(0);
+  const count = useRef(0);
   useEffect(() => {
-    const show = setTimeout(() => {
-      let cell = last.current;
-      while (cell === last.current) cell = Math.floor(Math.random() * 9);
-      last.current = cell;
-      setRock(cell);
-    }, ROCK_GAP_MS);
-    const gone = setTimeout(() => {
-      setRock(-1);
-      setWave((w) => w + 1);
-    }, ROCK_GAP_MS + ROCK_MS);
-    return () => {
-      clearTimeout(show);
-      clearTimeout(gone);
-    };
-  }, [wave]);
-  function tap(cell) {
-    if (rock < 0) return;
-    if (cell !== rock) {
-      onMark("wrong");
-      return;
-    }
+    const id = setInterval(() => {
+      const n = ++count.current;
+      const y0 = 6 + Math.random() * 70;
+      const y1 = Math.max(2, Math.min(78, y0 + (Math.random() - 0.5) * 40));
+      // A lumpy outline: eleven corners at uneven distances, so no two rocks look alike.
+      const outline = Array.from({ length: 11 }, (_, i) => {
+        const a = (i / 11) * 2 * Math.PI;
+        const d = 34 + Math.random() * 16;
+        return `${(50 + d * Math.cos(a)).toFixed(1)}% ${(50 + d * Math.sin(a)).toFixed(1)}%`;
+      }).join(", ");
+      const size = 2.4 + Math.random() * 1.4;
+      setRocks((list) => [...list, { n, y0, y1, ms: 2600 + Math.random() * 1600, size, squash: 0.7 + Math.random() * 0.3, outline }]);
+    }, ROCK_EVERY_MS);
+    return () => clearInterval(id);
+  }, []);
+  function shoot(e) {
+    const now = performance.now();
+    if (now - lastShot.current < SHOT_MS) return;
+    lastShot.current = now;
+    const n = Number(e.target.dataset.rock);
+    if (!n) return;
+    const box = e.target.getBoundingClientRect();
+    const area = field.current.getBoundingClientRect();
     onMark("right");
-    setRock(-1);
-    setWave((w) => w + 1);
+    setRocks((list) => list.filter((r) => r.n !== n));
+    setBooms((list) => [...list, { n, x: box.left + box.width / 2 - area.left, y: box.top + box.height / 2 - area.top }]);
   }
   return (
-    <div className="rocks">
-      {Array.from({ length: 9 }, (_, i) => (
-        <button
-          key={i}
-          type="button"
-          className={i === rock ? "rock up" : "rock"}
-          aria-label={i === rock ? "Asteroid" : "Empty space"}
-          onClick={() => tap(i)}
+    <div className="rocks" ref={field} onPointerDown={shoot} aria-label="Asteroid field">
+      {rocks.map((r) => (
+        <span
+          key={r.n}
+          className="rock"
+          data-rock={r.n}
+          style={{
+            "--y0": `${r.y0}%`,
+            "--y1": `${r.y1}%`,
+            "--size": `${r.size}rem`,
+            "--fly": `${r.ms}ms`,
+            height: `${r.size * r.squash}rem`,
+            clipPath: `polygon(${r.outline})`,
+          }}
+          onAnimationEnd={(e) => e.animationName === "fly" && setRocks((list) => list.filter((x) => x.n !== r.n))}
+        />
+      ))}
+      {booms.map((b) => (
+        <span
+          key={b.n}
+          className="boom"
+          style={{ left: b.x, top: b.y }}
+          onAnimationEnd={() => setBooms((list) => list.filter((x) => x.n !== b.n))}
         />
       ))}
     </div>
@@ -1551,7 +1592,7 @@ function Game() {
     if (FUEL_WORLDS.has(id)) {
       // Fuel worlds close after one visit, so this counts earlier fuel stops.
       const stops = g.visited.filter((v) => FUEL_WORLDS.has(v)).length;
-      const round = FUEL_ROUNDS[stops % FUEL_ROUNDS.length];
+      const round = g.fuelOrder[stops % g.fuelOrder.length];
       const card = drawFuelCard(round, g.fuelSeen);
       commit({
         phase: "fuel",
@@ -1925,7 +1966,7 @@ function Game() {
           ? `${snap.here} · ${snap.system}`
           : `${snap.here} system`;
   const mapHint = snap.system
-    ? "Planets orbit the sun. A hop costs power by how far apart they are right now."
+    ? `Planets orbit this ${STAR_NAMES[system(snap.system).star]}. A hop costs power by how far apart they are right now.`
     : snap.scanned.includes(snap.here)
       ? "Lanes from here show the fuel they cost."
       : snap.power + 1e-9 < MAP_SCAN_POWER

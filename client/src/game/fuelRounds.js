@@ -1,5 +1,5 @@
-// Fuel-stop challenges. Each stop plays the next round in this list, so eight fuel stops never
-// repeat one, and every player meets them in the same order. `per` is how many right answers
+// Fuel-stop challenges. Each player gets them in a shuffled order (App.jsx), so none repeats until
+// all eight have been played. `per` is how many right answers
 // earn one credit; it evens out fast rounds so a typical player earns about 13 credits a minute.
 // Rounds without `make` are interactive games drawn in App.jsx.
 import { rollInt, shuffleWith } from "./rules.js";
@@ -69,9 +69,9 @@ function makeRuleCard(rng = Math.random) {
 export const FUEL_ROUNDS = Object.freeze(
   [
     { id: "valve", title: "Pressure valve", how: "Tap Vent while the needle is in the green.", per: 2 },
-    { id: "log", title: "Flight log", how: "Watch the arrows, then tap them back in order.", per: 1 },
+    { id: "log", title: "Flight log", how: "Watch the arrows, then tap them back in order, or use the arrow keys.", per: 1 },
     { id: "ink", title: "Colour clash", how: "Pick the colour of the ink, not the word.", per: 2, make: makeInkCard },
-    { id: "rocks", title: "Asteroid tap", how: "Tap each asteroid before it's gone. Tapping empty space is a miss.", per: 4 },
+    { id: "rocks", title: "Asteroid tap", how: "Tap the asteroids as they fly across the screen.", per: 4 },
     { id: "tank", title: "Fullest tank", how: "Pick the fullest tank.", per: 2, make: makeTankCard },
     { id: "rule", title: "Rule switch", how: "Blue arrow: tap the way it points. Red arrow: tap the opposite way.", per: 2, make: makeRuleCard },
     { id: "arrows", title: "Flight path", how: "Which way does the middle arrow point?", per: 3, make: makeArrowCard },

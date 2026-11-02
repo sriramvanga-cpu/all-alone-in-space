@@ -11,9 +11,9 @@ export const POWER_CAP = 10;
 export const POWER_TICK_MS = 20_000;
 // A star-map scan, which reveals the systems one lane away.
 export const MAP_SCAN_POWER = 1;
-// Power per unit of distance between two planets (orbits sit 50 units apart): a hop costs about
-// 1–10, 4 on average. Dearer hops or slower recharge leave players waiting rather than playing.
-export const HOP_K = 0.02;
+// Power per unit of distance between two planets (orbits sit 65 units apart): a hop costs about
+// 1–11, 4.8 on average. Dearer hops or slower recharge leave players waiting rather than playing.
+export const HOP_K = 0.0167;
 
 /** Power for a hop of this many system units, to one decimal so the live label stays readable. */
 export function hopPower(distance) {

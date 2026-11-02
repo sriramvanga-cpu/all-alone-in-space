@@ -741,23 +741,48 @@ input:focus {
 .log-keys button { min-height: 4rem; font-size: 1.8rem; }
 .log-keys button[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 
-.rocks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-top: 0.6rem; }
-.rock {
-  height: 5rem;
-  padding: 0;
-  background: rgba(5, 9, 20, 0.55);
-  border: 1px solid var(--glass-line);
-  border-radius: 14px;
-  box-shadow: none;
-}
-.rock:hover:not(:disabled) { filter: none; box-shadow: none; transform: none; }
-.rock.up {
+.rocks {
+  position: relative;
+  height: 15rem;
+  margin-top: 0.6rem;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: manipulation;
+  user-select: none;
   background:
-    radial-gradient(circle at 38% 34%, #b49a84 0 12%, transparent 13%),
-    radial-gradient(circle at 62% 60%, #6d5848 0 9%, transparent 10%),
-    radial-gradient(circle at 46% 44%, #9b8270 0 30%, #5a463a 31% 34%, transparent 35%),
-    rgba(5, 9, 20, 0.55);
-  animation: pop 0.18s var(--ease) both;
+    linear-gradient(rgba(61, 220, 132, 0.07) 1px, transparent 1px) 0 0 / 2rem 2rem,
+    linear-gradient(90deg, rgba(61, 220, 132, 0.07) 1px, transparent 1px) 0 0 / 2rem 2rem,
+    radial-gradient(ellipse at 50% 50%, rgba(20, 60, 50, 0.35), rgba(5, 9, 20, 0.75));
+  border: 1px solid rgba(61, 220, 132, 0.35);
+  border-radius: 14px;
+}
+.rock {
+  position: absolute;
+  width: var(--size);
+  background:
+    radial-gradient(circle at 34% 30%, #b49a84 0 12%, transparent 13%),
+    radial-gradient(circle at 66% 58%, #6d5848 0 10%, transparent 11%),
+    radial-gradient(circle at 48% 74%, #5e4a3c 0 7%, transparent 8%),
+    radial-gradient(circle at 40% 36%, #a58b77, #5a463a 62%, #33271f 100%);
+  animation: fly var(--fly) linear forwards, spin 6s linear infinite;
+}
+@keyframes fly {
+  from { left: 100%; top: var(--y0); }
+  to { left: calc(-1 * var(--size)); top: var(--y1); }
+}
+.boom {
+  position: absolute;
+  width: 3.4rem;
+  height: 3.4rem;
+  translate: -50% -50%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, #fff 0 14%, #ffd27a 30%, rgba(255, 120, 40, 0.6) 50%, transparent 70%);
+  animation: boom 0.35s ease-out forwards;
+}
+@keyframes boom {
+  from { scale: 0.3; opacity: 1; }
+  to { scale: 1.6; opacity: 0; }
 }
 
 /* Right answers in a row during a fuel minute */
@@ -814,6 +839,12 @@ input:focus {
 .system-stage, .system-stage:active { cursor: default; }
 .orbit { fill: none; stroke: rgba(150, 185, 255, 0.34); stroke-width: 1.2; }
 .sun .star-glow { transform-box: fill-box; transform-origin: center; animation: corona 4s ease-in-out infinite alternate; }
+.star .rays, .star .beams, .star .pair { transform-box: fill-box; transform-origin: center; animation: spin 80s linear infinite; }
+.star .beams { animation-duration: 1.8s; }
+.star .pair { animation-duration: 9s; }
+.star .disk { fill: none; stroke: url(#hole-disk); opacity: 0.9; }
+.star .disk.haze { opacity: 0.2; }
+.star .photon { fill: none; stroke: #ffe2b0; }
 @keyframes corona { to { transform: scale(1.1); opacity: 0.8; } }
 .jump circle { fill: rgba(90, 209, 255, 0.06); stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 3 4; }
 
@@ -1168,7 +1199,7 @@ input:focus {
 
 @media (prefers-reduced-motion: reduce) {
   .streak, .link-flow, .ready-ring, .beacon-pulse, .navlight, .plume, .exhaust, .end-orb, .live::before,
-  .scan-btn, .node.system, .sun .star-glow, .sweep,
+  .scan-btn, .node.system, .sun .star-glow, .sweep, .star .rays, .star .beams, .star .pair,
   .starbase .spin, .starbase .core, .reading, .scan-bar i {
     animation: none !important;
   }

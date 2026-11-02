@@ -65,6 +65,12 @@ const FUEL_NAMES = [
   "Coridan", "Rigel", "Altair", "Antares", "Vega", "Maluria", "Holberg", "Platonius", "Excalbia", "Gothos",
 ];
 
+// What each system's planets circle. It's only looks: every kind plays the same.
+const STAR_KINDS = [
+  "hole", "hole", "neutron", "neutron", "giant", "giant", "dwarf", "dwarf", "binary", "binary",
+  "yellow", "yellow", "yellow", "yellow", "yellow", "orange", "orange", "orange", "red", "red", "blue",
+];
+
 // Each load turns the chart, mirrors it half the time and shuffles the names: the same map
 // to play, but a route can't be passed from one player to the next.
 const turn = Math.random() * 2 * Math.PI;
@@ -72,22 +78,25 @@ const flip = Math.random() < 0.5 ? -1 : 1;
 const stars = shuffleWith(STARS, Math.random);
 const tests = shuffleWith(TEST_NAMES, Math.random);
 const fuels = shuffleWith(FUEL_NAMES, Math.random);
+const kinds = shuffleWith(STAR_KINDS, Math.random);
 
 export const SYSTEMS = Object.freeze(
-  CHART.map(([ring, r, angle], slot) => Object.freeze({ id: stars[slot], ring, r, angle: flip * angle + turn, slot })),
+  CHART.map(([ring, r, angle], slot) =>
+    Object.freeze({ id: stars[slot], ring, r, angle: flip * angle + turn, slot, star: kinds[slot] }),
+  ),
 );
 
-// Orbits are 50 apart, starting 70 from the sun; inner planets go round faster.
+// Orbits are 65 apart, starting 100 from the sun; inner planets go round faster.
 export const PLANETS = Object.freeze(
   CHART.flatMap(([ring, , , kinds], slot) =>
     [...kinds].map((kind, i) => {
-      const orbit = 70 + 50 * i;
+      const orbit = 100 + 65 * i;
       return Object.freeze({
         id: kind === "T" ? tests.pop() : fuels.pop(),
         system: SYSTEMS[slot].id,
         shell: kind === "T" ? ring : "fuel",
         orbit,
-        period: 24_000 * (orbit / 70) ** 1.5,
+        period: 24_000 * (orbit / 100) ** 1.5,
         phase: Math.random() * 2 * Math.PI,
       });
     }),
@@ -127,12 +136,14 @@ export function lanesFrom(id) {
 }
 
 // Inside a system the ship arrives at a jump point this far left of the sun.
-export const JUMP_R = 290;
+export const JUMP_R = 365;
+// Each system is seen at a tilt, so its orbits are ovals this much flatter than they are wide.
+export const TILT = 0.62;
 
 /** Where a planet is at wall-clock time ms, in system units around its sun. */
 export function orbitAt(p, ms) {
   const a = p.phase - (2 * Math.PI * ms) / p.period;
-  return { x: p.orbit * Math.cos(a), y: p.orbit * Math.sin(a) };
+  return { x: p.orbit * Math.cos(a), y: p.orbit * TILT * Math.sin(a) };
 }
 
 /** A planet's spot at ms, or the jump point for a system id. */
@@ -145,9 +156,4 @@ export function hopDistance(from, to, ms) {
   const a = positionAt(from, ms);
   const b = positionAt(to, ms);
   return Math.hypot(a.x - b.x, a.y - b.y);
-}
-
-/** The shortest a hop gets, when the two line up on the same side of the sun. */
-export function closestHop(from, to) {
-  return Math.abs((planet(from)?.orbit ?? JUMP_R) - planet(to).orbit);
 }

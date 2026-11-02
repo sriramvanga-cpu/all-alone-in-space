@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   START_FUEL,
   START_CREDITS,
@@ -30,14 +31,13 @@ import {
   SYSTEMS,
   PLANETS,
   LANES,
-  JUMP_R,
+  TILT,
   system,
   planet,
   planetsOf,
   lanesFrom,
   orbitAt,
   hopDistance,
-  closestHop,
 } from "./map.js";
 
 function scripted(values) {
@@ -398,6 +398,8 @@ test("the star map has 20+ systems in three rings, each with 1–3 fuel and 0–
   }
   const names = [STATION, ...SYSTEMS.map((s) => s.id), ...PLANETS.map((p) => p.id)];
   assert.equal(new Set(names).size, names.length);
+  for (const s of SYSTEMS) assert.ok(s.star, `${s.id} has no star`);
+  assert.ok(SYSTEMS.some((s) => s.star === "hole") && SYSTEMS.some((s) => s.star === "neutron"));
   assert.equal(system(STATION), null);
   assert.equal(planet(SYSTEMS[0].id), null);
 });
@@ -461,26 +463,26 @@ test("every load is the same chart, turned and renamed", async () => {
   assert.notDeepEqual(loads[0].SYSTEMS.map((s) => s.id), loads[1].SYSTEMS.map((s) => s.id));
 });
 
-test("a hop is cheapest when two planets line up and dearest on opposite sides of the sun", () => {
+test("a hop is cheapest when two planets line up across the oval and dearest on opposite ends", () => {
   const p = PLANETS.find((x) => planetsOf(x.system).length >= 2);
   const q = planetsOf(p.system).find((x) => x.id !== p.id);
   const start = orbitAt(p, 0);
   const round = orbitAt(p, p.period);
   assert.ok(Math.abs(start.x - round.x) < 1e-6 && Math.abs(start.y - round.y) < 1e-6, "an orbit repeats after one period");
-  assert.ok(Math.abs(Math.hypot(start.x, start.y) - p.orbit) < 1e-9);
-  assert.equal(closestHop(p.id, q.id), Math.abs(p.orbit - q.orbit));
-  assert.equal(closestHop(p.system, q.id), JUMP_R - q.orbit);
+  assert.ok(Math.abs((start.x / p.orbit) ** 2 + (start.y / (p.orbit * TILT)) ** 2 - 1) < 1e-9, "the planet is on its oval");
   let lo = Infinity;
   let hi = 0;
-  for (let ms = 0; ms < 400_000; ms += 250) {
+  for (let ms = 0; ms < 800_000; ms += 100) {
     const d = hopDistance(p.id, q.id, ms);
     lo = Math.min(lo, d);
     hi = Math.max(hi, d);
   }
-  assert.ok(lo >= Math.abs(p.orbit - q.orbit) - 1e-9 && lo < Math.abs(p.orbit - q.orbit) + 5, `closest ${lo}`);
+  // Closest when both sit on the short axis, farthest at opposite ends of the long one.
+  const gap = Math.abs(p.orbit - q.orbit);
+  assert.ok(lo >= gap * TILT - 1e-9 && lo < gap * TILT + 5, `closest ${lo}`);
   assert.ok(hi <= p.orbit + q.orbit + 1e-9 && hi > p.orbit + q.orbit - 5, `farthest ${hi}`);
-  assert.equal(hopPower(220), 4.4);
-  assert.equal(hopPower(123), 2.5);
+  assert.equal(hopPower(240), 4);
+  assert.equal(hopPower(100), 1.7);
 });
 
 test("eight different fuel rounds, and every card has one right answer among four", async () => {
@@ -534,4 +536,21 @@ test("every flight event has two options, and one of them is always open", async
   assert.equal(canTake({ fuel: -1 }, { fuel: 0.9, credits: 0 }), false);
   assert.equal(canTake({ fuel: -1 }, { fuel: 1, credits: 0 }), true);
   assert.equal(canTake({ credits: -5 }, { fuel: 0, credits: 4 }), false);
+});
+
+test("every habitability card has one right answer among four, and each level has plenty", () => {
+  const bank = JSON.parse(readFileSync(new URL("../data/questions.json", import.meta.url), "utf8"));
+  const ids = new Set();
+  for (const domain of ["general", "mental", "technology"]) {
+    const count = { easy: 0, medium: 0, hard: 0 };
+    for (const card of bank[domain]) {
+      assert.ok(!ids.has(card.id), `${card.id} twice`);
+      ids.add(card.id);
+      assert.ok(card.level in count, card.id);
+      count[card.level] += 1;
+      assert.equal(new Set(card.choices).size, 4, card.id);
+      assert.ok(card.choices.includes(card.answer), card.id);
+    }
+    assert.ok(count.easy >= 16 && count.medium >= 12 && count.hard >= 12, `${domain} ${JSON.stringify(count)}`);
+  }
 });

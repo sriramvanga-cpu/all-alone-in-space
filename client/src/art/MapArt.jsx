@@ -1,5 +1,5 @@
-import { SYSTEMS } from "../game/map.js";
-import { hashId } from "./Planet.jsx";
+import { memo } from "react";
+import { SYSTEMS, TILT } from "../game/map.js";
 import { ShipDefs } from "./Ship.jsx";
 import { StationDefs } from "./Station.jsx";
 
@@ -12,19 +12,106 @@ const STAR_TINTS = {
   orange: ["#fff1de", "#ffad5c", "#d8702a"],
   red: ["#ffe6dc", "#ff7f5c", "#b8442e"],
   blue: ["#f6f9ff", "#b4ceff", "#6688ff"],
+  giant: ["#ffe2c8", "#ff8a4c", "#a8341c"],
+  dwarf: ["#ffffff", "#eaf3ff", "#a9c8ff"],
+  neutron: ["#ffffff", "#cfe6ff", "#7fb0ff"],
 };
 const TINTS = Object.keys(STAR_TINTS);
 
-/** A star: a bright core in a soft glow, its colour fixed by its name. Small on the star map, big as a sun. */
-export function StarDot({ name, r }) {
-  const tint = TINTS[hashId(name) % TINTS.length];
+export const STAR_NAMES = {
+  yellow: "yellow star",
+  orange: "orange star",
+  red: "red dwarf",
+  blue: "blue star",
+  giant: "red giant",
+  dwarf: "white dwarf",
+  neutron: "neutron star",
+  hole: "black hole",
+  binary: "binary star",
+};
+const KIND_SIZE = { giant: 1.2, dwarf: 0.45 };
+
+// In unit space. Corona: thin streamers of uneven length, blurred soft. Spikes: the sparkle of a
+// distant star. Beams: a pulsar's two cones of light.
+const RAYS = Array.from({ length: 18 }, (_, i) => {
+  const a = (i / 18) * 2 * Math.PI + ((i * 5) % 3) * 0.06;
+  const len = 1.45 + ((i * 7) % 6) * 0.2;
+  const at = (angle, d) => `${(Math.cos(angle) * d).toFixed(3)} ${(Math.sin(angle) * d).toFixed(3)}`;
+  return `M${at(a - 0.07, 0.9)}L${at(a, len)}L${at(a + 0.07, 0.9)}Z`;
+}).join("");
+const SPIKES = "M-2.2 0H2.2M0 -2.2V2.2";
+const BEAMS = "M0 0L-0.32 -3.2L0.32 -3.2ZM0 0L-0.32 3.2L0.32 3.2Z";
+
+function Ball({ tint, r }) {
+  return (
+    <>
+      <circle r={r * 2.6} fill={`url(#star-${tint}-glow)`} />
+      <circle r={r} fill={`url(#star-${tint})`} />
+    </>
+  );
+}
+
+/** A system's star (`kind` from map.js). Small on the star map; with `sun`, big at the centre of a planetary map. */
+function StarDotImpl({ kind, r, sun = false }) {
+  if (kind === "hole") {
+    // A black disc rimmed with light, inside a tilted disk of glowing gas.
+    return (
+      <g className="star" aria-hidden="true">
+        <circle r={r * 3} fill="url(#hole-glow)" />
+        <ellipse className="disk haze" rx={r * 1.7} ry={r * 1.7 * TILT} strokeWidth={r * 0.8} />
+        <ellipse className="disk" rx={r * 1.7} ry={r * 1.7 * TILT} strokeWidth={r * 0.28} />
+        <circle r={r * 0.8} fill="#000" />
+        <circle className="photon" r={r * 0.86} strokeWidth={r * 0.08} />
+      </g>
+    );
+  }
+  if (kind === "binary") {
+    return (
+      <g className="star" aria-hidden="true">
+        <g className="pair">
+          {/* Keeps the pair's box centred, so it turns about the middle. */}
+          <circle r={r * 2.6} fill="none" />
+          <g transform={`translate(${-r * 0.7} 0)`}>
+            <Ball tint="yellow" r={r * 0.6} />
+          </g>
+          <g transform={`translate(${r * 0.8} 0)`}>
+            <Ball tint="blue" r={r * 0.45} />
+          </g>
+        </g>
+      </g>
+    );
+  }
+  if (kind === "neutron") {
+    return (
+      <g className="star" aria-hidden="true">
+        <circle r={r * 1.4} fill="url(#star-neutron-glow)" />
+        <Ball tint="neutron" r={r * 0.3} />
+        <g transform={`scale(${r * (sun ? 1 : 0.75)})`}>
+          <path className="beams" d={BEAMS} fill="url(#star-beam)" />
+        </g>
+      </g>
+    );
+  }
+  const size = r * (KIND_SIZE[kind] ?? 1);
   return (
     <g className="star" aria-hidden="true">
-      <circle className="star-glow" r={r * 2.6} fill={`url(#star-${tint}-glow)`} />
-      <circle r={r} fill={`url(#star-${tint})`} />
+      <circle className="star-glow" r={size * (sun ? 3.2 : 2.6)} fill={`url(#star-${kind}-glow)`} />
+      {sun ? (
+        <g transform={`scale(${size})`}>
+          <path className="rays" d={RAYS} fill="url(#star-ray)" filter="url(#star-soft)" opacity="0.6" />
+        </g>
+      ) : null}
+      <circle r={size} fill={`url(#star-${kind})`} />
+      {sun ? null : (
+        <g transform={`scale(${size})`}>
+          <path d={SPIKES} stroke="url(#star-ray)" strokeWidth="0.07" />
+        </g>
+      )}
     </g>
   );
 }
+
+export const StarDot = memo(StarDotImpl);
 
 // Day/night shading shared by every planet. Unit space, light from the upper left.
 export function MapDefs() {
@@ -85,6 +172,28 @@ export function MapDefs() {
           </radialGradient>,
         ];
       })}
+      {/* Rays, spikes and beams are drawn in unit space, so these gradients and the blur are too. */}
+      <filter id="star-soft" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="0.09" />
+      </filter>
+      <radialGradient id="star-ray" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="2.4">
+        <stop offset="0.35" stopColor="#ffffff" stopOpacity="0.55" />
+        <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+      </radialGradient>
+      <radialGradient id="star-beam" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="3.2">
+        <stop offset="0" stopColor="#ffffff" stopOpacity="0.9" />
+        <stop offset="1" stopColor="#9cc8ff" stopOpacity="0" />
+      </radialGradient>
+      <linearGradient id="hole-disk" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stopColor="#fff4d6" />
+        <stop offset="0.35" stopColor="#ffb347" />
+        <stop offset="0.7" stopColor="#d4541c" />
+        <stop offset="1" stopColor="#8a2a10" stopOpacity="0.8" />
+      </linearGradient>
+      <radialGradient id="hole-glow">
+        <stop offset="0.25" stopColor="#ff9a40" stopOpacity="0.35" />
+        <stop offset="1" stopColor="#ff9a40" stopOpacity="0" />
+      </radialGradient>
       <ShipDefs />
       <StationDefs />
     </defs>
