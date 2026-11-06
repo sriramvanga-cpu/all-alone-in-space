@@ -694,7 +694,10 @@ function Stage({ scene, t, v }) {
 
 const still = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
-// Calls tick(seconds) once per animation frame while `on`. The step is capped, so a hidden tab
+// Reel seconds per real second. Below 1 so walk-up players can follow the moves and read the captions.
+const PACE = 0.8;
+
+// Calls tick(reel seconds) once per animation frame while `on`. The step is capped, so a hidden tab
 // or a stall doesn't skip the reel ahead.
 function useFrames(on, tick) {
   const ref = useRef(tick);
@@ -703,7 +706,7 @@ function useFrames(on, tick) {
     if (!on) return undefined;
     let last = performance.now();
     let id = requestAnimationFrame(function frame(now) {
-      ref.current(Math.min(0.1, Math.max(0, (now - last) / 1000)));
+      ref.current(PACE * Math.min(0.1, Math.max(0, (now - last) / 1000)));
       last = now;
       id = requestAnimationFrame(frame);
     });
@@ -711,6 +714,7 @@ function useFrames(on, tick) {
   }, [on]);
 }
 
+// Each scene's last frame stays up this many reel seconds before the next scene or loop.
 const HOLD = 1.2;
 const LOOPS = 3;
 
@@ -745,8 +749,9 @@ export default function HowTo({ onDone }) {
   useFrames(playing && !ended, (dt) =>
     setPos((p) => {
       const next = p.t + dt;
-      if (next < SCENES[p.i].s) return { i: p.i, t: next };
-      return p.i < SCENES.length - 1 ? { i: p.i + 1, t: 0 } : { i: p.i, t: SCENES[p.i].s };
+      const s = SCENES[p.i].s;
+      if (p.i === SCENES.length - 1) return { i: p.i, t: Math.min(next, s) };
+      return next < s + HOLD ? { i: p.i, t: next } : { i: p.i + 1, t: 0 };
     }),
   );
 
