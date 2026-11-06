@@ -65,7 +65,7 @@ import {
   SUN_R,
   systemBox,
 } from "./art/MapArt.jsx";
-import { publishArt, webglAvailable } from "./three/artStore.js";
+import { publishArt, useArt, webglAvailable } from "./three/artStore.js";
 import { FuelIcon, PowerIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipIcon, StarIcon, CompassIcon } from "./art/icons.jsx";
 
 const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
@@ -752,6 +752,39 @@ function fit(origin, size) {
   const hi = WORLD - size;
   if (hi < -WORLD) return (-WORLD + hi) / 2;
   return Math.max(-WORLD, Math.min(hi, origin));
+}
+
+// A planet's own art for panels: its rendered image once ready (else the vector art), framed to fit,
+// rings included.
+function PlanetArt({ id }) {
+  const face = FACES.get(id);
+  const art = useArt().planets.get(face.uid);
+  const reach = round2(face.radius * (art?.ext ?? (face.ring ? 2.2 : 1.22)) * 1.04);
+  return (
+    <svg className="planet-art-box" viewBox={`${-reach} ${-reach} ${2 * reach} ${2 * reach}`} aria-hidden="true">
+      <MapDefs />
+      <PlanetDot face={face} detail />
+    </svg>
+  );
+}
+
+const SHELL_WORDS = { inner: "Hard questions", middle: "Medium questions", outer: "Easy questions" };
+
+// The screens at a possible home show that planet beside the panel, so players remember where they are.
+function AtPlanet({ id, children }) {
+  const shell = planet(id)?.shell;
+  return (
+    <div className="at-planet">
+      <figure className="at-planet-art">
+        <PlanetArt id={id} />
+        <figcaption>
+          {id}
+          <small>{shell === "fuel" ? "Fuel stop" : `Possible home · ${SHELL_WORDS[shell]}`}</small>
+        </figcaption>
+      </figure>
+      {children}
+    </div>
+  );
 }
 
 function Ship({ at, angle }) {
@@ -2384,6 +2417,7 @@ function Game() {
         {tip && snap.phase !== "map" ? <Tip id={tip} onClose={closeTip} /> : null}
 
         {snap.phase === "pick" && !tip ? (
+          <AtPlanet id={snap.here}>
           <section className="panel">
             <p className="eyebrow">{snap.here}</p>
             <h1>Pick a topic</h1>
@@ -2400,9 +2434,11 @@ function Game() {
               })}
             </div>
           </section>
+          </AtPlanet>
         ) : null}
 
         {snap.phase === "question" && snap.card ? (
+          <AtPlanet id={snap.here}>
           <section className="panel">
             <div className="qhead">
               <Ring ms={qMs} total={QUESTION_MS} />
@@ -2421,9 +2457,11 @@ function Game() {
             />
             <p className="hint">Then you try to land. A right answer adds 10% to the chance and pays 15 credits; a wrong one halves it.</p>
           </section>
+          </AtPlanet>
         ) : null}
 
         {snap.phase === "land" ? (
+          <AtPlanet id={snap.here}>
           <section className="panel">
             <p className="eyebrow">
               {snap.here} · Landing chance {snap.landing.chance}%
@@ -2452,6 +2490,7 @@ function Game() {
               </button>
             </div>
           </section>
+          </AtPlanet>
         ) : null}
 
         {snap.phase === "scan" && snap.scan ? <Scan scan={snap.scan} onDone={leaveScan} /> : null}
