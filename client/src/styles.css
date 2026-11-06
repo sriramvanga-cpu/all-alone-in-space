@@ -1189,23 +1189,54 @@ p.credits a { color: inherit; }
 .ring text { fill: var(--ink); font: 700 19px var(--font-display); font-variant-numeric: tabular-nums; }
 .ring.urgent text { fill: var(--danger); }
 
-.pack {
-  display: grid;
-  grid-template-columns: 1fr auto 3ch auto;
-  gap: 0.6rem;
+/* The shop: what you hold, then the packs as product cards that light up when chosen. */
+.wallet { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.6rem 0 0; }
+.wallet span {
+  display: inline-flex;
   align-items: center;
-  margin: 0.55rem 0;
-  padding: 0.6rem 0.75rem;
-  background: rgba(5, 9, 20, 0.45);
-  border: 1px solid rgba(160, 190, 255, 0.14);
-  border-radius: var(--radius-md);
-  font-variant-numeric: tabular-nums;
+  gap: 0.35rem;
+  padding: 0.25rem 0.7rem;
+  font-size: var(--text-sm);
+  background: rgba(5, 9, 20, 0.5);
+  border: 1px solid rgba(160, 190, 255, 0.16);
+  border-radius: var(--radius-pill);
 }
+.wallet .icon, .pack-price .icon { width: 1rem; height: 1rem; }
+.wallet .credits { color: var(--gold); }
+.wallet .fuel { color: var(--fuel); }
+.wallet .power { color: var(--power); }
+.packs { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.7rem; margin: 0.9rem 0 0.6rem; }
+.pack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.9rem 0.7rem 0.8rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, rgba(22, 34, 66, 0.75), rgba(8, 13, 28, 0.75));
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius-lg);
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.pack.chosen { border-color: var(--fuel); box-shadow: 0 0 24px rgba(255, 176, 32, 0.3); transform: translateY(-2px); }
+.pack.power.chosen { border-color: var(--power); box-shadow: 0 0 24px rgba(125, 240, 180, 0.3); }
+.pack-art { width: 4.4rem; height: 3rem; overflow: visible; }
+.pack-art .cell { fill: #f59e0b; stroke: #ffd27a; stroke-width: 1.2; }
+.pack-art .cap { fill: #cbd5e1; }
+.pack-art .shine { fill: rgba(255, 255, 255, 0.28); }
+.pack-art .drop { fill: rgba(255, 255, 255, 0.85); }
+.pack.power .pack-art .cell { fill: #22a36a; stroke: var(--power); }
+.pack-art .bolt { fill: #f2fff8; }
+.pack-name { font-size: var(--text-md); color: var(--dim); }
 .pack-name b { font: 700 var(--text-xl) var(--font-display); color: var(--fuel); }
 .pack.power .pack-name b { color: var(--power); }
-.pack-name em { display: block; font-style: normal; font-size: var(--text-sm); color: var(--gold); }
-.pack .count { text-align: center; font: 700 var(--text-lg) var(--font-display); }
+.pack-price { display: inline-flex; align-items: center; gap: 0.3rem; font-size: var(--text-sm); color: var(--gold); }
+.pack-step { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.2rem; }
+.pack .count { min-width: 2ch; text-align: center; font: 700 var(--text-lg) var(--font-display); }
 .pack button { min-width: 44px; padding: 0.3rem 0.6rem; font-size: var(--text-lg); border-radius: 50%; }
+.shop-total { margin: 0.3rem 0 0; }
+.shop-total b { color: var(--gold); }
 
 /* ============================================================
    End screen and leaderboard

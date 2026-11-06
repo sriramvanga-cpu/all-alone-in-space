@@ -1303,6 +1303,39 @@ function FlightEvent({ event, fuel, credits, onPick }) {
   );
 }
 
+// A shop pack's picture: one fuel cell per 5 fuel, or a battery for power.
+function PackArt({ pack }) {
+  if (pack.power) {
+    return (
+      <svg className="pack-art" viewBox="0 0 64 44" aria-hidden="true">
+        <rect className="cap" x="27" y="4" width="10" height="5" rx="1.5" />
+        <rect className="cell" x="15" y="8" width="34" height="31" rx="5" />
+        <rect className="shine" x="19" y="11" width="5" height="25" rx="2.5" />
+        <path className="bolt" d="M35 13 27 25h6l-3 10 9-13h-6z" />
+      </svg>
+    );
+  }
+  const n = Math.max(1, Math.round(pack.fuel / 5));
+  const w = 16;
+  const gap = 4;
+  const left = (64 - (n * w + (n - 1) * gap)) / 2;
+  return (
+    <svg className="pack-art" viewBox="0 0 64 44" aria-hidden="true">
+      {Array.from({ length: n }, (_, i) => {
+        const x = left + i * (w + gap);
+        return (
+          <g key={i}>
+            <rect className="cap" x={x + 5} y="4" width="6" height="5" rx="1" />
+            <rect className="cell" x={x} y="8" width={w} height="31" rx="4" />
+            <rect className="shine" x={x + 2.5} y="11" width="3" height="25" rx="1.5" />
+            <path className="drop" d={DROP} transform={`translate(${x + w / 2} 24) scale(1.25)`} />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function Shop({ result, credits, fuel, power, world, exitFare, stuck, onBuy, onLeave }) {
   const [counts, setCounts] = useState(() => SHOP_PACKS.map(() => 0));
   const quote = buyPacks({ credits, fuel, power }, counts);
@@ -1331,47 +1364,71 @@ function Shop({ result, credits, fuel, power, world, exitFare, stuck, onBuy, onL
           {result.pricier ? " Over 1 in 10 wrong, so fuel now costs more." : ""}
         </p>
       ) : null}
-      <p>
-        {credits} {credits === 1 ? "credit" : "credits"}, {fmtNum(fuel)} fuel, {fmtNum(power)} power. Buy as many packs
-        as you can pay for.
+      <p className="wallet">
+        <span className="credits">
+          <CreditIcon /> {credits} {credits === 1 ? "credit" : "credits"}
+        </span>
+        <span className="fuel">
+          <FuelIcon /> {fmtNum(fuel)} fuel
+        </span>
+        <span className="power">
+          <PowerIcon /> {fmtNum(power)} power
+        </span>
       </p>
-      {SHOP_PACKS.map((pack, i) => (
-        <div className={pack.power ? "pack power" : "pack"} key={pack.credits}>
-          <span className="pack-name">
-            <b>{pack.fuel ?? pack.power}</b> {pack.fuel ? "fuel" : "power"}
-            <em>for {pack.credits} credits</em>
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              if (counts[i] <= 0) return;
-              const next = counts.slice();
-              next[i] -= 1;
-              setCounts(next);
-            }}
-            disabled={counts[i] === 0}
-            aria-label={`Fewer packs of ${pack.fuel ?? pack.power} ${pack.fuel ? "fuel" : "power"}`}
-          >
-            −
-          </button>
-          <span className="count">{counts[i]}</span>
-          <button
-            type="button"
-            onClick={() => {
-              if (!canInc(i)) return;
-              const next = counts.slice();
-              next[i] += 1;
-              setCounts(next);
-            }}
-            disabled={!canInc(i)}
-            aria-label={`More packs of ${pack.fuel ?? pack.power} ${pack.fuel ? "fuel" : "power"}`}
-          >
-            +
-          </button>
-        </div>
-      ))}
-      <p>
-        {quote.cost > 0 ? `${quote.cost} credits for ${gains}.` : "Choose a pack, or leave."}
+      <div className="packs">
+        {SHOP_PACKS.map((pack, i) => {
+          const what = pack.fuel ? "fuel" : "power";
+          const classes = ["pack", pack.power ? "power" : "", counts[i] > 0 ? "chosen" : ""].filter(Boolean).join(" ");
+          return (
+            <div className={classes} key={pack.credits}>
+              <PackArt pack={pack} />
+              <span className="pack-name">
+                <b>{pack.fuel ?? pack.power}</b> {what}
+              </span>
+              <span className="pack-price">
+                <CreditIcon /> {pack.credits} credits
+              </span>
+              <span className="pack-step">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (counts[i] <= 0) return;
+                    const next = counts.slice();
+                    next[i] -= 1;
+                    setCounts(next);
+                  }}
+                  disabled={counts[i] === 0}
+                  aria-label={`Fewer packs of ${pack.fuel ?? pack.power} ${what}`}
+                >
+                  −
+                </button>
+                <span className="count">{counts[i]}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!canInc(i)) return;
+                    const next = counts.slice();
+                    next[i] += 1;
+                    setCounts(next);
+                  }}
+                  disabled={!canInc(i)}
+                  aria-label={`More packs of ${pack.fuel ?? pack.power} ${what}`}
+                >
+                  +
+                </button>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p className={quote.cost > 0 ? "shop-total" : "hint"}>
+        {quote.cost > 0 ? (
+          <>
+            Total <b>{quote.cost} credits</b> for {gains}.
+          </>
+        ) : (
+          "Buy as many packs as you can pay for, or leave."
+        )}
       </p>
       {stuck ? (
         <p className="error">
