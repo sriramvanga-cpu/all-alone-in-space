@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { JUMP_R, SYSTEMS, TILT, ringLabelAngle } from "../game/map.js";
+import { useArt } from "../three/artStore.js";
 import { ShipDefs } from "./Ship.jsx";
 import { StationDefs } from "./Station.jsx";
 import { STAR_TINTS } from "./starTints.js";
@@ -65,11 +66,20 @@ const RAYS = Array.from({ length: 18 }, (_, i) => {
 const SPIKES = "M-2.2 0H2.2M0 -2.2V2.2";
 const BEAMS = "M0 0L-0.32 -3.2L0.32 -3.2ZM0 0L-0.32 3.2L0.32 3.2Z";
 
+// A star's face: its rendered surface (three/sprites.js) once ready, rim of light included; until
+// then, or without WebGL, the flat gradient.
+function Disc({ tint, r }) {
+  const art = useArt().stars.get(tint);
+  if (!art) return <circle r={r} fill={`url(#star-${tint})`} />;
+  const e = r * art.ext;
+  return <image className="surface" href={art.url} x={-e} y={-e} width={2 * e} height={2 * e} />;
+}
+
 function Ball({ tint, r }) {
   return (
     <>
       <circle r={r * 2.6} fill={`url(#star-${tint}-glow)`} />
-      <circle r={r} fill={`url(#star-${tint})`} />
+      <Disc tint={tint} r={r} />
     </>
   );
 }
@@ -124,7 +134,7 @@ function StarDotImpl({ kind, r, sun = false }) {
           <path className="rays" d={RAYS} fill="url(#star-ray)" filter="url(#star-soft)" opacity="0.6" />
         </g>
       ) : null}
-      <circle r={size} fill={`url(#star-${kind})`} />
+      <Disc tint={kind} r={size} />
       {sun ? null : (
         <g transform={`scale(${size})`}>
           <path d={SPIKES} stroke="url(#star-ray)" strokeWidth="0.07" />
