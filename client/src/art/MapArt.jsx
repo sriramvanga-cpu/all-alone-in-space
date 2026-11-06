@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { SYSTEMS, TILT, ringLabelAngle } from "../game/map.js";
+import { JUMP_R, SYSTEMS, TILT, ringLabelAngle } from "../game/map.js";
 import { ShipDefs } from "./Ship.jsx";
 import { StationDefs } from "./Station.jsx";
 
@@ -30,6 +30,20 @@ export const STAR_NAMES = {
   binary: "binary star",
 };
 const KIND_SIZE = { giant: 1.2, dwarf: 0.45 };
+
+// The planetary map's look, shared with the warp shots that must match it: the sun's radius, how much
+// bigger planets are drawn than on the old chart (phones draw them at 2), and the phone breakpoint.
+export const SUN_R = 40;
+export const PLANET_ZOOM = 1.2;
+export const NARROW = "(max-width: 560px)";
+
+/** The planetary map's view box for a system whose outer orbit is `reach`: the jump point on the left,
+ * the outer orbit with its labels on the right. Phones draw planets bigger, so labels need wider margins. */
+export function systemBox(reach, narrow) {
+  return narrow
+    ? [-JUMP_R - 40, -reach * TILT - 105, JUMP_R + reach + 180, 2 * reach * TILT + 165]
+    : [-JUMP_R - 40, -reach * TILT - 65, JUMP_R + reach + 120, 2 * reach * TILT + 115];
+}
 
 // The fuel-stop badge: a drop, filled from MapDefs' fuel-drop gradient.
 export const DROP = "M0 -4.8C2.7 -1 4 1 4 2.7A4 4 0 0 1 -4 2.7C-4 1 -2.7 -1 0 -4.8Z";

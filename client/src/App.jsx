@@ -53,7 +53,18 @@ import HowTo, { Reel } from "./intro/HowTo.jsx";
 import WarpTunnel from "./art/WarpTunnel.jsx";
 import { Starbase } from "./art/Station.jsx";
 import { PlanetDot, faceOf } from "./art/Planet.jsx";
-import { CostPill, DROP, MapDefs, MapBackdrop, StarDot, STAR_NAMES } from "./art/MapArt.jsx";
+import {
+  CostPill,
+  DROP,
+  MapDefs,
+  MapBackdrop,
+  NARROW,
+  PLANET_ZOOM,
+  StarDot,
+  STAR_NAMES,
+  SUN_R,
+  systemBox,
+} from "./art/MapArt.jsx";
 import { publishArt, webglAvailable } from "./three/artStore.js";
 import { FuelIcon, PowerIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipIcon, StarIcon, CompassIcon } from "./art/icons.jsx";
 
@@ -67,10 +78,6 @@ const VIEW_W = 720;
 const VIEW_H = 640;
 const SWEEP_MS = 1200;
 const STAR_R = 11;
-const SUN_R = 40;
-// Planets on the planetary map are drawn this much bigger than on the old chart, since the oval
-// orbits spread wider.
-const PLANET_ZOOM = 1.2;
 const WORLD = 900;
 const ROUND_MS = 15 * 60 * 1000;
 // Test runs: "admin" as both name and phone starts a cheat run. Its clock gets a day (the landing
@@ -242,7 +249,7 @@ function fresh() {
     stoppedAt: 0,
     endReason: "",
     flight: null,
-    // When the last warp jump ended; the arrival flash fades out from then.
+    // When the last warp jump ended at the station; the star map fades in from dark from then.
     warpAt: 0,
     domain: "",
     card: null,
@@ -747,7 +754,6 @@ function Ship({ at, angle }) {
 }
 
 // Phones get bigger map targets and labels; the map's own scale would make them too small to tap.
-const NARROW = "(max-width: 560px)";
 function useNarrow() {
   const [narrow, setNarrow] = useState(() => window.matchMedia?.(NARROW).matches ?? false);
   useEffect(() => {
@@ -770,6 +776,8 @@ function StarMap({ snap, now, shipRef, onLaunch, onBlocked, view, onView, childr
   const viewRef = useRef(view);
   viewRef.current = view;
   const flying = snap.phase === "fly" && snap.flight;
+  // A lane flight is a warp jump, unless reduced motion keeps it a plain flight on the chart.
+  const warping = flying && !stillMotion();
   const viewer = flying ? snap.flight.from : snap.here;
   const scanned = new Set(snap.scanned);
   const shown = new Set([STATION, snap.here, ...snap.scanned.flatMap((id) => [id, ...lanesFrom(id).map((hop) => hop.id)])]);
@@ -832,7 +840,7 @@ function StarMap({ snap, now, shipRef, onLaunch, onBlocked, view, onView, childr
   return (
     <div className="map-stage" ref={stageRef}>
     <svg
-      className={["map-svg", flying ? "flying" : "", narrow ? "narrow" : ""].filter(Boolean).join(" ")}
+      className={["map-svg", flying ? "flying" : "", warping ? "warping" : "", narrow ? "narrow" : ""].filter(Boolean).join(" ")}
       viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
       role="img"
       aria-label="Star map"
@@ -987,12 +995,14 @@ function StarMap({ snap, now, shipRef, onLaunch, onBlocked, view, onView, childr
       )}
     </svg>
     {/* A lane flight is a warp jump: the cockpit view covers the chart until the ship drops out. */}
-    {flying && !stillMotion() ? (
+    {warping ? (
       <WarpTunnel
         ms={snap.flight.ms}
         resume={snap.flight.resume}
         paused={snap.flight.paused}
-        to={snap.flight.to === STATION ? "the station" : snap.flight.to}
+        from={snap.flight.from}
+        to={snap.flight.to}
+        closed={snap.closed}
       />
     ) : null}
     {children ? <div className="map-overlay">{children}</div> : null}
@@ -1023,12 +1033,7 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, children }) {
   const ship = positionAt(snap.here, now);
   // Facing the sun, in degrees.
   const sunward = (at) => (Math.atan2(-at.y, -at.x) * 180) / Math.PI;
-  // Fit the view to this system: the jump point on the left, the outer orbit with its labels on the right.
-  const reach = Math.max(...planets.map((p) => p.orbit));
-  // Phones draw planets bigger, so their labels and pills need wider margins.
-  const box = narrow
-    ? [-JUMP_R - 40, -reach * TILT - 105, JUMP_R + reach + 180, 2 * reach * TILT + 165]
-    : [-JUMP_R - 40, -reach * TILT - 65, JUMP_R + reach + 120, 2 * reach * TILT + 115];
+  const box = systemBox(Math.max(...planets.map((p) => p.orbit)), narrow);
   const placed = planets.map((p) => ({ p, at: orbitAt(p, now) }));
   // Planets on the far side of the star are drawn before it, the near side after, so they pass behind it.
   const drawPlanet = ({ p, at }) => {
@@ -1719,7 +1724,8 @@ function Game() {
     const id = g.flight.to;
     if (!g.system) {
       // A lane flight: a system opens its planetary map; the station stays on the star map.
-      commit({ phase: "map", flight: null, system: id === STATION ? null : id, warpAt: Date.now() });
+      // The warp's last frame already shows a system as its planetary map will; only the station fades in.
+      commit({ phase: "map", flight: null, system: id === STATION ? null : id, warpAt: id === STATION ? Date.now() : 0 });
       return;
     }
     const visited = g.visited.includes(id) ? g.visited : [...g.visited, id];
@@ -2144,8 +2150,12 @@ function Game() {
         : snap.system && snap.here !== snap.system
           ? `${snap.here} · ${snap.system}`
           : `${snap.here} system`;
-  const mapHint = snap.system
-    ? `Planets orbit this ${STAR_NAMES[system(snap.system).star]}. A hop costs power by how far apart they are right now.`
+  // During a warp to a system the bar above the map already shows that system's hint and buttons, so it
+  // keeps its height and the planetary map takes over from the warp's last frame without the stage moving.
+  const barSystem =
+    snap.system || (snap.phase === "fly" && snap.flight && snap.flight.to !== STATION && !stillMotion() ? snap.flight.to : null);
+  const mapHint = barSystem
+    ? `Planets orbit this ${STAR_NAMES[system(barSystem).star]}. A hop costs power by how far apart they are right now.`
     : snap.scanned.includes(snap.here)
       ? "Lanes from here show the fuel they cost."
       : snap.power + 1e-9 < MAP_SCAN_POWER
@@ -2240,7 +2250,7 @@ function Game() {
                 </span>
               </p>
               <div className="row">
-                {snap.system ? (
+                {barSystem ? (
                   <button type="button" className="ghost" disabled={snap.phase !== "map" || !!tip} onClick={leaveSystem}>
                     Star map
                   </button>

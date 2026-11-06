@@ -204,6 +204,13 @@ const SOUNDS = {
     tone(110, 98, 0.65, { type: "sawtooth", gain: 0.05, lp: 700 });
     tone(116.5, 103, 0.65, { type: "sawtooth", gain: 0.045, lp: 700 });
   },
+  // A planet popping out of existence as the ship leaves: a soft falling blip.
+  vanish: () => tone(1320, 440, 0.16, { gain: 0.035, send: 0.4 }),
+  // A planet popping into existence on arrival: a soft rising blip with a glint.
+  appear: () => {
+    tone(520, 1320, 0.12, { gain: 0.035, send: 0.4 });
+    tone(2640, 2640, 0.15, { type: "triangle", gain: 0.012, delay: 0.06, send: 0.5 });
+  },
   // A flight event: a two-tone alarm, three times.
   alert: () =>
     [0, 0.22, 0.44].forEach((delay) => tone(988, 740, 0.18, { type: "sawtooth", gain: 0.04, lp: 2600, delay, send: 0.25 })),

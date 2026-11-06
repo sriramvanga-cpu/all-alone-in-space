@@ -628,9 +628,14 @@ p.credits a { color: inherit; }
 
 .map-stage:active { cursor: grabbing; }
 
-/* A lane flight is a warp jump: the cockpit view covers the chart, then a flash fades over the arrival. */
-.warp { position: absolute; inset: 0; pointer-events: none; background: var(--space-0); animation: warpin 0.25s ease-out both; }
-.warp canvas { display: block; width: 100%; height: 100%; }
+/* A lane flight is a warp jump: the chart gives way to the old system, warp space, then the new system,
+   drawn over the same sky as the maps so the planetary map takes over without a cut. */
+.map-svg { transition: opacity 0.3s; }
+.map-svg.warping { opacity: 0; }
+.warp { position: absolute; inset: 0; pointer-events: none; animation: warpin 0.25s ease-out both; }
+.warp > svg,
+.warp > canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.warp-spark { fill: none; stroke: rgba(200, 235, 255, 0.9); stroke-width: 2; }
 .warp-to {
   position: absolute;
   left: 0;
@@ -645,12 +650,10 @@ p.credits a { color: inherit; }
   text-shadow: 0 0 12px rgba(90, 209, 255, 0.8);
   animation: warpin 0.4s 0.3s ease-out both;
 }
-/* The ship outside warp: placed and stretched each frame by WarpTunnel, engines lit. */
-.warp-ship { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform, opacity; }
-.warp-ship svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.warp-ship .trail { opacity: 1; }
-.warp-ship .plume,
-.warp-ship .exhaust { opacity: 1; fill: #e7f8ff; animation: burn 0.14s ease-in-out infinite alternate; }
+/* The ship outside warp, engines lit until it settles at the new jump point. */
+.warp-ship.lit .trail { opacity: 1; }
+.warp-ship.lit .plume,
+.warp-ship.lit .exhaust { opacity: 1; fill: #e7f8ff; animation: burn 0.14s ease-in-out infinite alternate; }
 .warp-out {
   position: fixed;
   inset: 0;
