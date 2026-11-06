@@ -2,20 +2,11 @@ import { memo } from "react";
 import { JUMP_R, SYSTEMS, TILT, ringLabelAngle } from "../game/map.js";
 import { ShipDefs } from "./Ship.jsx";
 import { StationDefs } from "./Station.jsx";
+import { STAR_TINTS } from "./starTints.js";
 
 // Shared defs and backdrop for the star chart. Scale matches App.jsx's SCALE.
 const SCALE = 190;
 
-// Star colours: centre, body, limb.
-const STAR_TINTS = {
-  yellow: ["#fffbe8", "#ffd86a", "#e89a2a"],
-  orange: ["#fff1de", "#ffad5c", "#d8702a"],
-  red: ["#ffe6dc", "#ff7f5c", "#b8442e"],
-  blue: ["#f6f9ff", "#b4ceff", "#6688ff"],
-  giant: ["#ffe2c8", "#ff8a4c", "#a8341c"],
-  dwarf: ["#ffffff", "#eaf3ff", "#a9c8ff"],
-  neutron: ["#ffffff", "#cfe6ff", "#7fb0ff"],
-};
 const TINTS = Object.keys(STAR_TINTS);
 
 export const STAR_NAMES = {
