@@ -50,6 +50,7 @@ import SpaceBackdrop from "./art/SpaceBackdrop.jsx";
 import { SAUCER_X, ShipShapes, ShipSvg } from "./art/Ship.jsx";
 import Intro from "./intro/Intro.jsx";
 import HowTo, { Reel } from "./intro/HowTo.jsx";
+import WarpTunnel from "./art/WarpTunnel.jsx";
 import { Starbase } from "./art/Station.jsx";
 import { PlanetDot, faceOf } from "./art/Planet.jsx";
 import { CostPill, DROP, MapDefs, MapBackdrop, StarDot, STAR_NAMES } from "./art/MapArt.jsx";
@@ -233,6 +234,8 @@ function fresh() {
     stoppedAt: 0,
     endReason: "",
     flight: null,
+    // When the last warp jump ended; the arrival flash fades out from then.
+    warpAt: 0,
     domain: "",
     card: null,
     qDeadline: 0,
@@ -969,6 +972,15 @@ function StarMap({ snap, now, shipRef, onLaunch, onBlocked, view, onView, childr
         <Ship at={POS[snap.here]} angle={heading(snap.here)} />
       )}
     </svg>
+    {/* A lane flight is a warp jump: the cockpit view covers the chart until the ship drops out. */}
+    {flying && !stillMotion() ? (
+      <WarpTunnel
+        ms={snap.flight.ms}
+        resume={snap.flight.resume}
+        paused={snap.flight.paused}
+        to={snap.flight.to === STATION ? "the station" : snap.flight.to}
+      />
+    ) : null}
     {children ? <div className="map-overlay">{children}</div> : null}
     </div>
   );
@@ -1686,7 +1698,7 @@ function Game() {
     const id = g.flight.to;
     if (!g.system) {
       // A lane flight: a system opens its planetary map; the station stays on the star map.
-      commit({ phase: "map", flight: null, system: id === STATION ? null : id });
+      commit({ phase: "map", flight: null, system: id === STATION ? null : id, warpAt: Date.now() });
       return;
     }
     const visited = g.visited.includes(id) ? g.visited : [...g.visited, id];
@@ -2175,6 +2187,7 @@ function Game() {
         </div>
       </header>
       <div className="play-body">
+        {snap.warpAt && now - snap.warpAt < 900 ? <div key={snap.warpAt} className="warp-out" aria-hidden="true" /> : null}
         {snap.phase === "map" || snap.phase === "fly" ? (
           <>
             <div className="map-bar">
