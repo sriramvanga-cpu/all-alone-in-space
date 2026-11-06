@@ -2605,7 +2605,13 @@ function EndScreen({ snap }) {
     {facts.settled && snap.scan ? <Scan scan={snap.scan} habitable /> : null}
     <section className={facts.settled ? "panel wide end won" : "panel wide end lost"}>
       <div className="end-hero">
-        <div className="end-orb" aria-hidden="true" />
+        {facts.settled ? (
+          <div className="end-orb end-world" aria-hidden="true">
+            <PlanetArt id={snap.here} />
+          </div>
+        ) : (
+          <div className="end-orb" aria-hidden="true" />
+        )}
         <div>
           <p className="eyebrow">{facts.settled ? "Mission complete" : "Run over"}</p>
           <h1>{END_COPY[snap.endReason]?.(snap.here) || "Run over."}</h1>

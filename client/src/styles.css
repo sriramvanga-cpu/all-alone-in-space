@@ -1253,6 +1253,9 @@ p.credits a { color: inherit; }
   box-shadow: 0 0 44px rgba(90, 209, 255, 0.55), inset -10px -12px 22px rgba(0, 0, 20, 0.55);
   animation: float 6s ease-in-out infinite;
 }
+/* A win shows the world you settled, its own art in place of the painted orb, sunburst behind it. */
+.end-orb.end-world { width: 7.5rem; height: auto; border-radius: 0; background: none; box-shadow: none; isolation: isolate; }
+.end-world .planet-art-box { filter: drop-shadow(0 0 32px rgba(125, 222, 192, 0.45)); }
 .end.lost .end-orb {
   background: radial-gradient(circle at 34% 30%, #d9a98a 0, #7a3a22 38%, #1a0a08 100%);
   box-shadow: 0 0 32px rgba(255, 100, 60, 0.3), inset -10px -12px 22px rgba(0, 0, 0, 0.6);
@@ -1580,6 +1583,7 @@ p.credits a { color: inherit; }
   .stats { grid-template-columns: repeat(2, 1fr); }
   .end-hero { gap: 0.9rem; }
   .end-orb { width: 3.8rem; height: 3.8rem; }
+  .end-orb.end-world { width: 5.2rem; height: auto; }
   .lb th, .lb td { padding-left: 0.4rem; padding-right: 0.4rem; }
   .lb { font-size: var(--text-sm); }
   .podium { gap: 0.4rem; }
