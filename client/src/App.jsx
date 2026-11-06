@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   START_FUEL,
   START_CREDITS,
@@ -766,11 +766,50 @@ function useNarrow() {
   return narrow;
 }
 
+// A system's jump point, where its "Star map" button is pinned.
+const JUMP_SPOT = { x: -JUMP_R, y: 0 };
+
+// Pins the map's buttons to a spot on the map, centred just under it (`below` map units clear of
+// the art there) or just over it (`above`) near the bottom edge, and kept inside the stage. It moves
+// with the map as it pans, zooms or resizes; `deps` are what can move the spot or change the buttons.
+function usePin(stageRef, svgRef, pinRef, spot, below, above, deps) {
+  const place = () => {
+    const stage = stageRef.current;
+    const pin = pinRef.current;
+    const m = svgRef.current?.getScreenCTM();
+    if (!stage || !pin || !m) return;
+    const box = stage.getBoundingClientRect();
+    const x = m.a * spot.x + m.c * spot.y + m.e - box.left - stage.clientLeft;
+    const y = m.b * spot.x + m.d * spot.y + m.f - box.top - stage.clientTop;
+    const scale = Math.hypot(m.a, m.b);
+    const w = pin.offsetWidth;
+    const h = pin.offsetHeight;
+    const left = Math.min(stage.clientWidth - w - 8, Math.max(8, x - w / 2));
+    const under = y + below * scale + 6;
+    const top = under + h <= stage.clientHeight - 8 ? under : Math.max(8, y - above * scale - 6 - h);
+    pin.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+  };
+  const latest = useRef(place);
+  latest.current = place;
+  useLayoutEffect(() => latest.current(), deps);
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return undefined;
+    const watch = new ResizeObserver(() => latest.current());
+    watch.observe(stage);
+    return () => watch.disconnect();
+  }, []);
+}
+
 // The star map: the station and the systems you have found. A scan reveals the systems one
 // lane away and the lanes to them; whatever you have found stays on the chart.
-function StarMap({ snap, now, shipRef, onLaunch, onBlocked, view, onView, children }) {
+function StarMap({ snap, now, shipRef, onLaunch, onBlocked, view, onView, actions, children }) {
   const narrow = useNarrow();
   const stageRef = useRef(null);
+  const svgRef = useRef(null);
+  const pinRef = useRef(null);
+  // Scan and Enter sit just under the ship's spot, clear of the star and its planet badges.
+  usePin(stageRef, svgRef, pinRef, POS[snap.here], STAR_R + 25, STAR_R + 24, [view, snap.here, snap.scanned.length, !actions, narrow]);
   const drag = useRef(null);
   const moved = useRef(false);
   const viewRef = useRef(view);
@@ -840,6 +879,7 @@ function StarMap({ snap, now, shipRef, onLaunch, onBlocked, view, onView, childr
   return (
     <div className="map-stage" ref={stageRef}>
     <svg
+      ref={svgRef}
       className={["map-svg", flying ? "flying" : "", warping ? "warping" : "", narrow ? "narrow" : ""].filter(Boolean).join(" ")}
       viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
       role="img"
@@ -994,6 +1034,11 @@ function StarMap({ snap, now, shipRef, onLaunch, onBlocked, view, onView, childr
         <Ship at={POS[snap.here]} angle={heading(snap.here)} />
       )}
     </svg>
+    {actions ? (
+      <div className="map-actions" ref={pinRef}>
+        {actions}
+      </div>
+    ) : null}
     {/* A lane flight is a warp jump: the cockpit view covers the chart until the ship drops out. */}
     {warping ? (
       <WarpTunnel
@@ -1012,9 +1057,14 @@ function StarMap({ snap, now, shipRef, onLaunch, onBlocked, view, onView, childr
 
 // A system's planets orbit its sun. A hop costs power by how far apart two planets are right
 // now, so each open planet's price moves with them; a click pays the price on its label.
-function SystemMap({ snap, shipRef, onLaunch, onBlocked, children }) {
+function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
   const narrow = useNarrow();
   const zoom = narrow ? 2 : PLANET_ZOOM;
+  const stageRef = useRef(null);
+  const svgRef = useRef(null);
+  const pinRef = useRef(null);
+  // The way back to the star map sits under the jump point, where ships leave a system.
+  usePin(stageRef, svgRef, pinRef, JUMP_SPOT, 17, 34, [narrow, !actions]);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     let id = 0;
@@ -1105,8 +1155,9 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, children }) {
     );
   };
   return (
-    <div className="map-stage system-stage">
+    <div className="map-stage system-stage" ref={stageRef}>
       <svg
+        ref={svgRef}
         className={flying ? "map-svg flying" : "map-svg"}
         viewBox={box.join(" ")}
         role="img"
@@ -1139,6 +1190,11 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, children }) {
           <Ship at={ship} angle={sunward(ship)} />
         )}
       </svg>
+      {actions ? (
+        <div className="map-actions" ref={pinRef}>
+          {actions}
+        </div>
+      ) : null}
       {children ? <div className="map-overlay">{children}</div> : null}
     </div>
   );
@@ -2150,8 +2206,9 @@ function Game() {
         : snap.system && snap.here !== snap.system
           ? `${snap.here} · ${snap.system}`
           : `${snap.here} system`;
-  // During a warp to a system the bar above the map already shows that system's hint and buttons, so it
-  // keeps its height and the planetary map takes over from the warp's last frame without the stage moving.
+  const canScan = !snap.scanned.includes(snap.here);
+  // During a warp to a system the bar above the map already shows that system's hint, so it keeps its
+  // height and the planetary map takes over from the warp's last frame without the stage moving.
   const barSystem =
     snap.system || (snap.phase === "fly" && snap.flight && snap.flight.to !== STATION && !stillMotion() ? snap.flight.to : null);
   const mapHint = barSystem
@@ -2249,38 +2306,53 @@ function Game() {
                   Possible home
                 </span>
               </p>
-              <div className="row">
-                {barSystem ? (
+            </div>
+            {snap.system ? (
+              <SystemMap
+                snap={snap}
+                shipRef={shipRef}
+                onLaunch={launch}
+                onBlocked={blocked}
+                actions={
                   <button type="button" className="ghost" disabled={snap.phase !== "map" || !!tip} onClick={leaveSystem}>
                     Star map
                   </button>
-                ) : (
-                  <>
-                    {snap.scanned.includes(snap.here) ? null : (
-                      <button
-                        type="button"
-                        className="scan-btn"
-                        disabled={snap.phase !== "map" || !!tip || snap.power + 1e-9 < MAP_SCAN_POWER}
-                        onClick={scanHere}
-                      >
-                        Scan nearby systems · {MAP_SCAN_POWER} power
-                      </button>
-                    )}
-                    {system(snap.here) ? (
-                      <button type="button" className="ghost" disabled={snap.phase !== "map" || !!tip} onClick={enterSystem}>
-                        Enter {snap.here}
-                      </button>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            </div>
-            {snap.system ? (
-              <SystemMap snap={snap} shipRef={shipRef} onLaunch={launch} onBlocked={blocked}>
+                }
+              >
                 {tip ? <Tip id={tip} onClose={closeTip} /> : null}
               </SystemMap>
             ) : (
-              <StarMap snap={snap} now={now} shipRef={shipRef} onLaunch={launch} onBlocked={blocked} view={view} onView={setView}>
+              <StarMap
+                snap={snap}
+                now={now}
+                shipRef={shipRef}
+                onLaunch={launch}
+                onBlocked={blocked}
+                view={view}
+                onView={setView}
+                actions={
+                  // Shown by the ship while it's parked: a scan from a spot not yet scanned, and the way into a system.
+                  snap.phase === "map" && (canScan || system(snap.here)) ? (
+                    <>
+                      {canScan ? (
+                        <button
+                          type="button"
+                          className="scan-btn"
+                          disabled={!!tip || snap.power + 1e-9 < MAP_SCAN_POWER}
+                          onClick={scanHere}
+                        >
+                          Scan nearby systems · {MAP_SCAN_POWER} power
+                        </button>
+                      ) : null}
+                      {system(snap.here) ? (
+                        <button type="button" className="ghost" disabled={!!tip} onClick={enterSystem}>
+                          Enter {snap.here}
+                        </button>
+                      ) : null}
+                    </>
+                  ) : null
+                }
+              >
                 {tip ? (
                   <Tip id={tip} onClose={closeTip} />
                 ) : snap.phase === "fly" && snap.flight?.paused ? (
