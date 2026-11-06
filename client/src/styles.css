@@ -1090,6 +1090,8 @@ p.credits a { color: inherit; }
 .system-stage, .system-stage:active { cursor: default; }
 .orbit { fill: none; stroke: rgba(150, 185, 255, 0.34); stroke-width: 1.2; }
 .sun .star-glow { transform-box: fill-box; transform-origin: center; animation: corona 4s ease-in-out infinite alternate; }
+/* A sun's rendered surface turns slowly, so its granulation drifts like boiling gas. */
+.sun .surface { transform-box: fill-box; transform-origin: center; animation: spin 240s linear infinite; }
 .star .rays, .star .beams, .star .pair { transform-box: fill-box; transform-origin: center; animation: spin 80s linear infinite; }
 .star .beams { animation-duration: 1.8s; }
 .star .pair { animation-duration: 9s; }
@@ -1488,7 +1490,7 @@ p.credits a { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .streak, .link-flow, .ready-ring, .beacon-pulse, .navlight, .plume, .exhaust, .end-orb, .live::before,
-  .scan-btn, .node.system, .sun .star-glow, .sweep, .star .rays, .star .beams, .star .pair,
+  .scan-btn, .node.system, .sun .star-glow, .sun .surface, .sweep, .star .rays, .star .beams, .star .pair,
   .starbase .spin, .starbase .core, .reading, .scan-bar i {
     animation: none !important;
   }
