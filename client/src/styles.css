@@ -582,6 +582,41 @@ p.credits a { color: inherit; }
 }
 .play-body > .panel { margin: 2vh auto; }
 
+/* The landing chance: the time flown's part, then the right answer's bonus or the part a wrong
+   answer halved away, each growing in after the other. */
+.chance { margin: 0.9rem 0 0.3rem; }
+.chance-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font: 600 var(--text-xs) var(--font-body);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.chance-head b { font: 800 var(--text-2xl) var(--font-display); letter-spacing: 0.02em; color: var(--ink); text-shadow: 0 0 18px rgba(90, 209, 255, 0.45); }
+.chance-track {
+  display: flex;
+  height: 14px;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.chance-track i { display: block; height: 100%; transform-origin: left; animation: chance-grow 0.9s var(--ease) both; }
+.chance-time { background: linear-gradient(90deg, #4a7cff, #7be0ff); box-shadow: 0 0 12px rgba(123, 224, 255, 0.6); }
+.chance-track .chance-bonus { background: var(--ok); box-shadow: 0 0 12px rgba(125, 222, 192, 0.7); animation: chance-grow 0.6s 0.8s var(--ease) both; }
+.chance-track .chance-lost {
+  background: repeating-linear-gradient(135deg, rgba(255, 122, 138, 0.6) 0 6px, rgba(255, 122, 138, 0.15) 6px 12px);
+  animation: chance-grow 0.6s 0.8s var(--ease) both;
+}
+.chance-key { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.2rem 1rem; margin: 0.4rem 0 0; font-size: var(--text-sm); }
+.chance-key .time { color: var(--accent); }
+.chance-key .bonus { color: var(--ok); }
+.chance-key .lost { color: var(--danger); }
+@keyframes chance-grow { from { transform: scaleX(0); } }
+
 /* The screens at a possible home: the planet itself beside the panel. */
 .at-planet {
   display: flex;
@@ -625,7 +660,7 @@ p.credits a { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .backdrop .stars, .backdrop .sky, .panel, .title-card .ship, .meter.clock.urgent,
-  .title-planet, .title-big, .mission-steps li, .end.won .end-orb::before, .pop-in, .at-planet-art { animation: none !important; }
+  .title-planet, .title-big, .mission-steps li, .end.won .end-orb::before, .pop-in, .at-planet-art, .chance-track i { animation: none !important; }
   .celebrate, .shooting-star { display: none; }
   .delta, .meter-flash, .warp-out { display: none; }
 }

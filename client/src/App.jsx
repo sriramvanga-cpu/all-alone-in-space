@@ -770,6 +770,35 @@ function PlanetArt({ id }) {
 
 const SHELL_WORDS = { inner: "Hard questions", middle: "Medium questions", outer: "Easy questions" };
 
+// The landing chance as a bar: the part the time flown earns, then the right answer's bonus, or the
+// part a wrong answer (or running out of time) halved away, struck through.
+function ChanceBar({ landing }) {
+  const { chance, base, correct, timedOut } = landing;
+  const extra = correct ? chance - base : base - chance;
+  return (
+    <div className="chance" role="img" aria-label={`Landing chance ${chance}%`}>
+      <div className="chance-head">
+        <span>Landing chance</span>
+        <b>{chance}%</b>
+      </div>
+      <div className="chance-track">
+        <i className="chance-time" style={{ width: `${correct ? base : chance}%` }} />
+        {extra > 0 ? <i className={correct ? "chance-bonus" : "chance-lost"} style={{ width: `${extra}%` }} /> : null}
+      </div>
+      <p className="chance-key">
+        <span className="time">{base}% for the time flown</span>
+        {correct ? (
+          <span className="bonus">+{extra} for the right answer</span>
+        ) : (
+          <span className="lost">
+            {extra > 0 ? `−${extra}, halved` : "Halved"} {timedOut ? "as time ran out" : "for the wrong answer"}
+          </span>
+        )}
+      </p>
+    </div>
+  );
+}
+
 // The screens at a possible home show that planet beside the panel, so players remember where they are.
 function AtPlanet({ id, children }) {
   const shell = planet(id)?.shell;
@@ -2463,22 +2492,15 @@ function Game() {
         {snap.phase === "land" ? (
           <AtPlanet id={snap.here}>
           <section className="panel">
-            <p className="eyebrow">
-              {snap.here} · Landing chance {snap.landing.chance}%
-            </p>
+            <p className="eyebrow">{snap.here}</p>
             <h1>{snap.landing.correct ? "Right answer." : snap.landing.timedOut ? "Time's up." : "Wrong answer."} How will you land?</h1>
             {!snap.landing.correct && snap.landing.answer ? (
               <p className="answer-reveal">
                 The answer was <b>{snap.landing.answer}</b>.
               </p>
             ) : null}
-            <p className="hint">
-              {snap.landing.base}% for the time you've flown
-              {snap.landing.correct
-                ? `, +${snap.landing.chance - snap.landing.base} for your right answer`
-                : `, halved to ${snap.landing.chance}% ${snap.landing.timedOut ? "because time ran out" : "for the wrong answer"}`}
-              . The chance grows as the clock runs. A failed landing costs {LAND_FAIL_MS / 1000} s.
-            </p>
+            <ChanceBar landing={snap.landing} />
+            <p className="hint">The chance grows as the clock runs. A failed landing costs {LAND_FAIL_MS / 1000} s.</p>
             <div className="domains land">
               <button type="button" className="tile domain" disabled={snap.power + 1e-9 < SCAN_POWER} onClick={() => land(true)}>
                 Scan first · {SCAN_POWER} power
