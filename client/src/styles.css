@@ -499,6 +499,7 @@ p.credits a { color: inherit; }
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 .hud .eyebrow { margin: 0; }
+.cheat-tag { color: var(--gold); }
 .hud .where { font: 600 var(--text-lg) var(--font-display); letter-spacing: 0.05em; }
 
 .meters { display: flex; flex-wrap: wrap; gap: 0.55rem; font-variant-numeric: tabular-nums; }

@@ -72,6 +72,12 @@ const SUN_R = 40;
 const PLANET_ZOOM = 1.2;
 const WORLD = 900;
 const ROUND_MS = 15 * 60 * 1000;
+// Test runs: "admin" as both name and phone starts a cheat run. Its clock gets a day (the landing
+// odds still follow the time flown), fuel, power and credits are topped up after every change, and
+// the run never goes to the leaderboard.
+const CHEAT_ROUND_MS = 24 * 60 * 60 * 1000;
+const CHEAT_FILL = 9999;
+const roundMs = (g) => (g.cheat ? CHEAT_ROUND_MS : ROUND_MS);
 const QUESTION_MS = 60_000;
 const FUEL_WORLDS = new Set(PLANETS.filter((p) => p.shell === "fuel").map((p) => p.id));
 const FACES = new Map(PLANETS.map((p) => [p.id, faceOf(p)]));
@@ -218,6 +224,7 @@ function fresh() {
     phase: "name",
     name: "",
     phone: "",
+    cheat: false,
     here: STATION,
     // The system you're inside (its planetary map is showing), or null on the star map.
     system: null,
@@ -647,6 +654,11 @@ function NameScreen({ onStart }) {
           e.preventDefault();
           const nextName = name.trim();
           const nextPhone = phone.replace(/\D/g, "");
+          const cheat = nextName.toLowerCase() === "admin" && phone.trim().toLowerCase() === "admin";
+          if (cheat) {
+            onStart({ name: nextName, phone: "", cheat });
+            return;
+          }
           if (!nextName) {
             fail("pilot", "Enter your name.");
             return;
@@ -1567,7 +1579,13 @@ function Game() {
   const usedRef = useRef({ general: new Set(), mental: new Set(), technology: new Set() });
 
   function commit(patch) {
-    game.current = { ...game.current, ...patch };
+    const next = { ...game.current, ...patch };
+    if (next.cheat) {
+      next.fuel = Math.max(next.fuel, CHEAT_FILL);
+      next.power = Math.max(next.power, CHEAT_FILL);
+      next.credits = Math.max(next.credits, CHEAT_FILL);
+    }
+    game.current = next;
     setTick((n) => n + 1);
   }
 
@@ -1588,7 +1606,7 @@ function Game() {
 
   function dock() {
     if (game.current.phase !== "mission") return;
-    commit({ phase: "map", deadline: Date.now() + ROUND_MS });
+    commit({ phase: "map", deadline: Date.now() + roundMs(game.current) });
   }
 
   // A lane on the star map costs fuel; a hop inside a system costs the power its label shows now.
@@ -1771,7 +1789,7 @@ function Game() {
     sfx(correct ? "right" : "wrong");
     // Right or wrong, the player now tries to land; the odds come from the time flown (the clock's
     // view of it, so paused tips don't count), plus 10 for a right answer or halved for a wrong one.
-    const elapsed = ROUND_MS - (g.deadline - Date.now());
+    const elapsed = roundMs(g) - (g.deadline - Date.now());
     commit({
       phase: "land",
       card: null,
@@ -2049,7 +2067,8 @@ function Game() {
   }, [snap.phase, snap.flight]);
 
   useEffect(() => {
-    if (snap.phase !== "end" || game.current.sent) return;
+    // A cheat run is a test: it never goes to the board, not even into the retry queue.
+    if (snap.phase !== "end" || game.current.sent || game.current.cheat) return;
     game.current = { ...game.current, sent: true };
     const facts = runFacts(game.current);
     // Lets the server drop a retry of a post it already saved, and the end screen find this run's rank.
@@ -2136,7 +2155,10 @@ function Game() {
     <div className="play">
       <header className="hud">
         <div>
-          <p className="eyebrow">{snap.name}</p>
+          <p className="eyebrow">
+            {snap.name}
+            {snap.cheat ? <span className="cheat-tag"> · Cheat mode</span> : null}
+          </p>
           <strong className="where">{where}</strong>
         </div>
         <div className="meters">
@@ -2144,7 +2166,7 @@ function Game() {
             <FuelIcon />
             <div className="m-text">
               <small>Fuel</small>
-              <b>{fmtNum(fuelShown)}</b>
+              <b>{snap.cheat ? "∞" : fmtNum(fuelShown)}</b>
               <span className="gauge" aria-hidden="true">
                 <i style={{ width: `${Math.max(0, Math.min(1, fuelShown / Math.max(30, fuelShown))) * 100}%` }} />
               </span>
@@ -2155,7 +2177,7 @@ function Game() {
             <PowerIcon />
             <div className="m-text">
               <small>Power</small>
-              <b>{fmtNum(snap.power)}</b>
+              <b>{snap.cheat ? "∞" : fmtNum(snap.power)}</b>
             </div>
             <Delta value={snap.power} />
           </div>
@@ -2163,7 +2185,7 @@ function Game() {
             <CreditIcon />
             <div className="m-text">
               <small>Credits</small>
-              <b>{snap.credits}</b>
+              <b>{snap.cheat ? "∞" : snap.credits}</b>
             </div>
             <Delta value={snap.credits} />
           </div>
@@ -2171,7 +2193,7 @@ function Game() {
             <ClockIcon />
             <div className="m-text">
               <small>Clock</small>
-              <b>{formatClock(clockMs)}</b>
+              <b>{snap.cheat ? "∞" : formatClock(clockMs)}</b>
             </div>
             <Delta value={(snap.deadline - snap.pausedMs) / 1000} />
           </div>
@@ -2181,7 +2203,7 @@ function Game() {
               <small>
                 Points<span className="if-land"> if you land</span>
               </small>
-              <b>{pointsShown}</b>
+              <b>{snap.cheat ? "—" : pointsShown}</b>
             </div>
           </div>
         </div>
@@ -2409,6 +2431,7 @@ function EndScreen({ snap }) {
       : snap.postState === "retry"
         ? "Couldn't reach the board. Your score is saved here and will send itself."
         : "Sending the score…";
+  const sentLine = snap.cheat ? "Cheat run: not sent to the board." : post;
   return (
     <>
     {facts.settled ? <Celebration /> : null}
@@ -2419,14 +2442,14 @@ function EndScreen({ snap }) {
         <div>
           <p className="eyebrow">{facts.settled ? "Mission complete" : "Run over"}</p>
           <h1>{END_COPY[snap.endReason]?.(snap.here) || "Run over."}</h1>
-          <p className="hint">{post}</p>
+          <p className="hint">{sentLine}</p>
         </div>
       </div>
       <dl className="stats">
         <div className="stat rank-stat">
           <dt>Your rank</dt>
           <dd key={mine ? "rank" : "wait"} className={mine ? "pop-in" : undefined}>
-            {mine ? `#${mine.rank}` : "…"}
+            {mine ? `#${mine.rank}` : snap.cheat ? "—" : "…"}
             {mine ? <small>of {mine.total}</small> : null}
           </dd>
         </div>
@@ -2436,7 +2459,7 @@ function EndScreen({ snap }) {
         </div>
         <div className="stat">
           <dt>Time left</dt>
-          <dd>{formatClock(facts.timeLeft * 1000)}</dd>
+          <dd>{snap.cheat ? "∞" : formatClock(facts.timeLeft * 1000)}</dd>
         </div>
         <div className="stat">
           <dt>Worlds</dt>
