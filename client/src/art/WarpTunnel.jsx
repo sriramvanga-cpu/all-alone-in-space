@@ -16,9 +16,9 @@ import { JUMP_R, STATION, TILT, orbitAt, planetsOf, system } from "../game/map.j
 // the map takes over without a cut. Progress follows the ship's flight (ms, resume); a flight
 // event's pause drops the tunnel to a slow drift until the flight goes on.
 
-const JUMP = 0.27;
+export const JUMP = 0.27;
 const IN = 0.3;
-const OUT = 0.7;
+export const OUT = 0.7;
 const EXIT = 0.715;
 const SETTLE = 0.92;
 // One pop, in flight time, and when each planet and sun pops.

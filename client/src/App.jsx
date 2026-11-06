@@ -50,7 +50,7 @@ import SpaceBackdrop from "./art/SpaceBackdrop.jsx";
 import { SAUCER_X, ShipShapes, ShipSvg } from "./art/Ship.jsx";
 import Intro from "./intro/Intro.jsx";
 import HowTo, { Reel } from "./intro/HowTo.jsx";
-import WarpTunnel from "./art/WarpTunnel.jsx";
+import WarpTunnel, { JUMP as WARP_JUMP, OUT as WARP_OUT } from "./art/WarpTunnel.jsx";
 import { Starbase } from "./art/Station.jsx";
 import { PlanetDot, faceOf } from "./art/Planet.jsx";
 import {
@@ -73,6 +73,14 @@ const PENDING = "aais-pending-scores";
 const SCALE = 190;
 // A lane flight is a warp jump: about a second to jump in, a second in warp, a second to drop out.
 const FLIGHT_MS = 3200;
+
+// The engine through a warp jump, t from 0 to 1: it spools up while the drive charges, roars
+// through warp space, and winds down as the ship drops out.
+function warpPower(t) {
+  if (t < WARP_JUMP) return 0.3 + 0.7 * (t / WARP_JUMP) ** 2;
+  if (t < WARP_OUT) return 1;
+  return 1 - 0.7 * ((t - WARP_OUT) / (1 - WARP_OUT));
+}
 const HOP_MS = 1600;
 const VIEW_W = 720;
 const VIEW_H = 640;
@@ -2117,8 +2125,8 @@ function Game() {
       const u = ease(t);
       place(u);
       setFlyFuel(fromFuel - actual * u);
-      // Louder as the ship speeds up mid-route.
-      engine(0.25 + 0.75 * (t < 0.5 ? 2 * t : 2 - 2 * t));
+      // A lane flight's engine follows the warp; a hop's rises and falls with the ship's speed.
+      engine(ms === FLIGHT_MS ? warpPower(t) : 0.25 + 0.75 * (t < 0.5 ? 2 * t : 2 - 2 * t));
       if (t < 1) raf = requestAnimationFrame(frame);
       else {
         place(1);
