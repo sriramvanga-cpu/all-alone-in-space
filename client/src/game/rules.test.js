@@ -15,6 +15,7 @@ import {
   drawMultiplier,
   applyMultiplier,
   landingChance,
+  timeChance,
   siteSettles,
   answerPlanet,
   fuelMinute,
@@ -121,16 +122,21 @@ test("a penalty discounts to the cheapest exit but not below 1", () => {
   assert.equal(affordableVariable(2, 2, [8]), 1);
 });
 
-test("the landing chance grows from 5% to 60% over 10 minutes; a right answer adds 10, up to 65", () => {
+test("the landing chance climbs from 0% to 60% over 15 minutes, slowly at first; right adds 10 (up to 65), wrong halves it", () => {
   const min = 60_000;
-  assert.equal(landingChance(0, false), 5);
-  assert.equal(landingChance(0, true), 15);
-  assert.equal(landingChance(5 * min, false), 33);
-  assert.equal(landingChance(10 * min, false), 60);
-  assert.equal(landingChance(14 * min, false), 60);
-  assert.equal(landingChance(9 * min, true), 65);
-  assert.equal(landingChance(10 * min, true), 65);
-  assert.equal(landingChance(-1000, true), 15);
+  assert.equal(timeChance(0), 0);
+  assert.equal(timeChance(-1000), 0);
+  assert.equal(timeChance(5 * min), 7);
+  assert.equal(timeChance(7.5 * min), 15);
+  assert.equal(timeChance(10 * min), 27);
+  assert.equal(timeChance(15 * min), 60);
+  assert.equal(timeChance(20 * min), 60);
+  assert.equal(landingChance(0, true), 10);
+  assert.equal(landingChance(0, false), 0);
+  assert.equal(landingChance(10 * min, true), 37);
+  assert.equal(landingChance(10 * min, false), 14);
+  assert.equal(landingChance(15 * min, true), 65);
+  assert.equal(landingChance(15 * min, false), 30);
 });
 
 test("a landing site settles when its roll of 0–99 comes in under the chance", () => {

@@ -9,6 +9,8 @@ import {
   compareRuns,
   runPoints,
   landingChance,
+  timeChance,
+  LAND_FAIL_MS,
   siteSettles,
   answerPlanet,
   affordableVariable,
@@ -548,7 +550,7 @@ const TIPS = {
   fuel: ["Fuel stop", "Play for one minute to earn credits, then spend them in the shop on fuel and power. Get more than 1 in 10 wrong and fuel costs more."],
   test: [
     "A possible home",
-    "Answer one question, then try to land. The chance grows with time: 5% at the start, 60% after 10 minutes. A right answer adds 10% and pays 15 credits; a wrong one makes fuel cost more. Each planet can be tried once.",
+    "Answer one question, then try to land. The chance starts at 0% and climbs faster as the clock runs, to 60% at 15 minutes. A right answer adds 10% and pays 15 credits; a wrong one halves the chance and makes fuel cost more. A failed landing costs 30 s. Each planet can be tried once.",
   ],
 };
 
@@ -577,7 +579,7 @@ function Tip({ id, onClose }) {
 // The mission card ends the opening film: what to do, how to win, how you score. The clock starts here.
 const MISSION = [
   [CompassIcon, "Explore", "Scan the star map and fly between solar systems. Fuel flies the lanes; power flies between planets."],
-  [GlobeIcon, "Land", "On a planet marked !, answer a question, then try to land. Your chance grows from 5% to 60% as the clock runs, and a right answer adds 10%."],
+  [GlobeIcon, "Land", "On a planet marked !, answer a question, then try to land. Your chance starts at 0% and climbs faster as the clock runs, up to 60%. A right answer adds 10%; a wrong one halves it."],
   [StarIcon, "Win", "Land before your fuel or the 15-minute clock runs out. Points = fuel left + 1 per 10 s left. Most points tops the board; watch yours in the top bar."],
 ];
 
@@ -1766,7 +1768,7 @@ function Game() {
     const result = answerPlanet({ credits: g.credits, variable: g.variable }, correct);
     sfx(correct ? "right" : "wrong");
     // Right or wrong, the player now tries to land; the odds come from the time flown (the clock's
-    // view of it, so paused tips don't count), plus 10 for a right answer.
+    // view of it, so paused tips don't count), plus 10 for a right answer or halved for a wrong one.
     const elapsed = ROUND_MS - (g.deadline - Date.now());
     commit({
       phase: "land",
@@ -1775,7 +1777,7 @@ function Game() {
       variable: correct ? g.variable : affordableVariable(result.variable, g.fuel, laneExits(g)),
       landing: {
         chance: landingChance(elapsed, correct),
-        base: landingChance(elapsed, false),
+        base: timeChance(elapsed),
         correct,
         timedOut,
         answer: g.card?.answer ?? "",
@@ -1811,7 +1813,13 @@ function Game() {
   function leaveScan() {
     const g = game.current;
     if (g.phase !== "scan") return;
-    commit({ phase: "map", scan: null, note: `${g.here} isn't habitable. You can't land here again.` });
+    // The 30 s comes off here, not at touchdown, so the clock can't give the result away before the readings do.
+    commit({
+      phase: "map",
+      scan: null,
+      deadline: g.deadline - LAND_FAIL_MS,
+      note: `${g.here} isn't habitable, and the failed landing cost ${LAND_FAIL_MS / 1000} s. You can't land here again.`,
+    });
   }
 
   function closeFuelMinute() {
@@ -2277,7 +2285,7 @@ function Game() {
                 resolveQuestion(choice === game.current.card.answer, false);
               }}
             />
-            <p className="hint">Then you try to land. A right answer adds 10% to the chance and pays 15 credits.</p>
+            <p className="hint">Then you try to land. A right answer adds 10% to the chance and pays 15 credits; a wrong one halves it.</p>
           </section>
         ) : null}
 
@@ -2294,8 +2302,10 @@ function Game() {
             ) : null}
             <p className="hint">
               {snap.landing.base}% for the time you've flown
-              {snap.landing.correct ? `, +${snap.landing.chance - snap.landing.base} for your right answer` : ""}. The chance grows
-              as the clock runs.
+              {snap.landing.correct
+                ? `, +${snap.landing.chance - snap.landing.base} for your right answer`
+                : `, halved to ${snap.landing.chance}% ${snap.landing.timedOut ? "because time ran out" : "for the wrong answer"}`}
+              . The chance grows as the clock runs. A failed landing costs {LAND_FAIL_MS / 1000} s.
             </p>
             <div className="domains land">
               <button type="button" className="tile domain" disabled={snap.power + 1e-9 < SCAN_POWER} onClick={() => land(true)}>
@@ -2533,7 +2543,7 @@ function Scan({ scan, habitable = false, onDone }) {
           <p className={habitable ? "verdict yes" : "verdict no"} aria-live="polite">
             {habitable
               ? "All readings within safe limits. Habitable."
-              : `Toxic elements concentration is too high (safe limit ${TOXIC_LIMIT} ppm). Not habitable.`}
+              : `Toxic elements concentration is too high (safe limit ${TOXIC_LIMIT} ppm). Not habitable. The failed landing costs ${LAND_FAIL_MS / 1000} s.`}
           </p>
           {onDone ? (
             <div className="row">
