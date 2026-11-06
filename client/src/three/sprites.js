@@ -1,8 +1,10 @@
 import * as THREE from "three";
 import { loadTextures } from "./assets.js";
 import { publishArt } from "./artStore.js";
+import { NOISE } from "./glsl.js";
 import { makeAtmosphereMaterial, makePlanetMaterial } from "./planetMaterial.js";
 import { animateStarship, buildStarship, buildStation } from "./models.js";
+import { STAR_TINTS } from "../art/starTints.js";
 
 // Renders the map's art once, with real textures and lights, into small images:
 // every world (from its face), the ship from above, and the station from above.
@@ -119,6 +121,135 @@ async function renderPlanets(renderer, faces, tex) {
   return planets;
 }
 
+// How each kind of star's surface boils: the size of its convection cells (more = finer), how much
+// they stand out, and how spotty it is. Cool stars carry sunspots; hot and compact ones are smooth.
+const STAR_LOOKS = {
+  yellow: { cells: 14, contrast: 0.45, spots: 0.5 },
+  orange: { cells: 12, contrast: 0.5, spots: 0.8 },
+  red: { cells: 10, contrast: 0.45, spots: 1 },
+  blue: { cells: 16, contrast: 0.3, spots: 0 },
+  giant: { cells: 6, contrast: 0.5, spots: 0.7 },
+  dwarf: { cells: 20, contrast: 0.18, spots: 0 },
+  neutron: { cells: 22, contrast: 0.12, spots: 0 },
+};
+const STAR_PX = 320;
+// The image reaches this far past the star's radius, for its rim of light.
+const STAR_EXT = 1.32;
+
+const STAR_VERT = /* glsl */ `
+varying vec3 vNormal;
+varying vec3 vPos;
+void main() {
+  vPos = position;
+  vNormal = normalize(normalMatrix * normal);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+// A star's surface works out how hot each spot is, then colours it from a ramp (deep limb colour →
+// body → white-hot centre), so darker places read as cooler and redder rather than grey. The heat
+// falls towards the edge (limb darkening), rises inside the fine convection cells and dips in the
+// lanes between them, swirls in larger patches, sinks in sunspots on cool stars, and flares in
+// bright flecks (faculae) near the limb.
+const STAR_FRAG = /* glsl */ `
+uniform vec3 hot;
+uniform vec3 body;
+uniform vec3 limb;
+uniform float cellScale;
+uniform float contrast;
+uniform float spots;
+uniform float seed;
+varying vec3 vNormal;
+varying vec3 vPos;
+${NOISE}
+vec3 ramp(float x) {
+  vec3 c = mix(limb * 0.55, limb, smoothstep(0.0, 0.3, x));
+  c = mix(c, body, smoothstep(0.25, 0.65, x));
+  return mix(c, hot, smoothstep(0.65, 1.0, x));
+}
+void main() {
+  float mu = clamp(vNormal.z, 0.0, 1.0);
+  vec2 cell = cells(vPos * cellScale + seed);
+  float granule = smoothstep(0.0, 0.4, cell.x) * (0.85 + 0.3 * cell.y);
+  float swirl = fbm5(vPos * 3.0 + seed);
+  float heat = 0.25 + 0.55 * pow(mu, 0.45);
+  heat += contrast * ((granule - 0.55) * 0.5 + (swirl - 0.5) * 0.6);
+  float blot = fbm3(vPos * 2.2 + seed * 3.1);
+  heat -= spots * (0.18 * smoothstep(0.6, 0.66, blot) + 0.3 * smoothstep(0.68, 0.73, blot));
+  heat += 0.12 * smoothstep(0.62, 0.78, fbm3(vPos * 5.0 + seed * 1.7)) * (1.0 - mu);
+  vec3 col = ramp(clamp(heat, 0.0, 1.0)) * (0.9 + 0.25 * pow(mu, 2.0));
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+const HALO_VERT = /* glsl */ `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+// The thin rim of light just outside the disc, fading fast.
+const HALO_FRAG = /* glsl */ `
+uniform vec3 color;
+uniform float ext;
+varying vec2 vUv;
+void main() {
+  float r = length((vUv - 0.5) * 2.0 * ext);
+  gl_FragColor = vec4(color, exp(-max(r - 1.0, 0.0) * 10.0) * 0.85);
+}`;
+
+// A "#rrggbb" colour as raw 0–1 channels: the star shaders write colours as authored, with no colour
+// management in between.
+function rgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return new THREE.Vector3(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+}
+
+// One image per kind of star, keyed by kind, framed STAR_EXT radii wide like the planet images.
+async function renderStars(renderer) {
+  const scene = new THREE.Scene();
+  const cam = new THREE.OrthographicCamera(-STAR_EXT, STAR_EXT, STAR_EXT, -STAR_EXT, 0.1, 20);
+  cam.position.set(0, 0, 5);
+  const sphere = new THREE.SphereGeometry(1, 96, 48);
+  const plane = new THREE.PlaneGeometry(2 * STAR_EXT, 2 * STAR_EXT);
+  const stars = new Map();
+  for (const [kind, [hot, body, limb]] of Object.entries(STAR_TINTS)) {
+    const look = STAR_LOOKS[kind];
+    const surface = new THREE.ShaderMaterial({
+      vertexShader: STAR_VERT,
+      fragmentShader: STAR_FRAG,
+      uniforms: {
+        hot: { value: rgb(hot) },
+        body: { value: rgb(body) },
+        limb: { value: rgb(limb) },
+        cellScale: { value: look.cells },
+        contrast: { value: look.contrast },
+        spots: { value: look.spots },
+        seed: { value: (hash(kind) % 1000) / 10 },
+      },
+    });
+    const halo = new THREE.ShaderMaterial({
+      vertexShader: HALO_VERT,
+      fragmentShader: HALO_FRAG,
+      uniforms: { color: { value: rgb(body) }, ext: { value: STAR_EXT } },
+      transparent: true,
+      depthWrite: false,
+    });
+    const rim = new THREE.Mesh(plane, halo);
+    rim.position.z = -2;
+    const ball = new THREE.Mesh(sphere, surface);
+    ball.rotation.set(0.4, hash(kind) % 6, 0);
+    scene.add(rim, ball);
+    renderer.render(scene, cam);
+    stars.set(kind, { url: await toUrl(renderer.domElement), ext: STAR_EXT });
+    scene.remove(rim, ball);
+    surface.dispose();
+    halo.dispose();
+  }
+  sphere.dispose();
+  plane.dispose();
+  return stars;
+}
+
 function topDown(renderer, object, half, pxW, pxH, env) {
   const scene = new THREE.Scene();
   scene.environment = env;
@@ -162,6 +293,9 @@ export async function renderMapArt(faces) {
     station.group.rotation.y = 0.3;
     const stationUrl = await topDown(renderer, station.group, [[40, 40], 40], 384, 384, env);
     publishArt({ ship: shipUrl, station: stationUrl });
+
+    renderer.setSize(STAR_PX, STAR_PX, false);
+    publishArt({ stars: await renderStars(renderer) });
 
     renderer.setSize(PLANET_PX, PLANET_PX, false);
     const planets = await renderPlanets(renderer, faces, tex);
