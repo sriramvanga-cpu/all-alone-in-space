@@ -5,6 +5,8 @@
 let ac = null;
 let bus = null;
 let hum = null;
+// The engine power last asked for, so unmuting can bring the engine back to it.
+let wanted = 0;
 let hiss = null;
 // Booth staff can mute the game; the choice is remembered on this laptop.
 let muted = false;
@@ -32,6 +34,8 @@ export function setMuted(on) {
       param.setValueAtTime(0, t);
     }
   }
+  // Sound back on: the engine picks up whatever it was last asked for, such as an idle.
+  if (!on) engine(wanted);
 }
 
 function audio() {
@@ -284,6 +288,7 @@ function brownBuffer(a) {
  * - a faint turbine whine that climbs at speed.
  */
 export function engine(power) {
+  wanted = power;
   if (muted) power = 0;
   if (!hum && !(power > 0)) return;
   const a = audio();
