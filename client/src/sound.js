@@ -27,7 +27,7 @@ export function setMuted(on) {
   }
   if (on && hum && ac) {
     const t = ac.currentTime;
-    for (const param of [hum.gain.gain, hum.depth.gain, hum.airGain.gain]) {
+    for (const param of [hum.drone.gain, hum.depth.gain, hum.rumbleGain.gain, hum.whineGain.gain]) {
       param.cancelScheduledValues(t);
       param.setValueAtTime(0, t);
     }
@@ -255,10 +255,33 @@ export function sfx(name) {
   }
 }
 
+// Three seconds of brown noise (a deep, soft rumble), its ends cross-faded so the loop has no click.
+let brown = null;
+function brownBuffer(a) {
+  if (!brown) {
+    const len = a.sampleRate * 3;
+    const fade = 2048;
+    const raw = new Float32Array(len + fade);
+    let last = 0;
+    for (let i = 0; i < raw.length; i++) {
+      last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
+      raw[i] = last * 3.5;
+    }
+    brown = a.createBuffer(1, len, a.sampleRate);
+    const data = brown.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = i < fade ? raw[i] * (i / fade) + raw[len + i] * (1 - i / fade) : raw[i];
+  }
+  return brown;
+}
+
 /**
- * The drive's hum at power 0–1, silent at 0. A soft sine with a mellow octave above it, a breath of
- * air that rises with speed, and a slow light throb. Smooth waves and gentle noise rather than
- * buzzing low sawtooths: laptop speakers can't play deep bass, so a low growl came out as buzz.
+ * The starship's drive at power 0–1, silent at 0, in four layers:
+ * - a warm drone: one low note built from soft harmonics only (an organ-like tone, no buzz), with a
+ *   twin a few cents off so the two beat slowly; laptops can't play the fundamental but still hear
+ *   its pitch through the harmonics;
+ * - a deep rumble of brown noise that opens up with power;
+ * - the reactor's throb, a pulse on the drone that quickens with power;
+ * - a faint turbine whine that climbs at speed.
  */
 export function engine(power) {
   if (muted) power = 0;
@@ -266,52 +289,55 @@ export function engine(power) {
   const a = audio();
   if (!a) return;
   if (!hum) {
-    const low = a.createOscillator();
-    low.type = "sine";
-    const high = a.createOscillator();
-    high.type = "triangle";
-    high.detune.value = 4; // a hair off the octave, for warmth
-    const highGain = a.createGain();
-    highGain.gain.value = 0.35;
-    const mellow = a.createBiquadFilter();
-    mellow.type = "lowpass";
-    mellow.frequency.value = 900;
-    const gain = a.createGain();
-    gain.gain.value = 0;
-    low.connect(gain);
-    high.connect(highGain).connect(mellow).connect(gain);
-    // The throb: a slow wobble added to the hum's volume, scaled with power so silence stays silent.
-    const lfo = a.createOscillator();
-    lfo.frequency.value = 0.8;
+    const wave = a.createPeriodicWave(new Float32Array(7), new Float32Array([0, 1, 0.7, 0.45, 0.28, 0.16, 0.08]));
+    const core = a.createOscillator();
+    core.setPeriodicWave(wave);
+    const twin = a.createOscillator();
+    twin.setPeriodicWave(wave);
+    twin.detune.value = 7;
+    const warm = a.createBiquadFilter();
+    warm.type = "lowpass";
+    warm.frequency.value = 900;
+    const drone = a.createGain();
+    drone.gain.value = 0;
+    core.connect(warm);
+    twin.connect(warm);
+    warm.connect(drone);
+    out(a, drone, 0.2);
+    // The throb: a pulse added to the drone's volume, scaled with power so silence stays silent.
+    const pulse = a.createOscillator();
     const depth = a.createGain();
     depth.gain.value = 0;
-    lfo.connect(depth).connect(gain.gain);
-    gain.connect(bus.master);
-    // Air rushing past: band-passed noise that brightens with speed.
-    const air = a.createBufferSource();
-    air.buffer = noiseBuffer(a);
-    air.loop = true;
-    const airFilter = a.createBiquadFilter();
-    airFilter.type = "bandpass";
-    airFilter.Q.value = 0.7;
-    airFilter.frequency.value = 400;
-    const airGain = a.createGain();
-    airGain.gain.value = 0;
-    air.connect(airFilter).connect(airGain).connect(bus.master);
-    low.start();
-    high.start();
-    lfo.start();
-    air.start();
-    hum = { low, high, lfo, gain, depth, airFilter, airGain };
+    pulse.connect(depth).connect(drone.gain);
+    const rumble = a.createBufferSource();
+    rumble.buffer = brownBuffer(a);
+    rumble.loop = true;
+    const deep = a.createBiquadFilter();
+    deep.type = "lowpass";
+    deep.frequency.value = 160;
+    const rumbleGain = a.createGain();
+    rumbleGain.gain.value = 0;
+    rumble.connect(deep).connect(rumbleGain);
+    out(a, rumbleGain, 0.15);
+    const whine = a.createOscillator();
+    const whineGain = a.createGain();
+    whineGain.gain.value = 0;
+    whine.connect(whineGain);
+    out(a, whineGain, 0.3);
+    for (const node of [core, twin, pulse, rumble, whine]) node.start();
+    hum = { core, twin, warm, drone, pulse, depth, deep, rumbleGain, whine, whineGain };
   }
   const p = Math.max(0, Math.min(1, power || 0));
   const t = a.currentTime;
-  const f = 110 + p * 55; // A2, rising toward E3 at full power
-  hum.low.frequency.setTargetAtTime(f, t, 0.15);
-  hum.high.frequency.setTargetAtTime(f * 2, t, 0.15);
-  hum.gain.gain.setTargetAtTime(p * 0.07, t, 0.1);
-  hum.depth.gain.setTargetAtTime(p * 0.008, t, 0.1);
-  hum.lfo.frequency.setTargetAtTime(0.6 + p * 1.6, t, 0.2);
-  hum.airGain.gain.setTargetAtTime(p * 0.05, t, 0.1);
-  hum.airFilter.frequency.setTargetAtTime(400 + p * 1100, t, 0.15);
+  const f = 55 + p * 27; // A1, rising toward E2 at full power
+  hum.core.frequency.setTargetAtTime(f, t, 0.18);
+  hum.twin.frequency.setTargetAtTime(f, t, 0.18);
+  hum.warm.frequency.setTargetAtTime(600 + p * 900, t, 0.15);
+  hum.drone.gain.setTargetAtTime(p * 0.09, t, 0.12);
+  hum.depth.gain.setTargetAtTime(p * 0.022, t, 0.12);
+  hum.pulse.frequency.setTargetAtTime(1.6 + p * 3.4, t, 0.25);
+  hum.rumbleGain.gain.setTargetAtTime(p * 0.16, t, 0.12);
+  hum.deep.frequency.setTargetAtTime(120 + p * 420, t, 0.15);
+  hum.whine.frequency.setTargetAtTime(480 + p * 640, t, 0.2);
+  hum.whineGain.gain.setTargetAtTime(p * p * 0.011, t, 0.15);
 }
