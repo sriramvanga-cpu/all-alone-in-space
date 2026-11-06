@@ -357,6 +357,88 @@ input:focus {
 .mission-steps .icon { width: 2rem; height: 2rem; color: var(--step); }
 .mission-steps b { display: block; margin: 0.45rem 0 0.3rem; font: 700 var(--text-lg) var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--step); }
 .mission-steps p { margin: 0; color: var(--ink); font-size: var(--text-md); line-height: 1.45; }
+
+/* How to play: the reel between the opening film and the mission card, and the clips in tips */
+.howto { width: min(100%, 52rem); }
+.howto-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.7rem; }
+.howto-head .eyebrow { margin: 0; }
+.howto-head button { min-height: 40px; padding: 0.4rem 1rem; }
+.reel-hud { justify-content: center; margin-bottom: 0.8rem; }
+.reel-hud .meter { transition: border-color 0.25s, box-shadow 0.25s; }
+.reel-hud .meter.focus {
+  border-color: currentColor;
+  box-shadow: 0 0 0 1px currentColor, 0 0 24px color-mix(in srgb, currentColor 45%, transparent);
+}
+.reel-stage {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 1;
+  max-height: 46vh;
+  background: radial-gradient(ellipse at 50% 45%, rgba(40, 64, 128, 0.32), rgba(4, 7, 16, 0.78) 75%);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius-lg);
+}
+.tip .reel-stage { max-height: 10rem; margin: 0.5rem 0 0.3rem; }
+.reel-cap { min-height: 6.4rem; margin-top: 0.9rem; text-align: center; }
+.reel-cap h1 { margin: 0 0 0.25rem; font-size: clamp(1.25rem, 3.2vw, 1.8rem); }
+.reel-cap p { max-width: 36rem; margin: 0 auto; font-size: var(--text-lg); }
+.reel-steps { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem; margin: 0.6rem 0 0; padding: 0; list-style: none; }
+/* Each chip fills as its scene plays (--p from 0 to 1). */
+.reel-steps button {
+  min-height: 36px;
+  padding: 0.3rem 0.85rem;
+  font-size: var(--text-xs);
+  background:
+    linear-gradient(90deg, rgba(90, 209, 255, 0.34), rgba(138, 125, 255, 0.34)) 0 0 / calc(var(--p, 0) * 100%) 100% no-repeat,
+    rgba(14, 22, 44, 0.55);
+}
+.reel-steps button[aria-current] { border-color: var(--accent); color: #fff; }
+.reel-controls { justify-content: center; }
+
+/* Reel art. Map pieces reuse the map's own classes; these are the reel's extras. */
+.reel-route { fill: none; stroke: rgba(90, 209, 255, 0.55); stroke-width: 1.6; stroke-dasharray: 4 6; }
+.reel-sweep { fill: none; stroke: var(--power); stroke-width: 2; }
+.reel-label {
+  fill: var(--ink);
+  font: 700 15px var(--font-display);
+  letter-spacing: 0.04em;
+  paint-order: stroke;
+  stroke: rgba(2, 4, 10, 0.85);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.reel-label.dim { fill: var(--dim); font: 600 12px var(--font-body); letter-spacing: 0.06em; }
+.reel-label.fuel { fill: var(--fuel); }
+.reel-label.power { fill: var(--power); }
+.reel-label.gold { fill: var(--gold); }
+.reel-label.ok { fill: var(--ok); }
+.reel-label.bad { fill: var(--danger); }
+.reel-label.time { fill: var(--accent); }
+.reel-label.pink { fill: var(--pink); }
+.tag.time .cost rect { stroke: rgba(90, 209, 255, 0.75); }
+.tag.time .cost text { fill: var(--accent); }
+.reel-card { fill: rgba(9, 15, 32, 0.86); stroke: var(--glass-line); }
+.reel-card-title { fill: var(--accent); font: 600 11px var(--font-body); letter-spacing: 0.16em; }
+.reel-line { fill: rgba(160, 190, 255, 0.22); }
+.reel-tile { fill: rgba(22, 36, 70, 0.9); stroke: var(--glass-line); }
+.reel-tile.right { fill: rgba(125, 222, 192, 0.18); stroke: var(--ok); }
+.reel-key { fill: rgba(5, 9, 20, 0.6); stroke: var(--k); }
+.reel-key-text { fill: var(--k); font: 700 12px var(--font-body); }
+.reel-track { fill: rgba(255, 255, 255, 0.1); }
+.reel-time { fill: url(#reel-time); }
+.reel-right { fill: var(--ok); }
+.reel-ring { fill: none; stroke-width: 5; }
+.reel-ring.track { stroke: rgba(255, 255, 255, 0.1); }
+.reel-ring.value { stroke: var(--accent); stroke-linecap: round; }
+.reel-ring-text { fill: var(--ink); font: 700 15px var(--font-display); }
+.reel-rock { fill: url(#reel-rock); }
+.reel-boom { fill: url(#reel-boom); }
+.reel-pack { fill: rgba(5, 9, 20, 0.5); stroke: rgba(160, 190, 255, 0.2); }
+.reel-pack.lit { stroke: var(--fuel); }
+.reel-buy { fill: #2563eb; stroke: rgba(190, 200, 255, 0.55); }
+.reel-buy.down { fill: #9333ea; }
+.reel-buy-text { fill: #fff; font: 700 11px var(--font-body); letter-spacing: 0.1em; }
 .title-card .ship {
   display: block;
   width: min(52vw, 240px);
@@ -677,9 +759,12 @@ p.credits a { color: inherit; }
 .ship .navlight { animation: blink 1.8s steps(1) infinite; }
 .ship .navlight.red { fill: #ff5a5a; }
 .ship .navlight.green { fill: #5aff9a; animation-delay: 0.9s; }
-.map-svg.flying .trail { opacity: 1; }
+.map-svg.flying .trail,
+.reel-stage .ship.flying .trail { opacity: 1; }
 .map-svg.flying .plume,
-.map-svg.flying .exhaust { opacity: 1; fill: #e7f8ff; animation: burn 0.14s ease-in-out infinite alternate; }
+.map-svg.flying .exhaust,
+.reel-stage .ship.flying .plume,
+.reel-stage .ship.flying .exhaust { opacity: 1; fill: #e7f8ff; animation: burn 0.14s ease-in-out infinite alternate; }
 
 /* Station */
 .starbase .halo { fill: url(#station-glow); }
@@ -1383,6 +1468,11 @@ p.credits a { color: inherit; }
   .podium { gap: 0.4rem; }
   .pod { padding: 1.6rem 0.4rem 0.9rem; }
   .title-big { font-size: 2.1rem; }
+  .howto-head button { min-height: 36px; padding: 0.3rem 0.8rem; }
+  .reel-stage { max-height: none; }
+  .reel-cap { min-height: 7.6rem; }
+  .reel-cap p { font-size: var(--text-md); }
+  .reel-steps button { padding: 0.25rem 0.6rem; }
 }
 
 /* Shown while the 3D intro loads its textures (usually only a moment). */

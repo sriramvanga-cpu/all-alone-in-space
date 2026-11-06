@@ -31,6 +31,24 @@ export const STAR_NAMES = {
 };
 const KIND_SIZE = { giant: 1.2, dwarf: 0.45 };
 
+// The fuel-stop badge: a drop, filled from MapDefs' fuel-drop gradient.
+export const DROP = "M0 -4.8C2.7 -1 4 1 4 2.7A4 4 0 0 1 -4 2.7C-4 1 -2.7 -1 0 -4.8Z";
+
+/** A lane's fuel or a hop's power, as a pill centred on (x, y). */
+export function CostPill({ text, x, y, power = false, short = false, big = false }) {
+  const w = big ? 18 + text.length * 10 : 14 + text.length * 7;
+  const h = big ? 26 : 18;
+  const cls = ["cost", "hot", power ? "power" : "", short ? "short" : "", big ? "big" : ""].filter(Boolean).join(" ");
+  return (
+    <g className={cls} transform={`translate(${x} ${y})`}>
+      <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={h / 2} />
+      <text y={big ? 5.5 : 4} textAnchor="middle">
+        {text}
+      </text>
+    </g>
+  );
+}
+
 // In unit space. Corona: thin streamers of uneven length, blurred soft. Spikes: the sparkle of a
 // distant star. Beams: a pulsar's two cones of light.
 const RAYS = Array.from({ length: 18 }, (_, i) => {

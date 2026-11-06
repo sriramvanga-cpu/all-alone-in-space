@@ -49,9 +49,10 @@ import bank from "./data/questions.json";
 import SpaceBackdrop from "./art/SpaceBackdrop.jsx";
 import { SAUCER_X, ShipShapes, ShipSvg } from "./art/Ship.jsx";
 import Intro from "./intro/Intro.jsx";
+import HowTo, { Reel } from "./intro/HowTo.jsx";
 import { Starbase } from "./art/Station.jsx";
 import { PlanetDot, faceOf } from "./art/Planet.jsx";
-import { MapDefs, MapBackdrop, StarDot, STAR_NAMES } from "./art/MapArt.jsx";
+import { CostPill, DROP, MapDefs, MapBackdrop, StarDot, STAR_NAMES } from "./art/MapArt.jsx";
 import { publishArt, webglAvailable } from "./three/artStore.js";
 import { FuelIcon, PowerIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipIcon, StarIcon, CompassIcon } from "./art/icons.jsx";
 
@@ -73,7 +74,6 @@ const ROUND_MS = 15 * 60 * 1000;
 const QUESTION_MS = 60_000;
 const FUEL_WORLDS = new Set(PLANETS.filter((p) => p.shell === "fuel").map((p) => p.id));
 const FACES = new Map(PLANETS.map((p) => [p.id, faceOf(p)]));
-const DROP = "M0 -4.8C2.7 -1 4 1 4 2.7A4 4 0 0 1 -4 2.7C-4 1 -2.7 -1 0 -4.8Z";
 // Realistic map art renders in the background; the map shows vector art until it lands.
 if (webglAvailable()) {
   // While the realistic ship renders, show no ship rather than flash the old vector one.
@@ -559,12 +559,16 @@ function tipFor(g) {
   return id && !g.tipsSeen.includes(id) ? id : null;
 }
 
+// Each tip loops its scene from the how-to-play reel above the words.
+const TIP_SCENE = { star: "fly", system: "hop", fuel: "refuel", test: "answer" };
+
 function Tip({ id, onClose }) {
   const [title, text] = TIPS[id];
   return (
     <section className="panel tip" aria-live="polite">
       <p className="eyebrow">How it works</p>
       <h1>{title}</h1>
+      <Reel only={TIP_SCENE[id]} />
       <p>{text}</p>
       <p className="hint">The clock is paused.</p>
       <div className="row">
@@ -576,7 +580,7 @@ function Tip({ id, onClose }) {
   );
 }
 
-// The mission card ends the opening film: what to do, how to win, how you score. The clock starts here.
+// The mission card follows the how-to-play reel: what to do, how to win, how you score. The clock starts here.
 const MISSION = [
   [CompassIcon, "Explore", "Scan the star map and fly between solar systems. Fuel flies the lanes; power flies between planets."],
   [GlobeIcon, "Land", "On a planet marked !, answer a question, then try to land. Your chance starts at 0% and climbs faster as the clock runs, up to 60%. A right answer adds 10%; a wrong one halves it."],
@@ -737,20 +741,6 @@ function useNarrow() {
     return () => mq.removeEventListener("change", on);
   }, []);
   return narrow;
-}
-
-function CostPill({ text, x, y, power = false, short = false, big = false }) {
-  const w = big ? 18 + text.length * 10 : 14 + text.length * 7;
-  const h = big ? 26 : 18;
-  const cls = ["cost", "hot", power ? "power" : "", short ? "short" : "", big ? "big" : ""].filter(Boolean).join(" ");
-  return (
-    <g className={cls} transform={`translate(${x} ${y})`}>
-      <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={h / 2} />
-      <text y={big ? 5.5 : 4} textAnchor="middle">
-        {text}
-      </text>
-    </g>
-  );
 }
 
 // The star map: the station and the systems you have found. A scan reveals the systems one
@@ -2089,7 +2079,10 @@ function Game() {
     return <NameScreen onStart={(who) => commit({ ...who, phase: "intro" })} />;
   }
   if (snap.phase === "intro") {
-    return <Intro onDone={() => game.current.phase === "intro" && commit({ phase: "mission" })} />;
+    return <Intro onDone={() => game.current.phase === "intro" && commit({ phase: "howto" })} />;
+  }
+  if (snap.phase === "howto") {
+    return <HowTo onDone={() => game.current.phase === "howto" && commit({ phase: "mission" })} />;
   }
   if (snap.phase === "mission") return <Mission onStart={dock} />;
 
