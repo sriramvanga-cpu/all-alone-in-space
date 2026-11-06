@@ -74,6 +74,9 @@ const SCALE = 190;
 // A lane flight is a warp jump: about a second to jump in, a second in warp, a second to drop out.
 const FLIGHT_MS = 3200;
 
+// The engine's power while the ship sits parked on a map: low enough to fade into the background.
+const ENGINE_IDLE = 0.15;
+
 // The engine through a warp jump, t from 0 to 1: it spools up while the drive charges, roars
 // through warp space, and winds down as the ship drops out.
 function warpPower(t) {
@@ -2084,6 +2087,12 @@ function Game() {
     window.addEventListener("beforeunload", ask);
     return () => window.removeEventListener("beforeunload", ask);
   }, [live]);
+
+  // Parked on a map, the engine idles quietly; a flight drives it itself, and it falls silent on the
+  // screens that replace the map (questions, fuel rounds, the shop, the end).
+  useEffect(() => {
+    if (snap.phase !== "fly") engine(snap.phase === "map" ? ENGINE_IDLE : 0);
+  }, [snap.phase]);
 
   useEffect(() => {
     if (snap.phase !== "fly" || !snap.flight) return;
