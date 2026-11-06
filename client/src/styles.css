@@ -645,13 +645,19 @@ p.credits a { color: inherit; }
   text-shadow: 0 0 12px rgba(90, 209, 255, 0.8);
   animation: warpin 0.4s 0.3s ease-out both;
 }
+/* The ship outside warp: placed and stretched each frame by WarpTunnel, engines lit. */
+.warp-ship { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform, opacity; }
+.warp-ship svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.warp-ship .trail { opacity: 1; }
+.warp-ship .plume,
+.warp-ship .exhaust { opacity: 1; fill: #e7f8ff; animation: burn 0.14s ease-in-out infinite alternate; }
 .warp-out {
   position: fixed;
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: radial-gradient(circle at 50% 55%, rgba(230, 246, 255, 0.95), rgba(120, 170, 255, 0.55) 40%, rgba(4, 6, 13, 0) 78%);
-  animation: warpout 0.6s ease-out forwards;
+  background: var(--space-0);
+  animation: warpout 0.5s ease-out forwards;
 }
 @keyframes warpin { from { opacity: 0; } }
 @keyframes warpout { to { opacity: 0; } }

@@ -60,7 +60,8 @@ import { FuelIcon, PowerIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipI
 const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 const PENDING = "aais-pending-scores";
 const SCALE = 190;
-const FLIGHT_MS = 2400;
+// A lane flight is a warp jump: about a second to jump in, a second in warp, a second to drop out.
+const FLIGHT_MS = 3200;
 const HOP_MS = 1600;
 const VIEW_W = 720;
 const VIEW_H = 640;
@@ -574,6 +575,7 @@ const TIP_SCENE = { star: "fly", system: "hop", fuel: "refuel", test: "answer" }
 
 function Tip({ id, onClose }) {
   const [title, text] = TIPS[id];
+  useEffect(() => sfx("tip"), [id]);
   return (
     <section className="panel tip" aria-live="polite">
       <p className="eyebrow">How it works</p>
@@ -1625,6 +1627,7 @@ function Game() {
       if (move.power > g.power + 1e-9) return;
       // Aim for where the planet will be when the ship gets there.
       const { d } = bend(positionAt(g.here, now), positionAt(id, now + HOP_MS));
+      sfx("hop");
       commit({
         phase: "fly",
         here: id,
@@ -1877,7 +1880,10 @@ function Game() {
     const right = answers.filter((answer) => answer === "right").length;
     const { bonus } = fuelStreak(answers);
     const credits = g.creditFloor + Math.floor(right / g.fuelRound.per) + bonus;
-    sfx(bonus > fuelStreak(g.fuelAnswers).bonus ? "bonus" : credits > g.credits ? "credit" : kind);
+    // An asteroid hit always cracks; a credit or a streak bonus chimes on top.
+    const rock = g.fuelRound?.id === "rocks" && kind === "right";
+    if (rock) sfx("pop");
+    sfx(bonus > fuelStreak(g.fuelAnswers).bonus ? "bonus" : credits > g.credits ? "credit" : rock ? null : kind);
     commit({
       fuelAnswers: answers,
       fuelIndex: 0,
@@ -1909,6 +1915,7 @@ function Game() {
     if (g.phase !== "shop") return;
     const result = buyPacks({ credits: g.credits, fuel: g.fuel, power: g.power }, counts);
     if (!result.ok) return;
+    sfx("buy");
     commit({ credits: result.credits, fuel: result.fuel, power: result.power });
   }
 
@@ -2545,8 +2552,15 @@ function Scan({ scan, habitable = false, onDone }) {
   const [done, setDone] = useState(false);
   const revealMs = (scan.readings.length + 1) * SCAN_STEP_MS;
   useEffect(() => {
-    const id = setTimeout(() => setDone(true), revealMs);
-    return () => clearTimeout(id);
+    // A blip as each reading comes in, then the buzz of a toxic verdict (a win has its own chime).
+    const ids = scan.readings.map((_, i) => setTimeout(() => sfx("reading"), (i + 1) * SCAN_STEP_MS));
+    ids.push(
+      setTimeout(() => {
+        setDone(true);
+        if (!habitable) sfx("toxic");
+      }, revealMs),
+    );
+    return () => ids.forEach(clearTimeout);
   }, [revealMs]);
   return (
     <section className="panel wide scan">
@@ -2606,6 +2620,14 @@ function SoundToggle() {
 
 export default function App() {
   const route = window.location.pathname.replace(/\/+$/, "") || "/";
+  // Every button ticks when pressed; the game's own sounds play on top.
+  useEffect(() => {
+    const onClick = (e) => {
+      if (e.target instanceof Element && e.target.closest("button:not(:disabled)")) sfx("click");
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, []);
   return (
     <>
       <SpaceBackdrop />
