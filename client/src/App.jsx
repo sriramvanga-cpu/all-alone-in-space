@@ -93,8 +93,8 @@ const STAR_R = 11;
 const WORLD = 900;
 const ROUND_MS = 15 * 60 * 1000;
 // Test runs: "admin" as both name and phone starts a cheat run. Its clock gets a day (the landing
-// odds still follow the time flown), fuel, power and credits are topped up after every change, and
-// the run never goes to the leaderboard.
+// odds still follow the time flown), fuel, power and credits are topped up after every change until
+// the admin panel turns that off, and the run never goes to the leaderboard.
 const CHEAT_ROUND_MS = 24 * 60 * 60 * 1000;
 const CHEAT_FILL = 9999;
 const roundMs = (g) => (g.cheat ? CHEAT_ROUND_MS : ROUND_MS);
@@ -278,6 +278,8 @@ function fresh() {
     name: "",
     phone: "",
     cheat: false,
+    // Cheat mode's test switches, set from the admin panel.
+    admin: { refill: true },
     here: STATION,
     // The system you're inside (its planetary map is showing), or null on the star map.
     system: null,
@@ -1852,13 +1854,25 @@ function Game() {
 
   function commit(patch) {
     const next = { ...game.current, ...patch };
-    if (next.cheat) {
+    if (next.cheat && next.admin.refill) {
       next.fuel = Math.max(next.fuel, CHEAT_FILL);
       next.power = Math.max(next.power, CHEAT_FILL);
       next.credits = Math.max(next.credits, CHEAT_FILL);
     }
     game.current = next;
     setTick((n) => n + 1);
+  }
+
+  // Cheat mode's switches from the admin panel.
+  function setAdmin(patch) {
+    const g = game.current;
+    if (g.cheat) commit({ admin: { ...g.admin, ...patch } });
+  }
+
+  // Exact amounts, with the endless top-up off so they stick.
+  function setAmounts(amounts) {
+    const g = game.current;
+    if (g.cheat) commit({ ...amounts, admin: { ...g.admin, refill: false } });
   }
 
   function finish(reason) {
@@ -2438,6 +2452,8 @@ function Game() {
       ? Math.max(0, snap.deadline - (snap.stoppedAt || snap.deadline))
       : Math.max(0, snap.deadline - (tip && snap.tipAt ? snap.tipAt : now));
   const fuelShown = snap.phase === "fly" && flyFuel != null ? flyFuel : snap.fuel;
+  // A cheat run shows ∞ while it tops fuel, power and credits up.
+  const endless = snap.cheat && snap.admin.refill;
   // What landing right now would score, the same sum the board ranks by.
   const pointsShown =
     snap.phase === "end"
@@ -2487,7 +2503,7 @@ function Game() {
             <FuelIcon />
             <div className="m-text">
               <small>Fuel</small>
-              <b>{snap.cheat ? "∞" : fmtNum(fuelShown)}</b>
+              <b>{endless ? "∞" : fmtNum(fuelShown)}</b>
               <span className="gauge" aria-hidden="true">
                 <i style={{ width: `${Math.max(0, Math.min(1, fuelShown / Math.max(30, fuelShown))) * 100}%` }} />
               </span>
@@ -2498,7 +2514,7 @@ function Game() {
             <PowerIcon />
             <div className="m-text">
               <small>Power</small>
-              <b>{snap.cheat ? "∞" : fmtNum(snap.power)}</b>
+              <b>{endless ? "∞" : fmtNum(snap.power)}</b>
             </div>
             <Delta value={snap.power} />
           </div>
@@ -2506,7 +2522,7 @@ function Game() {
             <CreditIcon />
             <div className="m-text">
               <small>Credits</small>
-              <b>{snap.cheat ? "∞" : snap.credits}</b>
+              <b>{endless ? "∞" : snap.credits}</b>
             </div>
             <Delta value={snap.credits} />
           </div>
@@ -2529,6 +2545,7 @@ function Game() {
           </div>
         </div>
       </header>
+      {snap.cheat && snap.phase !== "end" ? <AdminPanel snap={snap} onAdmin={setAdmin} onAmounts={setAmounts} /> : null}
       <div className="play-body">
         {snap.warpAt && now - snap.warpAt < 900 ? <div key={snap.warpAt} className="warp-out" aria-hidden="true" /> : null}
         {snap.phase === "map" || snap.phase === "fly" ? (
@@ -2959,6 +2976,77 @@ function Scan({ scan, habitable = false, onDone, onSettle }) {
         </>
       ) : null}
     </section>
+  );
+}
+
+// Cheat mode's test tools, in a panel that opens from the corner across from the sound switch.
+// Every switch acts at once, and the game keeps running underneath.
+function AdminPanel({ snap, onAdmin, onAmounts }) {
+  const [open, setOpen] = useState(false);
+  const [amounts, setAmounts] = useState({ fuel: START_FUEL, power: START_POWER, credits: START_CREDITS });
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+  const admin = snap.admin;
+  const field = (key, label) => (
+    <label>
+      {label}
+      <input
+        type="number"
+        min="0"
+        step="any"
+        inputMode="decimal"
+        value={amounts[key]}
+        onChange={(e) => setAmounts({ ...amounts, [key]: e.target.value })}
+      />
+    </label>
+  );
+  return (
+    <>
+      <button type="button" className="ghost admin-toggle" aria-expanded={open} aria-controls="admin-panel" onClick={() => setOpen(!open)}>
+        Admin
+      </button>
+      {open ? (
+        <aside id="admin-panel" className="panel admin-panel" aria-label="Admin tools">
+          <div className="admin-head">
+            <h2>Admin tools</h2>
+            <button type="button" className="ghost" onClick={() => setOpen(false)}>
+              Close
+            </button>
+          </div>
+          <section className="admin-section">
+            <h3>Fuel, power and credits</h3>
+            <div className="admin-chips">
+              <button type="button" className="ghost" aria-pressed={admin.refill} onClick={() => onAdmin({ refill: !admin.refill })}>
+                Endless: {admin.refill ? "on" : "off"}
+              </button>
+            </div>
+            <form
+              className="admin-amounts"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const read = (key) => Math.max(0, Number(amounts[key]) || 0);
+                onAmounts({ fuel: read("fuel"), power: read("power"), credits: Math.floor(read("credits")) });
+              }}
+            >
+              {field("fuel", "Fuel")}
+              {field("power", "Power")}
+              {field("credits", "Credits")}
+              <button type="submit" className="ghost">
+                Set
+              </button>
+            </form>
+            <p className="hint">
+              Setting amounts turns endless off, so running low, the shop and running out can be tested. Too little fuel to leave
+              ends the run, as it would for anyone.
+            </p>
+          </section>
+        </aside>
+      ) : null}
+    </>
   );
 }
 
