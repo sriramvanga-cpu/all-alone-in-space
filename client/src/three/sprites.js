@@ -250,6 +250,56 @@ async function renderStars(renderer) {
   return stars;
 }
 
+const ROCK_PX = 128;
+// The rock images reach this far past a rock's unit radius, for its bumps.
+const ROCK_EXT = 1.4;
+
+// Asteroids for the Asteroid tap fuel round: lumpy, cratered rocks, lit like the planets, each
+// shaped by a few overlapping waves pushing its surface in and out.
+async function renderRocks(renderer, tex) {
+  const scene = new THREE.Scene();
+  const cam = new THREE.OrthographicCamera(-ROCK_EXT, ROCK_EXT, ROCK_EXT, -ROCK_EXT, 0.1, 20);
+  cam.position.set(0, 0, 5);
+  scene.add(new THREE.DirectionalLight("#ffffff", 3.2).translateOnAxis(LIGHT, 10));
+  scene.add(new THREE.AmbientLight("#ffffff", 0.2));
+  const maps = [tex.moon, tex.ceres, tex.mercury];
+  const urls = [];
+  const point = new THREE.Vector3();
+  // A wave across the rock: big gentle ones make the potato shape, small ones roughen its skin.
+  const wave = (freq, amp) => ({
+    dir: new THREE.Vector3().randomDirection(),
+    freq: freq[0] + Math.random() * (freq[1] - freq[0]),
+    phase: Math.random() * Math.PI * 2,
+    amp: amp[0] + Math.random() * (amp[1] - amp[0]),
+  });
+  for (let k = 0; k < 5; k++) {
+    // An indexed sphere, so the bumps get smooth normals instead of flat facets.
+    const geo = new THREE.SphereGeometry(1, 72, 48);
+    const pos = geo.attributes.position;
+    const waves = [
+      ...Array.from({ length: 4 }, () => wave([1.5, 3.5], [0.06, 0.12])),
+      ...Array.from({ length: 6 }, () => wave([6, 12], [0.01, 0.025])),
+    ];
+    for (let i = 0; i < pos.count; i++) {
+      point.fromBufferAttribute(pos, i).normalize();
+      let r = 1;
+      for (const w of waves) r += w.amp * Math.sin(point.dot(w.dir) * w.freq + w.phase);
+      pos.setXYZ(i, point.x * r * 1.12, point.y * r * 0.86, point.z * r);
+    }
+    geo.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({ map: maps[k % maps.length], color: "#cbb9a6", roughness: 1, metalness: 0 });
+    const rock = new THREE.Mesh(geo, mat);
+    rock.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+    scene.add(rock);
+    renderer.render(scene, cam);
+    urls.push(await toUrl(renderer.domElement));
+    scene.remove(rock);
+    geo.dispose();
+    mat.dispose();
+  }
+  return urls;
+}
+
 function topDown(renderer, object, half, pxW, pxH, env) {
   const scene = new THREE.Scene();
   scene.environment = env;
@@ -300,6 +350,9 @@ export async function renderMapArt(faces) {
     renderer.setSize(PLANET_PX, PLANET_PX, false);
     const planets = await renderPlanets(renderer, faces, tex);
     publishArt({ planets });
+
+    renderer.setSize(ROCK_PX, ROCK_PX, false);
+    publishArt({ rocks: await renderRocks(renderer, tex) });
     pmrem.dispose();
   } finally {
     renderer.dispose();
