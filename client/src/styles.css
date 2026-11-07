@@ -855,11 +855,14 @@ p.credits a { color: inherit; }
 .ship .navlight.red { fill: #ff5a5a; }
 .ship .navlight.green { fill: #5aff9a; animation-delay: 0.9s; }
 .map-svg.flying .trail,
-.reel-stage .ship.flying .trail { opacity: 1; }
+.reel-stage .ship.flying .trail,
+.board-ship .trail { opacity: 1; }
 .map-svg.flying .plume,
 .map-svg.flying .exhaust,
 .reel-stage .ship.flying .plume,
-.reel-stage .ship.flying .exhaust { opacity: 1; fill: #e7f8ff; animation: burn 0.14s ease-in-out infinite alternate; }
+.reel-stage .ship.flying .exhaust,
+.board-ship .plume,
+.board-ship .exhaust { opacity: 1; fill: #e7f8ff; animation: burn 0.14s ease-in-out infinite alternate; }
 
 /* Station */
 .starbase .halo { fill: url(#station-glow); }
@@ -1534,6 +1537,33 @@ p.credits a { color: inherit; }
 .pod-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.3rem 1rem; margin: 0.8rem 0 0; padding: 0; list-style: none; color: var(--dim); font-size: clamp(0.9rem, 1.5vw, 1.15rem); font-variant-numeric: tabular-nums; }
 .pod-stats li { display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
 .pod-stats .icon { width: 1.1em; height: 1.1em; flex: none; }
+/* The empty board: the ship glides past a world, over and over, inviting the first pilot. */
+.board-empty {
+  display: grid;
+  grid-template-columns: minmax(12rem, 24rem) 1fr;
+  align-items: center;
+  gap: clamp(1.5rem, 5vw, 4rem);
+  margin-top: clamp(2rem, 8vh, 5rem);
+  animation: rise 0.9s ease-out both;
+}
+.board-empty-art { position: relative; }
+.board-empty-art .planet-art-box { animation: float 9s ease-in-out infinite; }
+.board-ship {
+  position: absolute;
+  left: -6%;
+  bottom: 14%;
+  width: 46%;
+  height: auto;
+  overflow: visible;
+  animation: board-ship 12s linear infinite;
+}
+.board-empty h2 { margin: 0.4rem 0 0; font: 800 clamp(1.8rem, 4vw, 3.4rem) / 1.1 var(--font-display); letter-spacing: 0.03em; }
+.board-empty .hint { margin: 0.9rem 0 0; font-size: clamp(1rem, 1.8vw, 1.35rem); }
+@keyframes board-ship {
+  0% { opacity: 0; transform: translate(-25%, 40%) rotate(-14deg); }
+  12%, 82% { opacity: 1; }
+  100% { opacity: 0; transform: translate(170%, -150%) rotate(-14deg); }
+}
 @keyframes pod-rise {
   from { opacity: 0; transform: translateY(28px) scale(0.96); }
   to { opacity: 1; transform: none; }
@@ -1644,7 +1674,8 @@ p.credits a { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .streak, .link-flow, .ready-ring, .beacon-pulse, .navlight, .plume, .exhaust, .end-orb, .live::before,
   .scan-btn, .node.system, .sun .star-glow, .sun .surface, .gate-core, .gate-spin, .sweep, .star .rays, .star .beams, .star .pair,
-  .starbase .spin, .starbase .core, .reading, .scan-bar i, .pod, .pod.p1::before, .pod .rank::after {
+  .starbase .spin, .starbase .core, .reading, .scan-bar i, .pod, .pod.p1::before, .pod .rank::after,
+  .board-empty, .board-empty-art .planet-art-box, .board-ship {
     animation: none !important;
   }
 }
@@ -1680,6 +1711,8 @@ p.credits a { color: inherit; }
   .lb th, .lb td { padding-left: 0.4rem; padding-right: 0.4rem; }
   .lb { font-size: var(--text-sm); }
   .board h1 { font-size: 1.9rem; letter-spacing: 0.04em; }
+  .board-empty { grid-template-columns: 1fr; text-align: center; }
+  .board-empty-art { width: min(15rem, 70vw); margin: 0 auto; }
   .podium { gap: 0.4rem; }
   .pod { padding: 1.6rem 0.4rem 0.9rem; }
   .title-big { font-size: 2.1rem; }

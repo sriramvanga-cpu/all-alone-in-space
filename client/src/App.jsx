@@ -434,7 +434,8 @@ function Ring({ ms, total }) {
 // `run` asks the server to add that run's own row and rank to the top 10.
 function useBoard(run) {
   const [rows, setRows] = useState([]);
-  const [err, setErr] = useState(false);
+  // null until the first answer, so a board still loading isn't taken for an empty one.
+  const [err, setErr] = useState(null);
   useEffect(() => {
     let stop = false;
     async function pull() {
@@ -560,6 +561,26 @@ function Podium({ rows }) {
   );
 }
 
+// A solid world that could be home, for the empty board.
+const SHOWCASE = PLANETS.find((p) => p.shell !== "fuel" && FACES.get(p.id).kind !== "gas").id;
+
+// Before anyone has played, the board invites the first pilot: the ship gliding past a world.
+function BoardEmpty() {
+  return (
+    <section className="board-empty">
+      <div className="board-empty-art" aria-hidden="true">
+        <PlanetArt id={SHOWCASE} />
+        <ShipSvg className="board-ship" />
+      </div>
+      <div>
+        <p className="eyebrow">No scores yet</p>
+        <h2>Be the first pilot to settle a new world</h2>
+        <p className="hint">Fifteen minutes. One world. Every run lands on this board the moment it ends.</p>
+      </div>
+    </section>
+  );
+}
+
 function Board() {
   const { rows, err } = useBoard();
   return (
@@ -575,8 +596,14 @@ function Board() {
         Wins rank above every loss. Wins rank by points: 1 per fuel left and 1 per 10 seconds left.
         Losses rank by more worlds, then more fuel left, then who lasted longer.
       </p>
-      <Podium rows={rows} />
-      <BoardTable rows={rows} err={err} start={Math.min(3, rows.length)} />
+      {err === false && rows.length === 0 ? (
+        <BoardEmpty />
+      ) : (
+        <>
+          <Podium rows={rows} />
+          <BoardTable rows={rows} err={err} start={Math.min(3, rows.length)} />
+        </>
+      )}
     </main>
   );
 }
