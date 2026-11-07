@@ -304,7 +304,7 @@ function fresh() {
     phone: "",
     cheat: false,
     // Cheat mode's test switches, set from the admin panel.
-    admin: { refill: true, landing: "odds", clock: false, jump: false, answers: false },
+    admin: { refill: true, landing: "odds", clock: false, jump: false, answers: false, event: "" },
     here: STATION,
     // The system you're inside (its planetary map is showing), or null on the star map.
     system: null,
@@ -1979,11 +1979,14 @@ function Game() {
       return;
     }
     if (move.fuel > g.fuel + 1e-9) return;
+    // The admin panel can line up an event for the next lane flight, once.
+    const lined = g.cheat && g.admin.event ? FLIGHT_EVENTS.find((e) => e.id === g.admin.event) : null;
     // Never on the first flight, so the player has seen a plain one first.
-    const event = g.path.length && Math.random() < EVENT_CHANCE ? g.eventOrder[g.eventCount % g.eventOrder.length] : null;
+    const event = lined ?? (g.path.length && Math.random() < EVENT_CHANCE ? g.eventOrder[g.eventCount % g.eventOrder.length] : null);
     commit({
       phase: "fly",
       here: id,
+      admin: lined ? { ...g.admin, event: "" } : g.admin,
       path: [...g.path, { ideal: idealCost(move.distance), actual: move.fuel }],
       fuel: g.fuel - move.fuel,
       note: "",
@@ -3167,6 +3170,20 @@ function AdminPanel({ snap, chance, onAdmin, onAmounts, onClock, onFastForward }
               </button>
             </div>
             <p className="hint">Marks the right choice on landing questions and fuel cards.</p>
+          </section>
+          <section className="admin-section">
+            <h3>Next flight event</h3>
+            <div className="admin-chips" role="group" aria-label="Event on the next lane flight">
+              <button type="button" className="ghost" aria-pressed={!admin.event} onClick={() => onAdmin({ event: "" })}>
+                By chance
+              </button>
+              {FLIGHT_EVENTS.map((e) => (
+                <button key={e.id} type="button" className="ghost" aria-pressed={admin.event === e.id} onClick={() => onAdmin({ event: e.id })}>
+                  {e.title}
+                </button>
+              ))}
+            </div>
+            <p className="hint">The one picked happens on your next lane flight, once. Jumps skip the flight, so turn Jump anywhere off first.</p>
           </section>
         </aside>
       ) : null}
