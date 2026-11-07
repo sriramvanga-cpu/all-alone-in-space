@@ -197,6 +197,89 @@ void main() {
   gl_FragColor = vec4(color, exp(-max(r - 1.0, 0.0) * 10.0) * 0.85);
 }`;
 
+const HOLE_PX = 512;
+// The black hole image reaches this many shadow radii from its centre.
+const HOLE_EXT = 3.1;
+
+// A black hole seen from just above its disk, on a flat card in units of the shadow's radius. Back
+// to front: the far side of the disk bent by gravity over the top of the hole (and thinly under
+// it), the far half of the disk, the black shadow, the photon ring hugging it, then the near half
+// of the disk passing in front. The gas runs from white-hot inside to deep red outside in swirling
+// streaks, brighter and hotter on the side coming towards us. Written premultiplied, as the
+// canvas expects, so the PNG keeps its soft edges.
+const HOLE_FRAG = /* glsl */ `
+uniform float ext;
+uniform float seed;
+varying vec2 vUv;
+${NOISE}
+// Gas colour from the inner edge (t = 0) to the outer edge (t = 1).
+vec3 heat(float t) {
+  vec3 c = mix(vec3(1.0, 0.97, 0.9), vec3(1.0, 0.72, 0.3), smoothstep(0.0, 0.35, t));
+  return mix(c, vec3(0.75, 0.22, 0.06), smoothstep(0.35, 1.0, t));
+}
+// Streaks along circles about the centre, wound into a loose spiral: u is the direction, d the
+// distance. Sampled from the direction, not the angle, so there is no seam where the angle wraps.
+float streaks(vec2 u, float d) {
+  float a = 1.6 * log(d);
+  vec2 w = mat2(cos(a), sin(a), -sin(a), cos(a)) * u;
+  return smoothstep(0.25, 0.65, fbm3(vec3(w * 1.3, log(d) * 14.0 + seed)));
+}
+void over(inout vec3 col, inout float alpha, vec3 c, float a) {
+  col = c * a + col * (1.0 - a);
+  alpha = a + alpha * (1.0 - a);
+}
+void main() {
+  vec2 p = (vUv - 0.5) * 2.0 * ext;
+  float r = length(p);
+
+  // The disk, squashed by the tilt: rd is the distance within its plane, side is +1 where it comes towards us.
+  vec2 q = vec2(p.x, p.y / 0.28);
+  float rd = max(length(q), 0.001);
+  float side = -p.x / rd;
+  float t = clamp((rd - 1.45) / 1.45 - 0.2 * side, 0.0, 1.0);
+  float diskA = smoothstep(1.42, 1.48, rd) * (1.0 - smoothstep(2.4, 2.9, rd)) * (0.55 + 0.45 * (1.0 - t));
+  vec3 disk = heat(t) * (0.55 + 0.75 * streaks(q / rd, rd)) * (1.0 + 0.55 * side);
+
+  // The lensed far side: a broad arc over the top that thins to a fainter one underneath.
+  float ar = max(length(vec2(p.x, p.y * 1.05)), 0.001);
+  float arcSide = -p.x / ar;
+  float outer = mix(1.3, 1.75, smoothstep(-0.6, 0.6, p.y));
+  float arcA = smoothstep(1.05, 1.2, ar) * (1.0 - smoothstep(outer - 0.3, outer, ar)) * mix(0.35, 1.0, smoothstep(-0.3, 0.45, p.y));
+  vec3 arc = heat(clamp((ar - 1.05) / 0.8 - 0.2 * arcSide, 0.0, 1.0)) * (0.65 + 0.6 * streaks(p / ar, ar + 0.4)) * (1.0 + 0.4 * arcSide);
+
+  vec3 col = vec3(0.0);
+  float alpha = 0.0;
+  over(col, alpha, arc, arcA);
+  over(col, alpha, disk, diskA * step(0.0, p.y));
+  over(col, alpha, vec3(0.0), 1.0 - smoothstep(0.98, 1.02, r));
+  over(col, alpha, vec3(1.0, 0.92, 0.75), 0.9 * exp(-pow((r - 1.04) / 0.035, 2.0)));
+  over(col, alpha, disk, diskA * (1.0 - step(0.0, p.y)));
+  // A soft orange glow beneath it all, gone before the card's edge.
+  float glow = 0.25 * exp(-max(r - 1.0, 0.0) * 1.3) * (1.0 - smoothstep(2.4, 3.05, r)) * (1.0 - alpha);
+  col += vec3(1.0, 0.55, 0.2) * glow;
+  alpha += glow;
+  gl_FragColor = vec4(min(col, vec3(alpha)), alpha);
+}`;
+
+async function renderHole(renderer) {
+  const scene = new THREE.Scene();
+  const cam = new THREE.OrthographicCamera(-HOLE_EXT, HOLE_EXT, HOLE_EXT, -HOLE_EXT, 0.1, 20);
+  cam.position.set(0, 0, 5);
+  const plane = new THREE.PlaneGeometry(2 * HOLE_EXT, 2 * HOLE_EXT);
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: HALO_VERT,
+    fragmentShader: HOLE_FRAG,
+    uniforms: { ext: { value: HOLE_EXT }, seed: { value: 3.7 } },
+    blending: THREE.NoBlending,
+  });
+  scene.add(new THREE.Mesh(plane, mat));
+  renderer.render(scene, cam);
+  const url = await toUrl(renderer.domElement);
+  plane.dispose();
+  mat.dispose();
+  return { url, ext: HOLE_EXT };
+}
+
 // A "#rrggbb" colour as raw 0–1 channels: the star shaders write colours as authored, with no colour
 // management in between.
 function rgb(hex) {
@@ -345,7 +428,10 @@ export async function renderMapArt(faces) {
     publishArt({ ship: shipUrl, station: stationUrl });
 
     renderer.setSize(STAR_PX, STAR_PX, false);
-    publishArt({ stars: await renderStars(renderer) });
+    const stars = await renderStars(renderer);
+    renderer.setSize(HOLE_PX, HOLE_PX, false);
+    stars.set("hole", await renderHole(renderer));
+    publishArt({ stars });
 
     renderer.setSize(PLANET_PX, PLANET_PX, false);
     const planets = await renderPlanets(renderer, faces, tex);
