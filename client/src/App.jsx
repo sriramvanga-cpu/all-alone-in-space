@@ -304,7 +304,7 @@ function fresh() {
     phone: "",
     cheat: false,
     // Cheat mode's test switches, set from the admin panel.
-    admin: { refill: true, landing: "odds", clock: false, jump: false },
+    admin: { refill: true, landing: "odds", clock: false, jump: false, answers: false },
     here: STATION,
     // The system you're inside (its planetary map is showing), or null on the star map.
     system: null,
@@ -1567,7 +1567,8 @@ function Shop({ result, credits, fuel, power, world, exitFare, stuck, onBuy, onL
   );
 }
 
-function ChoiceButtons({ choices, onPick, render = (choice) => <span>{choice}</span> }) {
+// `answer`, from the admin panel, marks the right choice.
+function ChoiceButtons({ choices, onPick, answer, render = (choice) => <span>{choice}</span> }) {
   // The next card appears under the pointer, so a double click would answer a card nobody read.
   const shownAt = useRef(0);
   const pickRef = useRef(null);
@@ -1594,7 +1595,12 @@ function ChoiceButtons({ choices, onPick, render = (choice) => <span>{choice}</s
   return (
     <div className="choices">
       {choices.map((choice, i) => (
-        <button key={choice} type="button" className="tile choice" onClick={() => pickRef.current(choice)}>
+        <button
+          key={choice}
+          type="button"
+          className={answer !== undefined && choice === answer ? "tile choice cheat-answer" : "tile choice"}
+          onClick={() => pickRef.current(choice)}
+        >
           <span className="key" aria-hidden="true">
             {String.fromCharCode(65 + i)}
           </span>
@@ -2728,6 +2734,7 @@ function Game() {
             <p className="prompt">{snap.card.prompt}</p>
             <ChoiceButtons
               choices={snap.card.choices}
+              answer={snap.cheat && snap.admin.answers ? snap.card.answer : undefined}
               onPick={(choice) => {
                 if (game.current.phase !== "question") return;
                 resolveQuestion(choice === game.current.card.answer, false);
@@ -2814,6 +2821,7 @@ function Game() {
                 ) : null}
                 <ChoiceButtons
                   choices={fuelCard.choices}
+                  answer={snap.cheat && snap.admin.answers ? fuelCard.answer : undefined}
                   render={fuelCard.gauge ? (level) => <span className="gauge"><i style={{ width: `${level}%` }} /></span> : undefined}
                   onPick={(choice) => markFuel(choice === fuelCard.answer ? "right" : "wrong")}
                 />
@@ -3150,6 +3158,15 @@ function AdminPanel({ snap, chance, onAdmin, onAmounts, onClock, onFastForward }
               </button>
             </div>
             <p className="hint">Tap any system on the star map, or any open planet in a system, to be there at once, free.</p>
+          </section>
+          <section className="admin-section">
+            <h3>Questions</h3>
+            <div className="admin-chips">
+              <button type="button" className="ghost" aria-pressed={admin.answers} onClick={() => onAdmin({ answers: !admin.answers })}>
+                Show answers: {admin.answers ? "on" : "off"}
+              </button>
+            </div>
+            <p className="hint">Marks the right choice on landing questions and fuel cards.</p>
           </section>
         </aside>
       ) : null}
