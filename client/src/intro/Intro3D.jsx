@@ -7,6 +7,7 @@ import { engine, sfx } from "../sound.js";
 import { createComposer } from "../three/post.js";
 import { ParticleSystem, glowSprite } from "../three/particles.js";
 import { clamp, easeInOut, easeOut, rand, smooth } from "./draw.js";
+import { DROP } from "../art/MapArt.jsx";
 
 // The realistic intro: one unbroken camera move, no cuts.
 //   Launch     sunrise on Vulcan as it breaks up: quakes, a glowing crack by the pad, eruptions on
@@ -14,7 +15,9 @@ import { clamp, easeInOut, easeOut, rand, smooth } from "./draw.js";
 //   Climb      the camera rides close behind it while Vulcan, veined with glowing cracks, curves away below.
 //   Docking    the shuttle lines up behind the starship and flies into its stern hangar.
 //   Escape     the camera sweeps over the ship as it banks away into open space.
-//   Look back  from off the bow, Vulcan cracks and breaks apart behind the ship.
+//   Look back  from off the bow, Vulcan breaks apart behind the ship and the blast wave hits it.
+//   Ahead      the camera comes round behind the ship as it vents air and life support fails; a
+//              scan lights up the stars ahead, drawn like the star map, and the ship jumps to warp.
 const LIFT = 3.0;
 const CLIMB = 5.2;
 const ALIGN = 9.4;
@@ -22,7 +25,14 @@ const DOCK = 11.8;
 const JUMP = 12.4;
 const ARRIVE = 15.4;
 const BOOM = ARRIVE + 1.0;
-const END = BOOM + 3.6;
+const HIT = BOOM + 2.2;
+const TURN = BOOM + 2.8;
+const ALARM = HIT + 1.1;
+const AHEAD = TURN + 2.6;
+const SCAN = AHEAD + 0.1;
+const ROUTE = SCAN + 2.0;
+const WARP = ROUTE + 2.4;
+const END = WARP + 1.5;
 
 // The ground shakes at these moments before lift-off.
 const QUAKES = [0.5, 2.1];
@@ -30,8 +40,26 @@ const QUAKES = [0.5, 2.1];
 const CAPTIONS = [
   { from: 0.6, to: CLIMB - 0.5, title: "Vulcan is dying", text: "Its core is collapsing, and quakes are tearing the planet apart." },
   { from: CLIMB, to: DOCK + 0.4, title: "The last shuttle out", text: "Everyone else has fled. Your crew races for the starship in orbit." },
-  { from: BOOM + 0.4, to: END - 0.7, title: "Vulcan is gone", text: "No world is left to call home. You have 15 minutes to find a new one." },
+  { from: JUMP + 0.6, to: BOOM - 0.2, title: "Full speed away", text: "Vulcan has only seconds left." },
+  { from: BOOM + 0.4, to: ALARM - 0.1, title: "Vulcan is gone", text: "Home is gone, and the blast has hit the ship." },
+  { from: ALARM, to: SCAN + 1.6, title: "15 minutes of air", text: "Life support is failing. In 15 minutes the air runs out." },
+  { from: SCAN + 1.8, to: END - 0.4, title: "Find a new home", text: "Fly from star to star. Land on a world marked ! before the air runs out." },
 ];
+
+// The stars the ship's scan picks out ahead, in the ship's own frame once it has run clear (x ahead,
+// y up, z to the side), drawn over the film like the star map: a fuel stop, and a world that could be home.
+const HUD_STARS = [
+  { at: [2600, 0, 0], color: "#dfe9ff" },
+  { at: [3400, -250, 700], color: "#ffd27a", kind: "fuel", label: "Fuel stop" },
+  { at: [5600, 600, -650], color: "#9fe7ff", kind: "home", label: "Possible home" },
+  { at: [4600, 450, 1000], color: "#ffb48a" },
+];
+// Lanes between them (-1 is the ship), and the route that lights up: the ship, the first star, home.
+const HUD_LANES = [[-1, 0], [-1, 1], [0, 2], [1, 3], [0, 3]];
+const HUD_ROUTE = [[-1, 0], [0, 2]];
+// Where the blast wave tore the saucer's rim (ship frame), and the way the air vents out of it.
+const VENT = [7.9, 1.75, 6.06];
+const VENT_OUT = [-0.5, 0.15, 0.87];
 
 const RP = 1000;
 const ATM_TOP = 1055;
@@ -132,7 +160,9 @@ export default function Intro3D({ onDone, onFail }) {
   const failRef = useRef(onFail);
   doneRef.current = onDone;
   failRef.current = onFail;
+  const hudRef = useRef(null);
   const [caption, setCaption] = useState(-1);
+  const [alarm, setAlarm] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -320,8 +350,23 @@ export default function Intro3D({ onDone, onFail }) {
         // Bank into the turn, level out on arrival.
         const up = shipUp.clone().applyAxisAngle(fwd, -0.35 * Math.sin(Math.PI * k));
         ship.group.quaternion.copy(facing(fwd, up));
+        // The jump to warp: away along the route, faster and faster.
+        if (T > WARP) ship.group.position.addScaledVector(fwd, 16 * (Math.exp((T - WARP) * 4.5) - 1));
         ship.group.updateMatrixWorld(true);
       }
+      // Where the ship rests once clear, which the last act is framed on, and the stars it finds ahead.
+      const restPos = escape.getPoint(1);
+      const shipRest = new THREE.Matrix4().compose(restPos, facing(escape.getTangent(1), shipUp), v3(1, 1, 1));
+      const hudWorld = HUD_STARS.map((s) => {
+        const at = v3(...s.at).applyMatrix4(shipRest);
+        const glow = glowSprite(s.color, at.distanceTo(restPos) * 0.016);
+        glow.position.copy(at);
+        scene.add(glow);
+        return at;
+      });
+      const warpFlash = glowSprite("#cfe8ff", 1);
+      warpFlash.visible = false;
+      scene.add(warpFlash);
 
       const shuttle = buildShuttle();
       scene.add(shuttle.group);
@@ -463,7 +508,7 @@ export default function Intro3D({ onDone, onFail }) {
       function sweepCamera(T, outPos, outLook) {
         const k = easeInOut((T - JUMP) / (ARRIVE - JUMP));
         // A slow push in while Vulcan goes.
-        sweep.getPoint(k, outPos).x -= 6 * smooth(ARRIVE - 0.4, END, T);
+        sweep.getPoint(k, outPos).x -= 6 * smooth(ARRIVE - 0.4, TURN, T);
         outPos.applyMatrix4(ship.group.matrixWorld);
         const toShip = holdLookLocal.clone().lerp(shipMid, smooth(JUMP, JUMP + 1.2, T)).applyMatrix4(ship.group.matrixWorld).sub(outPos).normalize();
         const toPlanet = outPos.clone().negate().normalize();
@@ -488,8 +533,77 @@ export default function Intro3D({ onDone, onFail }) {
       const cues = [
         ...QUAKES.map((q) => [q, () => (sfx("quake"), quakeDust())]),
         [BOOM, () => sfx("blast")],
+        [ALARM, () => sfx("alert")],
+        [SCAN, () => sfx("scan")],
+        [WARP - 0.85, () => sfx("warpCharge")],
+        [WARP, () => sfx("warpJump")],
       ];
       let cue = 0;
+      // Then round behind the ship to look ahead past it, at the stars the scan will find.
+      const turnPath = new THREE.CubicBezierCurve3(v3(49, 8, 10), v3(52, 16, 46), v3(-40, 22, 40), v3(-70, 16, -14));
+      const restMid = shipMid.clone().applyMatrix4(shipRest);
+      function turnCamera(T, outPos, outLook) {
+        // Off to one side so the ship sits right of the captions; nearer the middle on tall screens.
+        const side = W < H ? -6 : -14;
+        turnPath.v3.z = side;
+        const k = easeInOut((T - TURN) / (AHEAD - TURN));
+        sweepCamera(TURN, outPos, outLook);
+        const from = outLook.clone().sub(outPos).normalize();
+        turnPath.getPoint(k, outPos).applyMatrix4(shipRest);
+        const toShip = restMid.clone().sub(outPos).normalize();
+        const toAhead = v3(420, -20, side).applyMatrix4(shipRest).sub(outPos).normalize();
+        outLook.copy(outPos).add(from.lerp(toShip, smooth(0, 0.45, k)).lerp(toAhead, smooth(0.4, 1, k)).normalize());
+      }
+
+      // The scan, drawn over the film in screen pixels like the star map: a ring sweeping out from
+      // the ship, each star lighting up as it passes, lanes between them, then the route home.
+      const hud = hudRef.current;
+      const hudSweep = hud.querySelector(".hud-sweep");
+      const hudLanes = [...hud.querySelectorAll(".hud-lane")];
+      const hudRoute = [...hud.querySelectorAll(".hud-route")];
+      const hudMarks = [...hud.querySelectorAll(".hud-mark")];
+      const onScreen = v3();
+      function screenAt(p) {
+        onScreen.copy(p).project(camera);
+        return [(onScreen.x + 1) * 0.5 * W, (1 - onScreen.y) * 0.5 * H];
+      }
+      function drawHud(T) {
+        const show = smooth(SCAN - 0.1, SCAN + 0.2, T) * (1 - smooth(WARP, WARP + 0.4, T));
+        hud.style.opacity = show;
+        if (show <= 0) return;
+        const diag = Math.hypot(W, H);
+        const ship2d = screenAt(restMid);
+        const stars2d = hudWorld.map(screenAt);
+        const at = (i) => (i < 0 ? ship2d : stars2d[i]);
+        const seen = stars2d.map(([x, y]) => SCAN + 1.4 * (1 - Math.cbrt(1 - Math.min(1, Math.hypot(x - ship2d[0], y - ship2d[1]) / diag))));
+        const when = (i) => (i < 0 ? SCAN : seen[i]);
+        const ring = clamp((T - SCAN) / 1.4);
+        hudSweep.setAttribute("cx", ship2d[0]);
+        hudSweep.setAttribute("cy", ship2d[1]);
+        hudSweep.setAttribute("r", easeOut(ring) * diag);
+        hudSweep.style.opacity = (1 - ring) * 0.9;
+        hudMarks.forEach((m, i) => {
+          const k = smooth(seen[i], seen[i] + 0.3, T);
+          m.setAttribute("transform", `translate(${stars2d[i][0].toFixed(1)} ${stars2d[i][1].toFixed(1)}) scale(${(0.6 + 0.4 * k).toFixed(3)})`);
+          m.style.opacity = k;
+        });
+        const draw = (el, [a, b], k) => {
+          const [x1, y1] = at(a);
+          const [x2, y2] = at(b);
+          el.setAttribute("x1", x1);
+          el.setAttribute("y1", y1);
+          el.setAttribute("x2", x1 + (x2 - x1) * k);
+          el.setAttribute("y2", y1 + (y2 - y1) * k);
+          el.style.opacity = k > 0 ? 1 : 0;
+        };
+        HUD_LANES.forEach((lane, i) => {
+          const from = Math.max(when(lane[0]), when(lane[1]));
+          draw(hudLanes[i], lane, smooth(from, from + 0.5, T));
+        });
+        HUD_ROUTE.forEach((leg, i) => draw(hudRoute[i], leg, smooth(ROUTE + i * 0.7, ROUTE + i * 0.7 + 0.7, T)));
+      }
+
+      let alarmShown = false;
       let boomed = false;
       let lastRcs = 0;
       let shown = -1;
@@ -642,8 +756,41 @@ export default function Intro3D({ onDone, onFail }) {
         const doors = smooth(ALIGN - 1.6, ALIGN - 0.4, T) * (1 - smooth(DOCK + 0.05, JUMP - 0.05, T));
         const power = smooth(DOCK + 0.2, JUMP + 0.4, T);
         animateStarship(ship, power, T, doors);
-        // The hum fades as Vulcan breaks up behind the ship.
-        engine(power * (1 - smooth(BOOM, END - 1, T)));
+        // The hum sinks as Vulcan breaks up, idles low on the damaged ship, then roars for the jump.
+        const off = 1 - smooth(END - 0.6, END, T);
+        engine(Math.max(power * (1 - 0.65 * smooth(BOOM, HIT + 0.5, T)), smooth(WARP - 0.85, WARP, T)) * off);
+
+        // --- The last act: the ship vents air, the alarm sounds, then it jumps to warp ----------
+        if (T > HIT && T < WARP + 0.3) {
+          const at = v3(...VENT).applyMatrix4(ship.group.matrixWorld);
+          const out = v3(...VENT_OUT).normalize().applyQuaternion(ship.group.quaternion);
+          for (let i = 0; i < 2; i++) {
+            dust.add({
+              pos: at, vel: out.clone().multiplyScalar(rand(2.5, 5)).add(v3(rand(-0.4, 0.4), rand(-0.4, 0.4), rand(-0.4, 0.4))),
+              size: 0.25, grow: rand(0.8, 1.6), life: rand(1.2, 2.0), drag: 0.6, alpha: 0.3, color: [0.86, 0.9, 0.96], end: [0.6, 0.64, 0.7],
+            });
+          }
+          if (Math.random() < dt * 5) {
+            for (let i = 0; i < 6; i++) {
+              embers.add({
+                pos: at, vel: out.clone().multiplyScalar(rand(4, 9)).add(v3(rand(-2, 2), rand(-2, 2), rand(-2, 2))),
+                size: rand(0.05, 0.1), life: rand(0.3, 0.6), drag: 1.2, alpha: 1, color: [3, 2.2, 1.2], end: [2, 0.5, 0.1],
+              });
+            }
+          }
+        }
+        const alarmOn = T >= ALARM && T < WARP;
+        if (alarmOn !== alarmShown) {
+          alarmShown = alarmOn;
+          setAlarm(alarmOn);
+        }
+        warpFlash.visible = T > WARP;
+        if (warpFlash.visible) {
+          const w = T - WARP;
+          warpFlash.position.copy(ship.group.position);
+          warpFlash.scale.setScalar(60 * Math.min(1, w * 6) * Math.exp(-w * 2.5) + 1);
+          warpFlash.material.opacity = Math.exp(-w * 2);
+        }
 
         // --- Vulcan breaks up ------------------------------------------------------
         const since = T - BOOM;
@@ -714,7 +861,8 @@ export default function Intro3D({ onDone, onFail }) {
 
         // --- Camera ----------------------------------------------------------------
         if (T < JUMP) chaseCamera(T, pose, camPos, camLook);
-        else sweepCamera(T, camPos, camLook);
+        else if (T < TURN) sweepCamera(T, camPos, camLook);
+        else turnCamera(T, camPos, camLook);
         camera.position.copy(camPos);
         camera.up.copy(camPos.clone().normalize().lerp(shipUp, smooth(ALIGN - 1.8, ALIGN, T)).normalize());
         camera.lookAt(camLook);
@@ -726,6 +874,8 @@ export default function Intro3D({ onDone, onFail }) {
         camera.rotateX(shake * (Math.sin(T * 83) + Math.sin(T * 47)));
         camera.rotateY(shake * (Math.sin(T * 71) + Math.cos(T * 53)));
         camera.rotateZ(shake * 0.5 * Math.sin(T * 39));
+        camera.updateMatrixWorld();
+        drawHud(T);
 
         // Atmosphere and ground detail by altitude.
         const camAlt = camPos.length() - RP;
@@ -749,6 +899,7 @@ export default function Intro3D({ onDone, onFail }) {
         for (const ps of [dust, embers, smoke, ash, lava]) ps.setScale(camera, H * pixelRatio);
         film.uniforms.uTime.value = T;
         film.uniforms.uBlack.value = 1 - smooth(0, 1, T) * (1 - smooth(END - 0.8, END, T));
+        film.uniforms.uWhite.value = 0.5 * Math.exp(-(((T - WARP - 0.18) / 0.16) ** 2));
         composer.render(dt);
         raf = requestAnimationFrame(frame);
       }
@@ -782,6 +933,39 @@ export default function Intro3D({ onDone, onFail }) {
         <canvas className="intro-gl" ref={canvasRef} />
       </div>
       {!ready ? <p className="intro-loading">Preparing launch…</p> : null}
+      <svg className="intro-hud" ref={hudRef} aria-hidden="true">
+        <circle className="hud-sweep" r="0" />
+        {HUD_LANES.map((_, i) => (
+          <line key={`lane${i}`} className="hud-lane" />
+        ))}
+        {HUD_ROUTE.map((_, i) => (
+          <line key={`leg${i}`} className="hud-route" />
+        ))}
+        {HUD_STARS.map((s, i) => (
+          <g key={i} className={s.kind ? `hud-mark ${s.kind}` : "hud-mark"}>
+            <circle className="hud-ring" r="13" />
+            {s.kind === "home" ? (
+              <g transform="translate(15 -15)">
+                <circle className="hud-beacon" r="9" />
+                <text className="hud-bang" y="4.5">
+                  !
+                </text>
+              </g>
+            ) : null}
+            {s.kind === "fuel" ? <path className="hud-drop" d={DROP} transform="translate(15 -15) scale(1.6)" /> : null}
+            {s.label ? (
+              <text className="hud-label" y="32">
+                {s.label}
+              </text>
+            ) : null}
+          </g>
+        ))}
+      </svg>
+      <div className={alarm ? "intro-alarm show" : "intro-alarm"} aria-hidden="true">
+        <p className="intro-alarm-head">Life support failing</p>
+        <p className="intro-alarm-clock">15:00</p>
+        <p className="intro-alarm-foot">of air left</p>
+      </div>
       <div className="letterbox top" aria-hidden="true" />
       <div className="letterbox bottom" aria-hidden="true" />
       <div className="opener-copy" aria-live="polite">
