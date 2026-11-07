@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { loadTextures } from "../three/assets.js";
 import { makeAtmosphereMaterial, makePlanetMaterial } from "../three/planetMaterial.js";
 import { animateShuttle, animateStarship, buildShuttle, buildStarship } from "../three/models.js";
-import { engine } from "../sound.js";
+import { engine, sfx } from "../sound.js";
 import { createComposer } from "../three/post.js";
 import { ParticleSystem, glowSprite } from "../three/particles.js";
 import { clamp, easeInOut, easeOut, rand, smooth } from "./draw.js";
@@ -391,6 +391,9 @@ export default function Intro3D({ onDone, onFail }) {
         outLook.copy(outPos).add(toShip.lerp(toPlanet, 0.6 * smooth(JUMP + 1.5, ARRIVE, T)));
       }
 
+      // Sounds, each fired once as the film passes its moment.
+      const cues = [[BOOM, "blast"]];
+      let cue = 0;
       let boomed = false;
       let lastRcs = 0;
       let shown = -1;
@@ -424,6 +427,7 @@ export default function Intro3D({ onDone, onFail }) {
           finish();
           return;
         }
+        while (cue < cues.length && T >= cues[cue][0]) sfx(cues[cue++][1]);
         const cap = captionAt(T);
         if (cap !== shown) {
           shown = cap;

@@ -235,6 +235,12 @@ const SOUNDS = {
     tone(80, 40, 0.5, { gain: 0.18, delay: 0.32, send: 0.3 });
     [2093, 1568, 1319].forEach((f, i) => tone(f, f, 0.3, { type: "triangle", gain: 0.035, delay: 0.38 + i * 0.07, send: 0.6 }));
   },
+  // Vulcan breaking apart: a deep boom that rolls on and on.
+  blast: () => {
+    tone(72, 22, 2.6, { gain: 0.3, send: 0.5 });
+    noise(3.4, { type: "lowpass", f0: 2600, f1: 70, gain: 0.22, attack: 0.01, send: 0.6 });
+    noise(1.2, { type: "lowpass", f0: 900, f1: 120, gain: 0.12, delay: 0.9, send: 0.6 });
+  },
   // Settled: a rising arpeggio over a warm chord that rings out.
   win: () => {
     [523, 659, 784].forEach((f) => tone(f, f, 1.8, { type: "triangle", gain: 0.05, attack: 0.25, send: 0.5 }));
