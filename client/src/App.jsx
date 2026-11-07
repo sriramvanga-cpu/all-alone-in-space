@@ -97,7 +97,21 @@ const ROUND_MS = 15 * 60 * 1000;
 // the admin panel turns that off, and the run never goes to the leaderboard.
 const CHEAT_ROUND_MS = 24 * 60 * 60 * 1000;
 const CHEAT_FILL = 9999;
-const roundMs = (g) => (g.cheat ? CHEAT_ROUND_MS : ROUND_MS);
+// Once the admin panel sets the clock, the run counts time flown like a normal one.
+const roundMs = (g) => (g.cheat && !g.admin.clock ? CHEAT_ROUND_MS : ROUND_MS);
+// The admin panel's clock settings: time left as in a normal run, or null for the day-long clock.
+const CLOCK_PRESETS = [
+  ["∞", null],
+  ["15:00", 15 * 60_000],
+  ["5:00", 5 * 60_000],
+  ["1:00", 60_000],
+  ["0:10", 10_000],
+];
+const LANDING_MODES = [
+  ["odds", "Normal odds"],
+  ["habitable", "Always habitable"],
+  ["toxic", "Always toxic"],
+];
 const QUESTION_MS = 60_000;
 const FUEL_WORLDS = new Set(PLANETS.filter((p) => p.shell === "fuel").map((p) => p.id));
 const FACES = new Map(PLANETS.map((p) => [p.id, faceOf(p)]));
@@ -279,7 +293,7 @@ function fresh() {
     phone: "",
     cheat: false,
     // Cheat mode's test switches, set from the admin panel.
-    admin: { refill: true },
+    admin: { refill: true, landing: "odds", clock: false },
     here: STATION,
     // The system you're inside (its planetary map is showing), or null on the star map.
     system: null,
@@ -1875,6 +1889,18 @@ function Game() {
     if (g.cheat) commit({ ...amounts, admin: { ...g.admin, refill: false } });
   }
 
+  // The clock: `ms` left as in a normal run, or null for the day-long cheat clock.
+  function setClock(ms) {
+    const g = game.current;
+    if (g.cheat && g.phase !== "end") commit({ deadline: Date.now() + (ms ?? CHEAT_ROUND_MS), admin: { ...g.admin, clock: ms != null } });
+  }
+
+  // Time passes as if flown: less on the clock, better landing odds.
+  function fastForward(ms) {
+    const g = game.current;
+    if (g.cheat && g.phase !== "end") commit({ deadline: g.deadline - ms });
+  }
+
   function finish(reason) {
     if (game.current.phase === "end") return;
     sfx(reason === "win" ? "win" : "lose");
@@ -2102,9 +2128,12 @@ function Game() {
     }
     if (scanned && g.power + 1e-9 < SCAN_POWER) return;
     const power = scanned ? g.power - SCAN_POWER : g.power;
-    const first = siteSettles(g.landing.chance);
+    // The admin panel can force every site one way.
+    const forced = g.cheat ? g.admin.landing : "odds";
+    const site = () => (forced === "odds" ? siteSettles(g.landing.chance) : forced === "habitable");
+    const first = site();
     const second = scanned && !first;
-    const won = first || (second && siteSettles(g.landing.chance));
+    const won = first || (second && site());
     const scan = {
       world: g.here,
       readings: scanReadings(won),
@@ -2452,8 +2481,9 @@ function Game() {
       ? Math.max(0, snap.deadline - (snap.stoppedAt || snap.deadline))
       : Math.max(0, snap.deadline - (tip && snap.tipAt ? snap.tipAt : now));
   const fuelShown = snap.phase === "fly" && flyFuel != null ? flyFuel : snap.fuel;
-  // A cheat run shows ∞ while it tops fuel, power and credits up.
+  // A cheat run shows ∞ while it tops fuel, power and credits up, and while its clock is longer than a run.
   const endless = snap.cheat && snap.admin.refill;
+  const endlessClock = snap.cheat && clockMs > ROUND_MS;
   // What landing right now would score, the same sum the board ranks by.
   const pointsShown =
     snap.phase === "end"
@@ -2530,7 +2560,7 @@ function Game() {
             <ClockIcon />
             <div className="m-text">
               <small>Clock</small>
-              <b>{snap.cheat ? "∞" : formatClock(clockMs)}</b>
+              <b>{endlessClock ? "∞" : formatClock(clockMs)}</b>
             </div>
             <Delta value={(snap.deadline - snap.pausedMs) / 1000} />
           </div>
@@ -2540,12 +2570,21 @@ function Game() {
               <small>
                 Points<span className="if-land"> if you land</span>
               </small>
-              <b>{snap.cheat ? "—" : pointsShown}</b>
+              <b>{endless || endlessClock ? "—" : pointsShown}</b>
             </div>
           </div>
         </div>
       </header>
-      {snap.cheat && snap.phase !== "end" ? <AdminPanel snap={snap} onAdmin={setAdmin} onAmounts={setAmounts} /> : null}
+      {snap.cheat && snap.phase !== "end" ? (
+        <AdminPanel
+          snap={snap}
+          chance={timeChance(roundMs(snap) - clockMs)}
+          onAdmin={setAdmin}
+          onAmounts={setAmounts}
+          onClock={setClock}
+          onFastForward={fastForward}
+        />
+      ) : null}
       <div className="play-body">
         {snap.warpAt && now - snap.warpAt < 900 ? <div key={snap.warpAt} className="warp-out" aria-hidden="true" /> : null}
         {snap.phase === "map" || snap.phase === "fly" ? (
@@ -2686,6 +2725,9 @@ function Game() {
             ) : null}
             <ChanceBar landing={snap.landing} />
             <p className="hint">The chance grows as the clock runs. A failed landing costs {LAND_FAIL_MS / 1000} s.</p>
+            {snap.cheat && snap.admin.landing !== "odds" ? (
+              <p className="hint cheat-tag">Cheat mode: every landing site is {snap.admin.landing === "habitable" ? "habitable" : "toxic"}.</p>
+            ) : null}
             <div className="domains land">
               <button type="button" className="tile domain" disabled={snap.power + 1e-9 < SCAN_POWER} onClick={() => land(true)}>
                 Scan first · {SCAN_POWER} power
@@ -2829,7 +2871,7 @@ function EndScreen({ snap }) {
         </div>
         <div className="stat">
           <dt>Time left</dt>
-          <dd>{snap.cheat ? "∞" : formatClock(facts.timeLeft * 1000)}</dd>
+          <dd>{snap.cheat && facts.timeLeft * 1000 > ROUND_MS ? "∞" : formatClock(facts.timeLeft * 1000)}</dd>
         </div>
         <div className="stat">
           <dt>Worlds</dt>
@@ -2981,7 +3023,7 @@ function Scan({ scan, habitable = false, onDone, onSettle }) {
 
 // Cheat mode's test tools, in a panel that opens from the corner across from the sound switch.
 // Every switch acts at once, and the game keeps running underneath.
-function AdminPanel({ snap, onAdmin, onAmounts }) {
+function AdminPanel({ snap, chance, onAdmin, onAmounts, onClock, onFastForward }) {
   const [open, setOpen] = useState(false);
   const [amounts, setAmounts] = useState({ fuel: START_FUEL, power: START_POWER, credits: START_CREDITS });
   useEffect(() => {
@@ -3042,6 +3084,37 @@ function AdminPanel({ snap, onAdmin, onAmounts }) {
             <p className="hint">
               Setting amounts turns endless off, so running low, the shop and running out can be tested. Too little fuel to leave
               ends the run, as it would for anyone.
+            </p>
+          </section>
+          <section className="admin-section">
+            <h3>Landing</h3>
+            <div className="admin-chips" role="group" aria-label="Landing outcome">
+              {LANDING_MODES.map(([mode, label]) => (
+                <button key={mode} type="button" className="ghost" aria-pressed={admin.landing === mode} onClick={() => onAdmin({ landing: mode })}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </section>
+          <section className="admin-section">
+            <h3>Clock</h3>
+            <div className="admin-chips" role="group" aria-label="Set the time left">
+              {CLOCK_PRESETS.map(([label, ms]) => (
+                <button key={label} type="button" className="ghost" onClick={() => onClock(ms)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="admin-chips">
+              <button type="button" className="ghost" onClick={() => onFastForward(60_000)}>
+                +1 min flown
+              </button>
+              <button type="button" className="ghost" onClick={() => onFastForward(5 * 60_000)}>
+                +5 min flown
+              </button>
+            </div>
+            <p className="hint">
+              Landing chance from the time flown: {chance}%. Fast-forward raises it and takes the time off the clock.
             </p>
           </section>
         </aside>
