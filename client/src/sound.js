@@ -235,6 +235,11 @@ const SOUNDS = {
     tone(80, 40, 0.5, { gain: 0.18, delay: 0.32, send: 0.3 });
     [2093, 1568, 1319].forEach((f, i) => tone(f, f, 0.3, { type: "triangle", gain: 0.035, delay: 0.38 + i * 0.07, send: 0.6 }));
   },
+  // A quake on Vulcan in the intro: a low rolling rumble.
+  quake: () => {
+    noise(1.6, { type: "lowpass", f0: 320, f1: 80, gain: 0.16, attack: 0.06, send: 0.35 });
+    tone(48, 36, 1.3, { gain: 0.12, attack: 0.04 });
+  },
   // Vulcan breaking apart: a deep boom that rolls on and on.
   blast: () => {
     tone(72, 22, 2.6, { gain: 0.3, send: 0.5 });

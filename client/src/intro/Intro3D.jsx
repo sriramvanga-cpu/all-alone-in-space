@@ -9,24 +9,28 @@ import { ParticleSystem, glowSprite } from "../three/particles.js";
 import { clamp, easeInOut, easeOut, rand, smooth } from "./draw.js";
 
 // The realistic intro: one unbroken camera move, no cuts.
-//   Launch     sunrise on Vulcan's surface; the shuttle lifts off its pad.
-//   Climb      the camera rides close behind it while Vulcan curves away below.
+//   Launch     sunrise on Vulcan as it breaks up: quakes, a glowing crack by the pad, eruptions on
+//              the horizon, the last other ships climbing away; then the shuttle lifts off its pad.
+//   Climb      the camera rides close behind it while Vulcan, veined with glowing cracks, curves away below.
 //   Docking    the shuttle lines up behind the starship and flies into its stern hangar.
 //   Escape     the camera sweeps over the ship as it banks away into open space.
 //   Look back  from off the bow, Vulcan cracks and breaks apart behind the ship.
-const LIFT = 1.0;
-const CLIMB = 3.2;
-const ALIGN = 7.4;
-const DOCK = 9.8;
-const JUMP = 10.4;
-const ARRIVE = 13.4;
+const LIFT = 3.0;
+const CLIMB = 5.2;
+const ALIGN = 9.4;
+const DOCK = 11.8;
+const JUMP = 12.4;
+const ARRIVE = 15.4;
 const BOOM = ARRIVE + 1.0;
 const END = BOOM + 3.6;
 
+// The ground shakes at these moments before lift-off.
+const QUAKES = [0.5, 2.1];
+
 const CAPTIONS = [
-  { from: 0.7, to: 5.0, title: "Vulcan is dying", text: "Its core is breaking up. The last shuttle lifts off." },
-  { from: 5.6, to: DOCK + 0.4, title: "Racing for the starship", text: "The last shuttle has to dock before the planet breaks apart." },
-  { from: JUMP + 0.8, to: END - 0.7, title: "Vulcan is gone", text: "No world is left to call home. You have 15 minutes to find a new one." },
+  { from: 0.6, to: CLIMB - 0.5, title: "Vulcan is dying", text: "Its core is collapsing, and quakes are tearing the planet apart." },
+  { from: CLIMB, to: DOCK + 0.4, title: "The last shuttle out", text: "Everyone else has fled. Your crew races for the starship in orbit." },
+  { from: BOOM + 0.4, to: END - 0.7, title: "Vulcan is gone", text: "No world is left to call home. You have 15 minutes to find a new one." },
 ];
 
 const RP = 1000;
@@ -78,6 +82,47 @@ function rockGeometry(seed) {
   }
   geo.computeVertexNormals();
   return geo;
+}
+
+// A jagged crack across the ground, as a ribbon lying on the surface: three vertices wide, so its
+// colour fades to nothing at both edges. Narrow at the ends, widest in the middle. The same seed
+// gives the same path at any width, and `line` is its centre.
+function fissure(seed, start, heading, steps, width) {
+  let s = seed;
+  const r = () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  const pos = [];
+  const col = [];
+  const index = [];
+  const line = [];
+  const p = start.clone();
+  const d = heading.clone();
+  for (let i = 0; i <= steps; i++) {
+    const n = p.clone().normalize();
+    const side = d.clone().cross(n).normalize();
+    const w = width * Math.sin(Math.PI * (0.06 + (0.88 * i) / steps)) * (0.55 + 0.9 * r());
+    const at = n.clone().multiplyScalar(RP + 0.03);
+    line.push(at);
+    for (const k of [-1, 0, 1]) {
+      pos.push(...at.clone().addScaledVector(side, (k * w) / 2).toArray());
+      col.push(...(k ? [0, 0, 0] : [1, 1, 1]));
+    }
+    if (i < steps) {
+      const a = i * 3;
+      index.push(a, a + 1, a + 3, a + 1, a + 4, a + 3, a + 1, a + 2, a + 4, a + 2, a + 5, a + 4);
+    }
+    // Wander, but keep the same general way and flat on the ground.
+    d.applyAxisAngle(n, (r() - 0.5) * 0.9).lerp(heading, 0.25);
+    d.addScaledVector(n, -d.dot(n)).normalize();
+    p.addScaledVector(d, 0.5 + 0.7 * r());
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  geo.setIndex(index);
+  return { geo, line };
 }
 
 export default function Intro3D({ onDone, onFail }) {
@@ -214,6 +259,40 @@ export default function Intro3D({ onDone, onFail }) {
         }
       }
       scene.add(pebbles);
+
+      // Vulcan breaking up around the pad: a glowing crack across the ground, eruptions on the
+      // horizon, and the last other ships climbing away beyond it.
+      const crackFrom = PAD.clone().add(v3(-9, 0, 7));
+      const crackWay = v3(0.62, 0, -1).normalize();
+      const crackLine = fissure(11, crackFrom, crackWay, 70, 0.26);
+      const crackCore = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 1.2, 0.3), vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const crackGlow = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.55, 0.16, 0.035), vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      scene.add(new THREE.Mesh(crackLine.geo, crackCore), new THREE.Mesh(fissure(11, crackFrom, crackWay, 70, 2.6).geo, crackGlow));
+      const towardHorizon = v3(0.61, 0, -0.79);
+      const vents = [
+        [-0.42, 62],
+        [0.33, 84],
+      ].map(([a, d]) => {
+        const pos = PAD.clone().addScaledVector(towardHorizon.clone().applyAxisAngle(UP, a), d).normalize().multiplyScalar(RP);
+        const glow = glowSprite("#ff6a1e", 1);
+        glow.position.copy(pos).addScaledVector(pos.clone().normalize(), 2);
+        scene.add(glow);
+        return { pos, up: pos.clone().normalize(), glow };
+      });
+      const ash = new ParticleSystem(400, { soft: 1.1 });
+      const lava = new ParticleSystem(300, { additive: true, soft: 2 });
+      scene.add(ash.points, lava.points);
+      const fleeing = [
+        [-0.3, 170, 0.0],
+        [0.42, 230, 0.9],
+        [0.12, 300, 2.0],
+      ].map(([a, d, at]) => {
+        const base = PAD.clone().addScaledVector(towardHorizon.clone().applyAxisAngle(UP, a), d).normalize().multiplyScalar(RP);
+        const glow = glowSprite("#d6ecff", 1);
+        glow.visible = false;
+        scene.add(glow);
+        return { base, up: base.clone().normalize(), at, glow };
+      });
 
       // Ships.
       const ship = buildStarship();
@@ -391,8 +470,25 @@ export default function Intro3D({ onDone, onFail }) {
         outLook.copy(outPos).add(toShip.lerp(toPlanet, 0.6 * smooth(JUMP + 1.5, ARRIVE, T)));
       }
 
-      // Sounds, each fired once as the film passes its moment.
-      const cues = [[BOOM, "blast"]];
+      // A quake throws dust up off the ground all round the pad.
+      function quakeDust() {
+        for (let i = 0; i < 40; i++) {
+          const a = rand(0, Math.PI * 2);
+          const d = rand(1.6, 14);
+          const at = PAD.clone().add(v3(Math.cos(a) * d, 0, Math.sin(a) * d)).normalize().multiplyScalar(RP + 0.05);
+          dust.add({
+            pos: at, vel: at.clone().normalize().multiplyScalar(rand(0.3, 1.2)),
+            size: rand(0.4, 1.0), grow: rand(0.6, 1.4), life: rand(1.5, 2.6), drag: 0.6, alpha: 0.18,
+            color: [0.8, 0.55, 0.42], end: [0.55, 0.4, 0.32],
+          });
+        }
+      }
+
+      // Sounds and moments, each fired once as the film passes it.
+      const cues = [
+        ...QUAKES.map((q) => [q, () => (sfx("quake"), quakeDust())]),
+        [BOOM, () => sfx("blast")],
+      ];
       let cue = 0;
       let boomed = false;
       let lastRcs = 0;
@@ -427,7 +523,7 @@ export default function Intro3D({ onDone, onFail }) {
           finish();
           return;
         }
-        while (cue < cues.length && T >= cues[cue][0]) sfx(cues[cue++][1]);
+        while (cue < cues.length && T >= cues[cue][0]) cues[cue++][1]();
         const cap = captionAt(T);
         if (cap !== shown) {
           shown = cap;
@@ -485,7 +581,61 @@ export default function Intro3D({ onDone, onFail }) {
             });
           }
         }
+        // The crack by the pad pulses and steams; ash and embers drift down past the camera.
+        const pulse = 0.8 + 0.12 * Math.sin(T * 5.3) + 0.08 * Math.sin(T * 13.1);
+        crackCore.color.setRGB(3.4 * pulse, 1.2 * pulse, 0.3 * pulse);
+        if (T < CLIMB + 2 && Math.random() < dt * 14) {
+          const at = crackLine.line[Math.floor(rand(4, crackLine.line.length - 4))];
+          const up = at.clone().normalize();
+          dust.add({
+            pos: at.clone().addScaledVector(up, 0.1), vel: up.multiplyScalar(rand(0.4, 1.1)).add(v3(rand(-0.2, 0.2), 0, rand(-0.2, 0.2))),
+            size: rand(0.3, 0.6), grow: rand(0.8, 1.6), life: rand(1.8, 3), drag: 0.3, alpha: 0.16, color: [0.95, 0.72, 0.55], end: [0.6, 0.55, 0.52],
+          });
+        }
+        if (T < CLIMB + 1.2 && Math.random() < dt * 30) {
+          const ahead = camera.getWorldDirection(v3());
+          const right = ahead.clone().cross(camera.up).normalize();
+          embers.add({
+            pos: camera.position.clone().addScaledVector(ahead, rand(2.5, 9)).addScaledVector(right, rand(-5, 5)).addScaledVector(camera.up, rand(-0.5, 3.5)),
+            vel: v3(rand(0.2, 0.7), -rand(0.15, 0.45), rand(-0.3, 0.3)), size: rand(0.02, 0.045), life: rand(2, 3.2),
+            alpha: 1, color: [2.6, 1.0, 0.28], end: [0.5, 0.1, 0.03],
+          });
+        }
+        // Eruptions on the horizon, throwing up lava and columns of ash that lean in the wind.
+        for (const v of vents) {
+          v.glow.visible = T < ALIGN;
+          if (T >= ALIGN) continue;
+          v.glow.scale.setScalar(11 * (0.85 + 0.15 * Math.sin(T * 9 + v.pos.x)));
+          if (Math.random() < dt * 22) {
+            ash.add({
+              pos: v.pos.clone().addScaledVector(v.up, 1.5), vel: v.up.clone().multiplyScalar(rand(7, 11)).addScaledVector(EAST, rand(1.5, 3)).add(v3(rand(-1.2, 1.2), 0, rand(-1.2, 1.2))),
+              size: rand(3, 5), grow: rand(2.5, 4), life: rand(6, 8), drag: 0.3, alpha: 1, color: [0.24, 0.13, 0.08], end: [0.07, 0.06, 0.06],
+            });
+          }
+          for (let i = 0; i < 2; i++) {
+            if (Math.random() < dt * 16) {
+              lava.add({
+                pos: v.pos.clone().addScaledVector(v.up, 0.5), vel: v.up.clone().multiplyScalar(rand(4, 10)).add(v3(rand(-3, 3), 0, rand(-3, 3))),
+                size: rand(0.6, 1.5), life: rand(0.7, 1.4), drag: 0.7, alpha: 1, color: [3.2, 1.3, 0.3], end: [1.2, 0.2, 0.03],
+              });
+            }
+          }
+        }
+        // The last other ships rising from beyond the horizon, trailing vapour.
+        for (const f of fleeing) {
+          const t = T - f.at;
+          f.glow.visible = t > 0 && T < DOCK;
+          if (!f.glow.visible) continue;
+          const h = 5 * t + 6 * t * t;
+          f.glow.position.copy(f.base).addScaledVector(f.up, h).addScaledVector(EAST, 0.3 * h);
+          f.glow.scale.setScalar(2.6 * (0.85 + 0.15 * Math.sin(T * 40 + f.at * 7)));
+          if (Math.random() < dt * 30) {
+            dust.add({ pos: f.glow.position, vel: v3(), size: 0.6, grow: 1.4, life: rand(1.6, 2.4), alpha: 0.12, color: [0.95, 0.93, 0.92], end: [0.75, 0.72, 0.72] });
+          }
+        }
         dust.update(dt);
+        ash.update(dt);
+        lava.update(dt);
 
         // --- Starship: hangar doors open for the shuttle, then it powers up and runs ---
         if (T >= JUMP) placeShip(T);
@@ -497,7 +647,8 @@ export default function Intro3D({ onDone, onFail }) {
 
         // --- Vulcan breaks up ------------------------------------------------------
         const since = T - BOOM;
-        const crack = smooth(ARRIVE - 0.8, BOOM, T);
+        // Cracks glow across Vulcan from the start and spread as the shuttle climbs, then split it open.
+        const crack = Math.max(0.14 + 0.3 * smooth(LIFT, DOCK, T), smooth(ARRIVE - 0.8, BOOM, T));
         planetMat.uniforms.crack.value = crack;
         planetMat.uniforms.city.value = 1 - crack;
         const flashV = since >= 0 ? Math.exp(-since * 3) * (reduce ? 0.4 : 1) : 0;
@@ -570,7 +721,8 @@ export default function Intro3D({ onDone, onFail }) {
         // A tremor as the crust splits, a jolt at the blast, another as the shock ring rolls past.
         const tremor = since < 0 ? 0.003 * crack : 0;
         const jolt = since >= 0 ? 0.025 * Math.exp(-since * 2.2) + (since > 2.2 ? 0.02 * Math.exp(-(since - 2.2) * 3) : 0) : 0;
-        const shake = reduce ? 0 : tremor + jolt;
+        const quake = T < CLIMB ? QUAKES.reduce((sum, q) => sum + (T > q ? 0.012 * Math.exp(-(T - q) * 3) : 0), 0) : 0;
+        const shake = reduce ? 0 : tremor + jolt + quake;
         camera.rotateX(shake * (Math.sin(T * 83) + Math.sin(T * 47)));
         camera.rotateY(shake * (Math.sin(T * 71) + Math.cos(T * 53)));
         camera.rotateZ(shake * 0.5 * Math.sin(T * 39));
@@ -594,7 +746,7 @@ export default function Intro3D({ onDone, onFail }) {
         sunHalo.scale.setScalar(5200);
         sunHalo.material.opacity = 0.45;
 
-        for (const ps of [dust, embers, smoke]) ps.setScale(camera, H * pixelRatio);
+        for (const ps of [dust, embers, smoke, ash, lava]) ps.setScale(camera, H * pixelRatio);
         film.uniforms.uTime.value = T;
         film.uniforms.uBlack.value = 1 - smooth(0, 1, T) * (1 - smooth(END - 0.8, END, T));
         composer.render(dt);
@@ -636,7 +788,7 @@ export default function Intro3D({ onDone, onFail }) {
         {CAPTIONS.map((c, i) => (
           <div key={c.title} className={i === caption ? "cap show" : "cap"}>
             <p className="eyebrow">
-              {String(i + 1).padStart(2, "0")} / 03 · Nova Grid
+              {String(i + 1).padStart(2, "0")} / {String(CAPTIONS.length).padStart(2, "0")} · Nova Grid
             </p>
             <h1>{c.title}</h1>
             <p>{c.text}</p>
