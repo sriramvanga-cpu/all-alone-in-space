@@ -196,6 +196,39 @@ const POS = Object.fromEntries([
   ...SYSTEMS.map((s) => [s.id, { x: round2(s.r * SCALE * Math.cos(s.angle)), y: round2(s.r * SCALE * Math.sin(s.angle)) }]),
 ]);
 
+// A black hole's disk and glow fill this ellipse about the centre of its system (the inner orbit
+// is 100 × 62). A hop whose usual path would cut across it swings round the hole instead.
+const HOLE_KEEP = { rx: 90, ry: 56 };
+
+function hopPath(a, b, star) {
+  const direct = bend(a, b).d;
+  if (star !== "hole") return direct;
+  // In units of the keep-out ellipse, so it becomes the unit circle.
+  const ax = a.x / HOLE_KEEP.rx, ay = a.y / HOLE_KEEP.ry;
+  const dx = b.x / HOLE_KEEP.rx - ax, dy = b.y / HOLE_KEEP.ry - ay;
+  const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / (dx * dx + dy * dy || 1)));
+  if (Math.hypot(ax + t * dx, ay + t * dy) > 1.15) return direct;
+  // Sweep round the centre, easing the distance from one end's to the other's.
+  const ra = Math.hypot(ax, ay);
+  const rb = Math.hypot(ax + dx, ay + dy);
+  const ta = Math.atan2(ay, ax);
+  let turn = Math.atan2(ay + dy, ax + dx) - ta;
+  if (turn > Math.PI) turn -= 2 * Math.PI;
+  if (turn < -Math.PI) turn += 2 * Math.PI;
+  const pts = Array.from({ length: 25 }, (_, i) => {
+    const s = i / 24;
+    const r = Math.max(1.15, ra + (rb - ra) * s * s * (3 - 2 * s));
+    return [r * Math.cos(ta + turn * s) * HOLE_KEEP.rx, r * Math.sin(ta + turn * s) * HOLE_KEEP.ry];
+  });
+  pts[0] = [a.x, a.y];
+  pts[24] = [b.x, b.y];
+  // Quadratic pieces through the midpoints, so the heading turns smoothly.
+  const f = ([x, y]) => `${round2(x)} ${round2(y)}`;
+  let d = `M ${f(pts[0])}`;
+  for (let i = 1; i < 24; i++) d += ` Q ${f(pts[i])} ${f([(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2])}`;
+  return `${d} L ${f(pts[24])}`;
+}
+
 const ROUTES = LANES.map((edge) => ({ ...edge, ...bend(POS[edge.a], POS[edge.b]) }));
 
 function routePath(from, to) {
@@ -1863,7 +1896,7 @@ function Game() {
     if (g.system) {
       if (move.power > g.power + 1e-9) return;
       // Aim for where the planet will be when the ship gets there.
-      const { d } = bend(positionAt(g.here, now), positionAt(id, now + HOP_MS));
+      const d = hopPath(positionAt(g.here, now), positionAt(id, now + HOP_MS), system(g.system).star);
       sfx("hop");
       commit({
         phase: "fly",
