@@ -21,10 +21,12 @@ const BOOM = INSIDE + 2.6;
 const END = INSIDE + 6.4;
 const BRIDGE_X = 13.5;
 
+// The same story as the 3D intro, in the time this film has.
 const CAPTIONS = [
-  { from: 0.7, to: 5.0, title: "Vulcan is dying", text: "Its core is breaking up. The last shuttle lifts off." },
-  { from: 5.6, to: 9.4, title: "Racing for the starship", text: "The last shuttle has to dock before the planet breaks apart." },
-  { from: INSIDE + 0.4, to: END - 0.7, title: "Vulcan is gone", text: "No world is left to call home. You have 15 minutes to find a new one." },
+  { from: 0.7, to: 5.0, title: "Vulcan is dying", text: "Its core is collapsing, and quakes are tearing the planet apart." },
+  { from: 5.6, to: 9.4, title: "The last shuttle out", text: "Everyone else has fled. Your crew races for the starship in orbit." },
+  { from: INSIDE - 0.4, to: BOOM - 0.2, title: "Full speed away", text: "Vulcan has only seconds left." },
+  { from: BOOM + 0.4, to: END - 0.4, title: "Find a new home", text: "The blast damaged life support: 15 minutes of air. Land on a world marked ! in time." },
 ];
 
 function captionAt(T) {
@@ -511,7 +513,7 @@ export default function ClassicIntro({ onDone }) {
         {CAPTIONS.map((c, i) => (
           <div key={c.title} className={i === caption ? "cap show" : "cap"}>
             <p className="eyebrow">
-              {String(i + 1).padStart(2, "0")} / 03 · Nova Grid
+              {String(i + 1).padStart(2, "0")} / {String(CAPTIONS.length).padStart(2, "0")} · Nova Grid
             </p>
             <h1>{c.title}</h1>
             <p>{c.text}</p>
