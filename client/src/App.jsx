@@ -3136,10 +3136,7 @@ function AdminPanel({ snap, chance, onAdmin, onAmounts, onClock, onFastForward, 
                 Set
               </button>
             </form>
-            <p className="hint">
-              Setting amounts turns endless off, so running low, the shop and running out can be tested. Too little fuel to leave
-              ends the run, as it would for anyone.
-            </p>
+            <p className="hint">Setting amounts turns endless off. Too little fuel to leave ends the run, as for anyone.</p>
           </section>
           <section className="admin-section">
             <h3>Landing</h3>
@@ -3168,9 +3165,7 @@ function AdminPanel({ snap, chance, onAdmin, onAmounts, onClock, onFastForward, 
                 +5 min flown
               </button>
             </div>
-            <p className="hint">
-              Landing chance from the time flown: {chance}%. Fast-forward raises it and takes the time off the clock.
-            </p>
+            <p className="hint">The time flown gives a {chance}% landing chance. Fast-forward raises it.</p>
           </section>
           <section className="admin-section">
             <h3>Map</h3>
@@ -3179,7 +3174,7 @@ function AdminPanel({ snap, chance, onAdmin, onAmounts, onClock, onFastForward, 
                 Jump anywhere: {admin.jump ? "on" : "off"}
               </button>
             </div>
-            <p className="hint">Tap any system on the star map, or any open planet in a system, to be there at once, free.</p>
+            <p className="hint">Tap any system, or any open planet, to be there at once, free.</p>
           </section>
           <section className="admin-section">
             <h3>Questions</h3>
@@ -3188,7 +3183,7 @@ function AdminPanel({ snap, chance, onAdmin, onAmounts, onClock, onFastForward, 
                 Show answers: {admin.answers ? "on" : "off"}
               </button>
             </div>
-            <p className="hint">Marks the right choice on landing questions and fuel cards.</p>
+            <p className="hint">Marks the right choice on questions and fuel cards.</p>
           </section>
           <section className="admin-section">
             <h3>Next flight event</h3>
@@ -3202,7 +3197,7 @@ function AdminPanel({ snap, chance, onAdmin, onAmounts, onClock, onFastForward, 
                 </button>
               ))}
             </div>
-            <p className="hint">The one picked happens on your next lane flight, once. Jumps skip the flight, so turn Jump anywhere off first.</p>
+            <p className="hint">Happens on your next lane flight, once. Jumps don't count.</p>
           </section>
           <section className="admin-section">
             <h3>Replay</h3>
