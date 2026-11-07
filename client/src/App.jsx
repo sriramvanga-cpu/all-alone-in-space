@@ -1883,6 +1883,8 @@ function Game() {
   const [tick, setTick] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [flyFuel, setFlyFuel] = useState(null);
+  // The admin panel can play the intro film or the How to play reel again mid-run.
+  const [replay, setReplay] = useState(null);
   const [view, setView] = useState(() => {
     const w = 520;
     const h = w * (VIEW_H / VIEW_W);
@@ -1924,6 +1926,15 @@ function Game() {
   function fastForward(ms) {
     const g = game.current;
     if (g.cheat && g.phase !== "end") commit({ deadline: g.deadline - ms });
+  }
+
+  // The admin panel's replays: the film or the reel over the run, which carries on underneath, or the
+  // first-time tips, which come back as each part of the game shows again.
+  function startReplay(kind) {
+    const g = game.current;
+    if (!g.cheat) return;
+    if (kind === "tips") commit({ tipsSeen: [], tipAt: 0 });
+    else setReplay(kind);
   }
 
   function finish(reason) {
@@ -2509,6 +2520,13 @@ function Game() {
     return <HowTo onDone={() => game.current.phase === "howto" && commit({ phase: "mission" })} />;
   }
   if (snap.phase === "mission") return <Mission onStart={dock} />;
+  if (replay) {
+    const back = () => {
+      setReplay(null);
+      engine(game.current.phase === "map" ? ENGINE_IDLE : 0);
+    };
+    return replay === "intro" ? <Intro onDone={back} /> : <HowTo onDone={back} />;
+  }
 
   const clockMs =
     snap.phase === "end"
@@ -2617,6 +2635,7 @@ function Game() {
           onAmounts={setAmounts}
           onClock={setClock}
           onFastForward={fastForward}
+          onReplay={startReplay}
         />
       ) : null}
       <div className="play-body">
@@ -3059,7 +3078,7 @@ function Scan({ scan, habitable = false, onDone, onSettle }) {
 
 // Cheat mode's test tools, in a panel that opens from the corner across from the sound switch.
 // Every switch acts at once, and the game keeps running underneath.
-function AdminPanel({ snap, chance, onAdmin, onAmounts, onClock, onFastForward }) {
+function AdminPanel({ snap, chance, onAdmin, onAmounts, onClock, onFastForward, onReplay }) {
   const [open, setOpen] = useState(false);
   const [amounts, setAmounts] = useState({ fuel: START_FUEL, power: START_POWER, credits: START_CREDITS });
   useEffect(() => {
@@ -3184,6 +3203,29 @@ function AdminPanel({ snap, chance, onAdmin, onAmounts, onClock, onFastForward }
               ))}
             </div>
             <p className="hint">The one picked happens on your next lane flight, once. Jumps skip the flight, so turn Jump anywhere off first.</p>
+          </section>
+          <section className="admin-section">
+            <h3>Replay</h3>
+            <div className="admin-chips">
+              {[
+                ["intro", "Intro film"],
+                ["howto", "How to play"],
+                ["tips", "First-time tips"],
+              ].map(([kind, label]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className="ghost"
+                  onClick={() => {
+                    setOpen(false);
+                    onReplay(kind);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="hint">The run keeps going underneath. Tips come back as each part shows again.</p>
           </section>
         </aside>
       ) : null}
