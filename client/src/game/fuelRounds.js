@@ -1,5 +1,5 @@
 // Fuel-stop challenges. Each player gets them in a shuffled order (App.jsx), so none repeats until
-// all eight have been played. `per` is how many right answers
+// all seven have been played. `per` is how many right answers
 // earn one credit; it evens out fast rounds so a typical player earns about 13 credits a minute.
 // Rounds without `make` are interactive games drawn in App.jsx.
 import { rollInt, shuffleWith } from "./rules.js";
@@ -56,16 +56,6 @@ function makeArrowCard(rng = Math.random) {
   return { prompt: `${flank} ${flank} ${dir} ${flank} ${flank}`, choices: [...ARROWS], answer: dir };
 }
 
-export const RULE_RED = "#ff5a5a";
-const OPPOSITE = { "←": "→", "→": "←", "↑": "↓", "↓": "↑" };
-
-// Blue arrow: answer the way it points. Red arrow: the opposite way.
-function makeRuleCard(rng = Math.random) {
-  const dir = pick(ARROWS, rng);
-  const red = rng() < 0.5;
-  return { prompt: dir, ink: red ? RULE_RED : "#4f8bff", choices: [...ARROWS], answer: red ? OPPOSITE[dir] : dir };
-}
-
 export const FUEL_ROUNDS = Object.freeze(
   [
     { id: "valve", title: "Pressure valve", how: "Tap Vent while the needle is in the green.", per: 2 },
@@ -73,7 +63,6 @@ export const FUEL_ROUNDS = Object.freeze(
     { id: "ink", title: "Colour clash", how: "Pick the colour of the ink, not the word.", per: 2, make: makeInkCard },
     { id: "rocks", title: "Asteroid tap", how: "Tap or drag across the asteroids as they fly past, or press Space to hit the leading one.", per: 4 },
     { id: "tank", title: "Fullest tank", how: "Pick the fullest tank.", per: 2, make: makeTankCard },
-    { id: "rule", title: "Rule switch", how: "Blue arrow: tap the way it points. Red arrow: tap the opposite way.", per: 2, make: makeRuleCard },
     { id: "arrows", title: "Flight path", how: "Which way does the middle arrow point?", per: 3, make: makeArrowCard },
     { id: "element", title: "Element check", how: "Name the element from its symbol.", per: 1, make: makeElementCard },
   ].map(Object.freeze),

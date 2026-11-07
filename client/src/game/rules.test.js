@@ -361,15 +361,11 @@ test("a hop is cheapest when two planets line up across the oval and dearest on 
   assert.equal(hopPower(100), 1.7);
 });
 
-test("eight different fuel rounds, and every card has one right answer among four", async () => {
-  const { FUEL_ROUNDS, RULE_RED } = await import("./fuelRounds.js");
-  assert.equal(new Set(FUEL_ROUNDS.map((r) => r.id)).size, 8);
+test("seven different fuel rounds, and every card has one right answer among four", async () => {
+  const { FUEL_ROUNDS } = await import("./fuelRounds.js");
+  assert.equal(new Set(FUEL_ROUNDS.map((r) => r.id)).size, 7);
   const checks = {
     ink: (c) => assert.notEqual(c.answer.toUpperCase(), c.prompt),
-    rule: (c) => {
-      const opposite = { "←": "→", "→": "←", "↑": "↓", "↓": "↑" };
-      assert.equal(c.answer, c.ink === RULE_RED ? opposite[c.prompt] : c.prompt);
-    },
     tank: (c) => assert.equal(c.answer, String(Math.max(...c.choices.map(Number)))),
   };
   for (const round of FUEL_ROUNDS) {
