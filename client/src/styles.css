@@ -1679,6 +1679,7 @@ p.credits a { color: inherit; }
   .end-orb.end-world { width: 5.2rem; height: auto; }
   .lb th, .lb td { padding-left: 0.4rem; padding-right: 0.4rem; }
   .lb { font-size: var(--text-sm); }
+  .board h1 { font-size: 1.9rem; letter-spacing: 0.04em; }
   .podium { gap: 0.4rem; }
   .pod { padding: 1.6rem 0.4rem 0.9rem; }
   .title-big { font-size: 2.1rem; }
