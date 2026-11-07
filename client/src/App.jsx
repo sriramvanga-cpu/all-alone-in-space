@@ -2301,6 +2301,12 @@ function Game() {
     });
   }
 
+  // Cheat mode: leave a fuel stop at once, skipping the rest of the minute and the shop.
+  function leaveFuelStop() {
+    const g = game.current;
+    if (g.phase === "fuel" && g.cheat) commit({ phase: "map", fuelRound: null, fuelDeck: [], fuelAnswers: [] });
+  }
+
   function purchase(counts) {
     const g = game.current;
     if (g.phase !== "shop") return;
@@ -2810,6 +2816,9 @@ function Game() {
                     {r.title}
                   </button>
                 ))}
+                <button type="button" className="ghost cheat-leave" onClick={leaveFuelStop}>
+                  Leave fuel stop
+                </button>
               </div>
             ) : null}
             <div className="qhead">
