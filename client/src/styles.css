@@ -1722,7 +1722,8 @@ p.credits a { color: inherit; }
   .reel-cap p { font-size: var(--text-md); }
   .reel-steps button { padding: 0.25rem 0.6rem; }
   .at-planet { flex-direction: column; gap: 0.3rem; margin-top: 1vh; }
-  .at-planet-art { width: 6.5rem; }
+  .at-planet-art { width: auto; }
+  .at-planet-art .planet-art-box { width: 6.5rem; margin: 0 auto; }
   .at-planet-art figcaption { margin-top: 0.2rem; font-size: var(--text-md); }
 }
 
