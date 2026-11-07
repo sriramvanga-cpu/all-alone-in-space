@@ -1,4 +1,4 @@
-// How to play: a short reel between the opening film and the mission card that shows the aim of
+// How to play: a short reel between the opening film and the run that shows the aim of
 // the game with the map's own art, plus the one-scene clips the first-time tips loop. Each scene
 // is a pure function of the seconds played, like the films' poses. Every number on screen comes
 // from the rules, so the reel stays true when they change.
@@ -735,8 +735,8 @@ export function Reel({ only }) {
   return <Stage scene={scene} t={t} v={scene.hud(t)} />;
 }
 
-/** The how-to-play screen: the whole reel once, with chips to jump, then Continue to the mission card. */
-export default function HowTo({ onDone }) {
+/** The how-to-play screen: the whole reel once, with chips to jump; the last button reads `doneLabel`. */
+export default function HowTo({ onDone, doneLabel = "Continue" }) {
   const [calm] = useState(still);
   const [pos, setPos] = useState({ i: 0, t: calm ? SCENES[0].s : 0 });
   const [playing, setPlaying] = useState(!calm);
@@ -816,7 +816,7 @@ export default function HowTo({ onDone }) {
             </button>
           )}
           <button type="button" onClick={() => (last ? onDone() : go(pos.i + 1))} autoFocus>
-            {last ? "Continue" : "Next"}
+            {last ? doneLabel : "Next"}
           </button>
         </div>
       </section>

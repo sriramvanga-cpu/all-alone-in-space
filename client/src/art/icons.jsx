@@ -43,15 +43,6 @@ export function StarIcon(props) {
   );
 }
 
-export function CompassIcon(props) {
-  return (
-    <Icon {...props}>
-      <circle cx="12" cy="12" r="8.4" />
-      <path d="m15.4 8.6-2 4.8-4.8 2 2-4.8Z" />
-    </Icon>
-  );
-}
-
 export function CreditIcon(props) {
   return (
     <Icon {...props}>

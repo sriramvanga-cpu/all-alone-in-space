@@ -67,7 +67,7 @@ import {
   systemBox,
 } from "./art/MapArt.jsx";
 import { publishArt, useArt, webglAvailable } from "./three/artStore.js";
-import { FuelIcon, PowerIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipIcon, StarIcon, CompassIcon } from "./art/icons.jsx";
+import { FuelIcon, PowerIcon, CreditIcon, ClockIcon, GlobeIcon, BrainIcon, ChipIcon, StarIcon } from "./art/icons.jsx";
 
 const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 const PENDING = "aais-pending-scores";
@@ -710,39 +710,6 @@ function Tip({ id, onClose }) {
         </button>
       </div>
     </section>
-  );
-}
-
-// The mission card follows the how-to-play reel: what to do, how to win, how you score. The clock starts here.
-const MISSION = [
-  [CompassIcon, "Explore", "Scan the star map and fly between solar systems. Fuel flies the lanes; power flies between planets."],
-  [GlobeIcon, "Land", "On a planet marked !, answer a question, then try to land. Your chance starts at 0% and climbs faster as the clock runs, up to 60%. A right answer adds 10%; a wrong one halves it."],
-  [StarIcon, "Win", "Land before your fuel or the 15-minute clock runs out. Points = fuel left + 1 per 10 s left. Most points tops the board; watch yours in the top bar."],
-];
-
-function Mission({ onStart }) {
-  return (
-    <main className="screen">
-      <section className="panel wide mission">
-        <p className="eyebrow">Your mission</p>
-        <h1>Find a new home</h1>
-        <ol className="mission-steps">
-          {MISSION.map(([StepIcon, title, text]) => (
-            <li key={title}>
-              <StepIcon />
-              <b>{title}</b>
-              <p>{text}</p>
-            </li>
-          ))}
-        </ol>
-        <p className="hint">Tips explain each part of the game the first time you meet it. The clock waits while you read them.</p>
-        <div className="row">
-          <button type="button" onClick={onStart} autoFocus>
-            Start the clock
-          </button>
-        </div>
-      </section>
-    </main>
   );
 }
 
@@ -1952,8 +1919,9 @@ function Game() {
   void tick;
   const tip = tipFor(snap);
 
+  // The run's clock starts as the How to play reel hands over, finished or skipped.
   function dock() {
-    if (game.current.phase !== "mission") return;
+    if (game.current.phase !== "howto") return;
     commit({ phase: "map", deadline: Date.now() + roundMs(game.current) });
   }
 
@@ -2523,9 +2491,8 @@ function Game() {
     return <Intro onDone={() => game.current.phase === "intro" && commit({ phase: "howto" })} />;
   }
   if (snap.phase === "howto") {
-    return <HowTo onDone={() => game.current.phase === "howto" && commit({ phase: "mission" })} />;
+    return <HowTo doneLabel="Start the clock" onDone={dock} />;
   }
-  if (snap.phase === "mission") return <Mission onStart={dock} />;
   if (replay) {
     const back = () => {
       setReplay(null);

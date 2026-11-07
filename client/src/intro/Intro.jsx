@@ -7,7 +7,7 @@ const Intro3D = lazy(() => import("./Intro3D.jsx"));
 
 // Plays the realistic 3D intro, and falls back to the 2D one if WebGL or the
 // textures are not available on this machine.
-// With reduced motion asked for, the camera-flight film is skipped; the how-to-play stills and the mission card tell the story.
+// With reduced motion asked for, the camera-flight film is skipped; the how-to-play stills tell the story.
 const still = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 export default function Intro({ onDone }) {
