@@ -261,7 +261,18 @@ function heading(id) {
 
 // Where a click can fly at time ms: inside a system, its open planets, priced in power by how far
 // apart they are right then; on the star map, the lanes a scan has revealed, priced in fuel.
+// The admin panel's jump anywhere: every system from the star map, or every open planet in a system, free.
+function jumpMoves(g) {
+  if (g.system) {
+    return planetsOf(g.system)
+      .filter((p) => p.id !== g.here && !g.closed.includes(p.id))
+      .map((p) => ({ id: p.id, power: 0 }));
+  }
+  return [STATION, ...SYSTEMS.map((s) => s.id)].filter((id) => id !== g.here).map((id) => ({ id, distance: 0, fuel: 0 }));
+}
+
 function moves(g, ms = Date.now()) {
+  if (g.cheat && g.admin.jump) return jumpMoves(g);
   if (g.system) {
     return planetsOf(g.system)
       .filter((p) => p.id !== g.here && !g.closed.includes(p.id))
@@ -293,7 +304,7 @@ function fresh() {
     phone: "",
     cheat: false,
     // Cheat mode's test switches, set from the admin panel.
-    admin: { refill: true, landing: "odds", clock: false },
+    admin: { refill: true, landing: "odds", clock: false, jump: false },
     here: STATION,
     // The system you're inside (its planetary map is showing), or null on the star map.
     system: null,
@@ -984,7 +995,10 @@ function StarMap({ snap, now, shipRef, onLaunch, onBlocked, view, onView, action
   const warping = flying && !stillMotion();
   const viewer = flying ? snap.flight.from : snap.here;
   const scanned = new Set(snap.scanned);
-  const shown = new Set([STATION, snap.here, ...snap.scanned.flatMap((id) => [id, ...lanesFrom(id).map((hop) => hop.id)])]);
+  const jumping = snap.cheat && snap.admin.jump;
+  const shown = jumping
+    ? new Set([STATION, ...SYSTEMS.map((s) => s.id)])
+    : new Set([STATION, snap.here, ...snap.scanned.flatMap((id) => [id, ...lanesFrom(id).map((hop) => hop.id)])]);
   const options = snap.phase === "map" ? moves(snap) : [];
   const byId = new Map(options.map((m) => [m.id, m]));
   useEffect(() => {
@@ -1108,7 +1122,9 @@ function StarMap({ snap, now, shipRef, onLaunch, onBlocked, view, onView, action
             tabIndex={move ? 0 : undefined}
             aria-disabled={short || undefined}
             aria-label={
-              ready
+              ready && jumping
+                ? `Jump to ${id === STATION ? "the station" : id}`
+                : ready
                 ? `Fly to ${id === STATION ? "the station" : id}, ${fmtNum(move.fuel)} fuel`
                 : short
                   ? `${name}, ${fmtNum(move.fuel)} fuel, ${shortBy(move.fuel - snap.fuel)} more than you have`
@@ -1178,7 +1194,7 @@ function StarMap({ snap, now, shipRef, onLaunch, onBlocked, view, onView, action
           </g>
         );
       })}
-      {options.map((m) => {
+      {(jumping ? [] : options).map((m) => {
         const edge = ROUTES.find((r) => (r.a === snap.here && r.b === m.id) || (r.b === snap.here && r.a === m.id));
         return (
           <CostPill
@@ -1243,6 +1259,7 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
   const flying = snap.phase === "fly" && snap.flight;
   const options = snap.phase === "map" ? moves(snap, now) : [];
   const byId = new Map(options.map((m) => [m.id, m]));
+  const jumping = snap.cheat && snap.admin.jump;
   const shut = new Set(snap.closed);
   const planets = planetsOf(snap.system);
   const ship = positionAt(snap.here, now);
@@ -1270,7 +1287,9 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
         tabIndex={move ? 0 : undefined}
         aria-disabled={short || undefined}
         aria-label={
-          ready
+          ready && jumping
+            ? `Jump to ${p.id}${test ? ", a possible home" : ""}`
+            : ready
             ? `Fly to ${p.id}, ${fmtNum(move.power)} power${test ? ", a possible home" : ""}`
             : short
               ? `${p.id}, ${fmtNum(move.power)} power, ${shortBy(move.power - snap.power)} more than you have`
@@ -1315,7 +1334,7 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
         <text className="node-label" y={-(face.radius + 3)} textAnchor="middle" dominantBaseline="text-after-edge">
           {p.id}
         </text>
-        {move ? <CostPill text={fmtNum(move.power)} x={face.radius + 24} y={0} power short={short} /> : null}
+        {move && !jumping ? <CostPill text={fmtNum(move.power)} x={face.radius + 24} y={0} power short={short} /> : null}
       </g>
     );
   };
@@ -1932,6 +1951,12 @@ function Game() {
     }
     const move = moves(g, now).find((m) => m.id === id);
     if (!move) return;
+    // The admin panel's jump anywhere lands at once, as if a flight had just come in.
+    if (g.cheat && g.admin.jump) {
+      commit({ phase: "fly", here: id, note: "", flight: { from: g.here, to: id, d: "", ms: 0, fromFuel: g.fuel, actual: 0, event: null, paused: false, resume: 0 } });
+      arrive();
+      return;
+    }
     setFlyFuel(g.fuel);
     if (g.system) {
       if (move.power > g.power + 1e-9) return;
@@ -3116,6 +3141,15 @@ function AdminPanel({ snap, chance, onAdmin, onAmounts, onClock, onFastForward }
             <p className="hint">
               Landing chance from the time flown: {chance}%. Fast-forward raises it and takes the time off the clock.
             </p>
+          </section>
+          <section className="admin-section">
+            <h3>Map</h3>
+            <div className="admin-chips">
+              <button type="button" className="ghost" aria-pressed={admin.jump} onClick={() => onAdmin({ jump: !admin.jump })}>
+                Jump anywhere: {admin.jump ? "on" : "off"}
+              </button>
+            </div>
+            <p className="hint">Tap any system on the star map, or any open planet in a system, to be there at once, free.</p>
           </section>
         </aside>
       ) : null}
