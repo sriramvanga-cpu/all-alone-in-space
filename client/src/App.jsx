@@ -2097,6 +2097,11 @@ function Game() {
       note: second ? "Site 1 was toxic, so the scanner checked a second site." : scanned ? "Scanned from orbit." : "Landed blind.",
     };
     if (won) {
+      // A cheat run chooses: settle here and end the run, or keep flying to test more.
+      if (g.cheat) {
+        commit({ power, closed: [...g.closed, g.here], phase: "scan", scan: { ...scan, won: true }, landing: null });
+        return;
+      }
       game.current = { ...g, power, scan, landing: null };
       finish("win");
       return;
@@ -2107,6 +2112,10 @@ function Game() {
   function leaveScan() {
     const g = game.current;
     if (g.phase !== "scan") return;
+    if (g.scan.won) {
+      commit({ phase: "map", scan: null, note: `${g.here} is habitable. Cheat mode kept the run going; you can't land here again.` });
+      return;
+    }
     // The 30 s comes off here, not at touchdown, so the clock can't give the result away before the readings do.
     commit({
       phase: "map",
@@ -2114,6 +2123,12 @@ function Game() {
       deadline: g.deadline - LAND_FAIL_MS,
       note: `${g.here} isn't habitable, and the failed landing cost ${LAND_FAIL_MS / 1000} s. You can't land here again.`,
     });
+  }
+
+  // Cheat mode's other choice after a landing that settles: end the run with the win.
+  function settle() {
+    const g = game.current;
+    if (g.phase === "scan" && g.scan?.won) finish("win");
   }
 
   function closeFuelMinute() {
@@ -2668,7 +2683,9 @@ function Game() {
           </AtPlanet>
         ) : null}
 
-        {snap.phase === "scan" && snap.scan ? <Scan scan={snap.scan} onDone={leaveScan} /> : null}
+        {snap.phase === "scan" && snap.scan ? (
+          <Scan scan={snap.scan} habitable={Boolean(snap.scan.won)} onDone={leaveScan} onSettle={snap.scan.won ? settle : undefined} />
+        ) : null}
 
         {snap.phase === "fuel" && snap.fuelRound && !tip ? (
           <section className="panel fuel">
@@ -2877,7 +2894,9 @@ function CountUp({ value, ms = 1200 }) {
 
 const SCAN_STEP_MS = 450;
 
-function Scan({ scan, habitable = false, onDone }) {
+// `onSettle` (cheat mode, a habitable world) offers settling here or flying on; otherwise `onDone`
+// returns to the map.
+function Scan({ scan, habitable = false, onDone, onSettle }) {
   const [done, setDone] = useState(false);
   const revealMs = (scan.readings.length + 1) * SCAN_STEP_MS;
   useEffect(() => {
@@ -2887,6 +2906,7 @@ function Scan({ scan, habitable = false, onDone }) {
       setTimeout(() => {
         setDone(true);
         if (!habitable) sfx("toxic");
+        else if (onSettle) sfx("right");
       }, revealMs),
     );
     return () => ids.forEach(clearTimeout);
@@ -2917,7 +2937,19 @@ function Scan({ scan, habitable = false, onDone }) {
               ? "All readings within safe limits. Habitable."
               : `Toxic elements concentration is too high (safe limit ${TOXIC_LIMIT} ppm). Not habitable. The failed landing costs ${LAND_FAIL_MS / 1000} s.`}
           </p>
-          {onDone ? (
+          {onSettle ? (
+            <>
+              <p className="hint">Cheat mode: settle here to end the run with the win, or keep flying to test more.</p>
+              <div className="row">
+                <button type="button" onClick={onSettle}>
+                  Settle here
+                </button>
+                <button type="button" className="ghost" onClick={onDone}>
+                  Keep flying
+                </button>
+              </div>
+            </>
+          ) : onDone ? (
             <div className="row">
               <button type="button" onClick={onDone}>
                 Return to the map
