@@ -1659,6 +1659,7 @@ const ROCK_EVERY_MS = 1000;
 const SHOT_MS = 250;
 
 function AsteroidTap({ onMark }) {
+  const rockArt = useArt().rocks;
   const [rocks, setRocks] = useState([]);
   const [booms, setBooms] = useState([]);
   const field = useRef(null);
@@ -1736,8 +1737,10 @@ function AsteroidTap({ onMark }) {
             "--y1": `${r.y1}%`,
             "--size": `${r.size}rem`,
             "--fly": `${r.ms}ms`,
-            height: `${r.size * r.squash}rem`,
-            clipPath: `polygon(${r.outline})`,
+            // A rendered asteroid brings its own outline; the CSS rock is cut to a lumpy one.
+            ...(rockArt.length
+              ? { height: `${r.size}rem`, background: `url(${rockArt[r.n % rockArt.length]}) center / 120% no-repeat` }
+              : { height: `${r.size * r.squash}rem`, clipPath: `polygon(${r.outline})` }),
           }}
           onAnimationEnd={(e) => e.animationName === "fly" && setRocks((list) => list.filter((x) => x.n !== r.n))}
         />
