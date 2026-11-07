@@ -37,6 +37,20 @@ export function systemBox(reach, narrow) {
     : [-JUMP_R - 40, -reach * TILT - 65, JUMP_R + reach + 120, 2 * reach * TILT + 115];
 }
 
+/** The gate ships arrive at and leave a system through, centred on (0, 0): a glow, a pulsing core,
+ * a bright ring and two dashed rings turning opposite ways. Needs MapDefs for its gradients. */
+export function JumpGate() {
+  return (
+    <g className="gate" aria-hidden="true">
+      <circle className="gate-glow" r="34" />
+      <circle className="gate-core" r="13" />
+      <circle className="gate-ring" r="15" />
+      <circle className="gate-spin" r="20" />
+      <circle className="gate-spin back" r="10" />
+    </g>
+  );
+}
+
 // The fuel-stop badge: a drop, filled from MapDefs' fuel-drop gradient.
 export const DROP = "M0 -4.8C2.7 -1 4 1 4 2.7A4 4 0 0 1 -4 2.7C-4 1 -2.7 -1 0 -4.8Z";
 
@@ -190,6 +204,19 @@ export function MapDefs() {
       <linearGradient id="fuel-drop" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stopColor="#ffe08a" />
         <stop offset="1" stopColor="#ff8a1f" />
+      </linearGradient>
+      <radialGradient id="gate-glow">
+        <stop offset="0.3" stopColor="#5ad1ff" stopOpacity="0.32" />
+        <stop offset="1" stopColor="#5ad1ff" stopOpacity="0" />
+      </radialGradient>
+      <radialGradient id="gate-core">
+        <stop offset="0" stopColor="#ffffff" stopOpacity="0.95" />
+        <stop offset="0.45" stopColor="#8fe3ff" stopOpacity="0.55" />
+        <stop offset="1" stopColor="#8a7dff" stopOpacity="0" />
+      </radialGradient>
+      <linearGradient id="gate-ring" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#7be0ff" />
+        <stop offset="1" stopColor="#a68bff" />
       </linearGradient>
       {TINTS.map((tint) => {
         const [centre, body, limb] = STAR_TINTS[tint];

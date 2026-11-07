@@ -5,7 +5,7 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import { clamp, easeInOut, easeOut, lerp, smooth } from "./draw.js";
-import { CostPill, DROP, MapDefs, StarDot } from "../art/MapArt.jsx";
+import { CostPill, DROP, JumpGate, MapDefs, StarDot } from "../art/MapArt.jsx";
 import { Starbase } from "../art/Station.jsx";
 import { SAUCER_X, ShipShapes } from "../art/Ship.jsx";
 import { PlanetDot, faceOf } from "../art/Planet.jsx";
@@ -252,8 +252,8 @@ function drawHop(t) {
       {ORBITS.map((o) => (
         <ellipse key={o.rx} className="orbit" cx={SUN.x} cy={SUN.y} rx={o.rx} ry={r1(o.rx * TILT)} />
       ))}
-      <g className="jump">
-        <circle cx={JUMP.x} cy={JUMP.y} r="16" />
+      <g className="jump" transform={`translate(${JUMP.x} ${JUMP.y})`}>
+        <JumpGate />
       </g>
       <Label x={JUMP.x} y={JUMP.y + 36} tone="dim">
         Jump point

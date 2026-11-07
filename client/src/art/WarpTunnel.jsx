@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { easeIn, easeOut, smooth } from "../intro/draw.js";
 import { sfx } from "../sound.js";
 import { ShipShapes } from "./Ship.jsx";
-import { DROP, MapDefs, NARROW, PLANET_ZOOM, StarDot, SUN_R, systemBox } from "./MapArt.jsx";
+import { DROP, JumpGate, MapDefs, NARROW, PLANET_ZOOM, StarDot, SUN_R, systemBox } from "./MapArt.jsx";
 import { PlanetDot, faceOf } from "./Planet.jsx";
 import { Starbase } from "./Station.jsx";
 import { JUMP_R, STATION, TILT, orbitAt, planetsOf, system } from "../game/map.js";
@@ -112,7 +112,7 @@ const Scene = memo(function Scene({ scene, zoom }) {
       </g>
       {scene.worlds.map((w, i) => (far(w) ? null : world(w, i)))}
       <g className="jump warp-jump" transform={`translate(${-JUMP_R} 0)`}>
-        <circle r="15" />
+        <JumpGate />
         <text className="node-label" y="-21" textAnchor="middle">
           Jump point
         </text>

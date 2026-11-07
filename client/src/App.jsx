@@ -56,6 +56,7 @@ import { PlanetDot, faceOf } from "./art/Planet.jsx";
 import {
   CostPill,
   DROP,
+  JumpGate,
   MapDefs,
   MapBackdrop,
   NARROW,
@@ -1246,7 +1247,7 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
         </g>
         {placed.filter(({ at }) => at.y >= 0).map(drawPlanet)}
         <g className="jump" transform={`translate(${-JUMP_R} 0)`}>
-          <circle r="15" />
+          <JumpGate />
           <text className="node-label" y="-21" textAnchor="middle">
             Jump point
           </text>

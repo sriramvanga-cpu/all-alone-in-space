@@ -1156,7 +1156,24 @@ p.credits a { color: inherit; }
 .star .disk.haze { opacity: 0.2; }
 .star .photon { fill: none; stroke: #ffe2b0; }
 @keyframes corona { to { transform: scale(1.1); opacity: 0.8; } }
-.jump circle { fill: rgba(90, 209, 255, 0.06); stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 3 4; }
+/* The jump gate: a glow, a pulsing core, a bright ring and two dashed rings turning opposite ways. */
+.gate-glow { fill: url(#gate-glow); }
+.gate-core { fill: url(#gate-core); transform-box: fill-box; transform-origin: center; animation: gate-pulse 3s ease-in-out infinite alternate; }
+.gate-ring { fill: none; stroke: url(#gate-ring); stroke-width: 2.2; filter: drop-shadow(0 0 3px rgba(123, 224, 255, 0.8)); }
+.gate-spin {
+  fill: none;
+  stroke: rgba(150, 220, 255, 0.75);
+  stroke-width: 1.2;
+  stroke-dasharray: 6 5;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: spin 14s linear infinite;
+}
+.gate-spin.back { stroke: rgba(190, 170, 255, 0.7); stroke-dasharray: 3 4; animation-duration: 9s; animation-direction: reverse; }
+@keyframes gate-pulse {
+  from { opacity: 0.55; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1.05); }
+}
 
 /* Landing choice after a right answer */
 .land small { font: 400 var(--text-md)/1.35 var(--font-body); letter-spacing: 0; text-transform: none; color: var(--dim); }
@@ -1581,7 +1598,7 @@ p.credits a { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .streak, .link-flow, .ready-ring, .beacon-pulse, .navlight, .plume, .exhaust, .end-orb, .live::before,
-  .scan-btn, .node.system, .sun .star-glow, .sun .surface, .sweep, .star .rays, .star .beams, .star .pair,
+  .scan-btn, .node.system, .sun .star-glow, .sun .surface, .gate-core, .gate-spin, .sweep, .star .rays, .star .beams, .star .pair,
   .starbase .spin, .starbase .core, .reading, .scan-bar i {
     animation: none !important;
   }
