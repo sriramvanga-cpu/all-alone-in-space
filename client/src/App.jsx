@@ -2181,6 +2181,23 @@ function Game() {
     });
   }
 
+  // Cheat mode: play any fuel game at a fuel stop, starting a fresh minute.
+  function pickFuelRound(id) {
+    const g = game.current;
+    const round = FUEL_ROUNDS.find((r) => r.id === id);
+    if (g.phase !== "fuel" || !g.cheat || !round) return;
+    const card = drawFuelCard(round, g.fuelSeen);
+    commit({
+      fuelRound: round,
+      fuelDeck: [card],
+      fuelIndex: 0,
+      fuelAnswers: [],
+      creditFloor: g.credits,
+      fuelSeen: card ? [...g.fuelSeen, fuelKey(card)] : g.fuelSeen,
+      fuelDeadline: Date.now() + QUESTION_MS,
+    });
+  }
+
   function purchase(counts) {
     const g = game.current;
     if (g.phase !== "shop") return;
@@ -2655,6 +2672,16 @@ function Game() {
 
         {snap.phase === "fuel" && snap.fuelRound && !tip ? (
           <section className="panel fuel">
+            {snap.cheat ? (
+              <div className="cheat-picker" role="group" aria-label="Cheat mode: play any fuel game">
+                <span className="cheat-tag">Cheat mode · fuel game</span>
+                {FUEL_ROUNDS.map((r) => (
+                  <button key={r.id} type="button" className="ghost" aria-pressed={snap.fuelRound.id === r.id} onClick={() => pickFuelRound(r.id)}>
+                    {r.title}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="qhead">
               <Ring ms={fuelMs} total={QUESTION_MS} />
               <div>
@@ -2676,7 +2703,7 @@ function Game() {
               Every {STREAK} in a row earns a bonus credit. You have {snap.credits}.
             </p>
             {FuelGame ? (
-              <FuelGame key={snap.here} onMark={markFuel} />
+              <FuelGame key={`${snap.here}-${snap.fuelDeadline}`} onMark={markFuel} />
             ) : fuelCard ? (
               <>
                 {fuelCard.prompt ? (
