@@ -529,15 +529,30 @@ function Podium({ rows }) {
     <div className="podium">
       {top.map((row, i) => {
         const fuel = Number.isFinite(row.fuel) ? row.fuel : Number(row.score) || 0;
+        const worlds = row.worlds ?? 0;
         return (
           <article key={row.id ?? i} className={`pod p${i + 1}`}>
             <RankBadge n={i + 1} />
             <p className="pod-name">{row.name}</p>
             <p className={row.settled ? "pod-result yes" : "pod-result"}>{row.settled ? "Settled" : "Not settled"}</p>
-            <p className="pod-meta">
-              {row.settled ? `${fmtScore(runPoints(row))} pts · ${formatClock((row.timeLeft ?? 0) * 1000)} left · ` : ""}
-              {row.worlds ?? 0} {(row.worlds ?? 0) === 1 ? "world" : "worlds"} · fuel {fmtScore(fuel)}
-            </p>
+            {row.settled ? (
+              <p className="pod-points">
+                <strong>{fmtScore(runPoints(row))}</strong> pts
+              </p>
+            ) : null}
+            <ul className="pod-stats">
+              {row.settled ? (
+                <li>
+                  <ClockIcon /> {formatClock((row.timeLeft ?? 0) * 1000)} left
+                </li>
+              ) : null}
+              <li>
+                <GlobeIcon /> {worlds} {worlds === 1 ? "world" : "worlds"}
+              </li>
+              <li>
+                <FuelIcon /> {fmtScore(fuel)} fuel
+              </li>
+            </ul>
           </article>
         );
       })}
