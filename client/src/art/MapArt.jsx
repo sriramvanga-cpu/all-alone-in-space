@@ -98,17 +98,31 @@ function Ball({ tint, r }) {
   );
 }
 
+// A black hole: its rendered image (three/sprites.js) once ready, its shadow 0.7 r across; until
+// then, or without WebGL, a black disc rimmed with light inside a tilted disk of glowing gas.
+function Hole({ r }) {
+  const art = useArt().stars.get("hole");
+  if (art) {
+    const e = r * 0.7 * art.ext;
+    return <image href={art.url} x={-e} y={-e} width={2 * e} height={2 * e} />;
+  }
+  return (
+    <>
+      <ellipse className="disk haze" rx={r * 1.7} ry={r * 1.7 * TILT} strokeWidth={r * 0.8} />
+      <ellipse className="disk" rx={r * 1.7} ry={r * 1.7 * TILT} strokeWidth={r * 0.28} />
+      <circle r={r * 0.8} fill="#000" />
+      <circle className="photon" r={r * 0.86} strokeWidth={r * 0.08} />
+    </>
+  );
+}
+
 /** A system's star (`kind` from map.js). Small on the star map; with `sun`, big at the centre of a planetary map. */
 function StarDotImpl({ kind, r, sun = false }) {
   if (kind === "hole") {
-    // A black disc rimmed with light, inside a tilted disk of glowing gas.
     return (
       <g className="star" aria-hidden="true">
         <circle r={r * 3} fill="url(#hole-glow)" />
-        <ellipse className="disk haze" rx={r * 1.7} ry={r * 1.7 * TILT} strokeWidth={r * 0.8} />
-        <ellipse className="disk" rx={r * 1.7} ry={r * 1.7 * TILT} strokeWidth={r * 0.28} />
-        <circle r={r * 0.8} fill="#000" />
-        <circle className="photon" r={r * 0.86} strokeWidth={r * 0.08} />
+        <Hole r={r} />
       </g>
     );
   }
