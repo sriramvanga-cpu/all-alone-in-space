@@ -59,7 +59,7 @@ function makeArrowCard(rng = Math.random) {
 export const FUEL_ROUNDS = Object.freeze(
   [
     { id: "valve", title: "Pressure valve", how: "Tap Vent while the needle is in the green.", per: 2 },
-    { id: "log", title: "Flight log", how: "Watch the arrows, then tap them back in order, or use the arrow keys.", per: 1 },
+    { id: "reactor", title: "Reactor tap", how: "Tap the overheating cell to vent it, or press its number. Cold cells are a miss.", per: 4 },
     { id: "ink", title: "Colour clash", how: "Pick the colour of the ink, not the word.", per: 2, make: makeInkCard },
     { id: "rocks", title: "Asteroid tap", how: "Tap or drag across the asteroids as they fly past, or press Space to hit the leading one.", per: 4 },
     { id: "tank", title: "Fullest tank", how: "Pick the fullest tank.", per: 2, make: makeTankCard },

@@ -1038,21 +1038,70 @@ button.ghost.admin-toggle {
   to { opacity: 1; transform: scale(1); }
 }
 
-.log-screen {
+/* Reactor tap: nine fuel cells, one overheating at a time. */
+.reactor-core {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  width: min(100%, 16rem);
+  margin: 0.8rem auto 0;
+  padding: 0.8rem;
+  background: radial-gradient(circle at 50% 50%, rgba(40, 100, 140, 0.35), rgba(5, 9, 20, 0.8));
+  border: 1px solid rgba(123, 224, 255, 0.35);
+  border-radius: var(--radius-lg);
+  touch-action: manipulation;
+  user-select: none;
+}
+button.ghost.reactor-cell {
+  position: relative;
   display: grid;
   place-items: center;
-  height: 6rem;
-  margin: 0.6rem 0;
-  font: 700 3.6rem/1 var(--font-display);
-  color: var(--accent);
-  text-shadow: 0 0 22px rgba(90, 209, 255, 0.7);
-  background: rgba(5, 9, 20, 0.55);
-  border: 1px solid var(--glass-line);
-  border-radius: var(--radius-md);
+  aspect-ratio: 1;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  background: rgba(8, 16, 34, 0.85);
+  border-color: rgba(123, 224, 255, 0.25);
 }
-.log-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; }
-.log-keys button { min-height: 4rem; font-size: 1.8rem; }
-.log-keys button[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+button.ghost.reactor-cell.hot {
+  border-color: #ff8a3a;
+  box-shadow: 0 0 22px rgba(255, 120, 40, 0.55), inset 0 0 18px rgba(255, 90, 30, 0.35);
+}
+.reactor-rod {
+  width: 24%;
+  height: 62%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #9fe7ff, #2a7bbf);
+  box-shadow: 0 0 10px rgba(123, 224, 255, 0.45);
+}
+.reactor-cell.hot .reactor-rod {
+  background: linear-gradient(180deg, #fff1c2, #ff7a2a 55%, #c2261a);
+  box-shadow: 0 0 22px rgba(255, 130, 50, 0.95);
+  animation: overheat 0.3s ease-in-out infinite alternate;
+}
+/* The heat bar drains over the flare's life: vent it before it's gone. */
+.reactor-cell.hot::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 9%;
+  height: 4px;
+  border-radius: 2px;
+  background: #ff8a3a;
+  transform-origin: left;
+  animation: drain var(--life) linear forwards;
+}
+.reactor-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(170, 240, 255, 0.9) 0 18%, rgba(90, 209, 255, 0.4) 40%, transparent 70%);
+  animation: boom 0.4s ease-out forwards;
+}
+.reactor-burst.miss { background: radial-gradient(circle, rgba(255, 122, 138, 0.75) 0 25%, transparent 70%); }
+@keyframes overheat { to { transform: scaleX(1.12); filter: brightness(1.25); } }
+@keyframes drain { to { transform: scaleX(0); } }
 
 .rocks {
   position: relative;
@@ -1758,7 +1807,7 @@ button.ghost.admin-toggle {
   .streak, .link-flow, .ready-ring, .beacon-pulse, .navlight, .plume, .exhaust, .end-orb, .live::before,
   .scan-btn, .node.system, .sun .star-glow, .sun .surface, .gate-core, .gate-spin, .sweep, .star .rays, .star .beams, .star .pair,
   .starbase .spin, .starbase .core, .reading, .scan-bar i, .pod, .pod.p1::before, .pod .rank::after,
-  .board-empty, .board-empty-art .planet-art-box, .board-ship {
+  .board-empty, .board-empty-art .planet-art-box, .board-ship, .reactor-cell.hot .reactor-rod {
     animation: none !important;
   }
 }

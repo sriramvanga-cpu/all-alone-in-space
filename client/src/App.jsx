@@ -1652,87 +1652,92 @@ function Valve({ onMark }) {
   );
 }
 
-const LOG_DIRS = [
-  ["←", "Left"],
-  ["↑", "Up"],
-  ["↓", "Down"],
-  ["→", "Right"],
-];
+// Reactor tap: one of nine fuel cells overheats at a time, with a heat bar draining. Tap it (or press
+// its number) to vent it before it cools off on its own; a missed flare costs nothing, but a cold cell
+// tapped is a miss. Each vent shortens the next flare a little, down to a floor, like the valve
+// speeding up. About one vent a second keeps the pay close to the other rounds'.
+const REACTOR_CELLS = 9;
+const FLARE_MS = 1300;
+const FLARE_MIN_MS = 750;
+const FLARE_GAP_MS = 250;
 
-// Simon-style: arrows flash one at a time, then tap them back in order. The log grows by one after a
-// success (up to 4) and shrinks by one after a mistake (down to 3). Short logs keep the pay close to
-// the other rounds'.
-function FlightLog({ onMark }) {
-  const [seq, setSeq] = useState(() => logOf(3));
-  const [lit, setLit] = useState(-1);
-  const [watching, setWatching] = useState(true);
-  const [last, setLast] = useState(null);
-  const [got, setGot] = useState(0);
-  const pos = useRef(0);
+function ReactorTap({ onMark }) {
+  const [hot, setHot] = useState(-1);
+  const [burst, setBurst] = useState(null);
+  const hotRef = useRef(-1);
+  const lastRef = useRef(-1);
+  const life = useRef(FLARE_MS);
+  const timer = useRef(0);
 
-  useEffect(() => {
-    pos.current = 0;
-    setGot(0);
-    setWatching(true);
-    const timers = seq.flatMap((dir, i) => [
-      setTimeout(() => setLit(dir), 500 + i * 500),
-      setTimeout(() => setLit(-1), 500 + i * 500 + 350),
-    ]);
-    timers.push(setTimeout(() => setWatching(false), 500 + seq.length * 500));
-    return () => timers.forEach(clearTimeout);
-  }, [seq]);
-
-  function press(dir) {
-    if (watching) return;
-    if (dir !== seq[pos.current]) {
-      onMark("wrong");
-      setLast("wrong");
-      setSeq(logOf(Math.max(3, seq.length - 1)));
-      return;
-    }
-    pos.current += 1;
-    setGot(pos.current);
-    if (pos.current === seq.length) {
-      onMark("right");
-      setLast("right");
-      setSeq(logOf(Math.min(4, seq.length + 1)));
-    }
+  // After `after` ms a different cell flares; if nobody vents it, it cools and the next one follows.
+  function flare(after) {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      let next = lastRef.current;
+      while (next === lastRef.current) next = Math.floor(Math.random() * REACTOR_CELLS);
+      lastRef.current = next;
+      hotRef.current = next;
+      setHot(next);
+      timer.current = setTimeout(() => {
+        hotRef.current = -1;
+        setHot(-1);
+        flare(FLARE_GAP_MS);
+      }, life.current);
+    }, after);
   }
 
-  // The keyboard's arrow keys work like the buttons, in LOG_DIRS order.
   useEffect(() => {
-    const keys = { ArrowLeft: 0, ArrowUp: 1, ArrowDown: 2, ArrowRight: 3 };
+    flare(600);
+    return () => clearTimeout(timer.current);
+  }, []);
+
+  function tap(cell) {
+    const hit = cell === hotRef.current;
+    onMark(hit ? "right" : "wrong");
+    setBurst((b) => ({ cell, hit, n: (b?.n ?? 0) + 1 }));
+    if (!hit) return;
+    life.current = Math.max(FLARE_MIN_MS, life.current * 0.95);
+    hotRef.current = -1;
+    setHot(-1);
+    flare(FLARE_GAP_MS);
+  }
+
+  // Keys 1 to 9 tap the cells, left to right and top to bottom.
+  const tapRef = useRef(tap);
+  tapRef.current = tap;
+  useEffect(() => {
     const onKey = (e) => {
-      if (!(e.key in keys)) return;
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-9]$/.test(e.key)) return;
       e.preventDefault();
-      if (!e.repeat) press(keys[e.key]);
+      tapRef.current(Number(e.key) - 1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [watching, seq]);
+  }, []);
 
-  const status = watching
-    ? last === "wrong" ? "Wrong log. Watch again." : "Watch the arrows."
-    : `Your turn: ${got} of ${seq.length}.`;
   return (
-    <div className="log">
-      <p className="hint" aria-live="polite">{status}</p>
-      <p className="log-screen" aria-hidden="true">
-        {lit >= 0 ? LOG_DIRS[lit][0] : ""}
-      </p>
-      <div className="log-keys">
-        {LOG_DIRS.map(([arrow, name], i) => (
-          <button key={name} type="button" className="ghost" aria-label={name} aria-disabled={watching} onClick={() => press(i)}>
-            {arrow}
-          </button>
-        ))}
-      </div>
+    <div className="reactor-core" role="group" aria-label="Reactor cells">
+      {Array.from({ length: REACTOR_CELLS }, (_, i) => (
+        <button
+          key={i}
+          type="button"
+          className={i === hot ? "ghost reactor-cell hot" : "ghost reactor-cell"}
+          style={i === hot ? { "--life": `${life.current}ms` } : undefined}
+          aria-label={i === hot ? `Cell ${i + 1}, overheating` : `Cell ${i + 1}`}
+          // Judge the press, not the release, like the valve.
+          onPointerDown={(e) => e.button === 0 && tap(i)}
+          onKeyDown={(e) => {
+            if (e.key !== " " && e.key !== "Enter") return;
+            e.preventDefault();
+            if (!e.repeat) tap(i);
+          }}
+        >
+          <span className="reactor-rod" aria-hidden="true" />
+          {burst?.cell === i ? <span key={burst.n} className={burst.hit ? "reactor-burst" : "reactor-burst miss"} aria-hidden="true" /> : null}
+        </button>
+      ))}
     </div>
   );
-}
-
-function logOf(length) {
-  return Array.from({ length }, () => Math.floor(Math.random() * LOG_DIRS.length));
 }
 
 // Asteroids drift across a scanner screen; tap one to blast it. A miss costs nothing, but the cannon
@@ -1840,7 +1845,7 @@ function AsteroidTap({ onMark }) {
   );
 }
 
-const FUEL_GAMES = { valve: Valve, log: FlightLog, rocks: AsteroidTap };
+const FUEL_GAMES = { valve: Valve, reactor: ReactorTap, rocks: AsteroidTap };
 
 const DOMAIN_ICONS = { general: GlobeIcon, mental: BrainIcon, technology: ChipIcon };
 
