@@ -52,7 +52,7 @@ Fuel and power pills are hidden while jumping. Closed planets stay closed.
 
 ### Questions
 
-**Show answers: on / off** marks the right choice with a gold border and an "Answer" tag. This works on landing questions and on the four fuel games that use choice cards: Colour clash, Fullest tank, Flight path and Element check.
+**Show answers: on / off** marks the right choice with a gold border and an "Answer" tag. This works on landing questions and on the six fuel games that use choice cards: Colour clash, Fullest tank, Flight path, Element check, Planet order and Biggest world.
 
 ### Next flight event
 
@@ -67,7 +67,7 @@ Pick one of the five flight events, or **By chance** for the normal random event
 
 Every fuel stop in an admin run opens with a **fuel game picker** above the game:
 
-- **Pick any of the seven games** to start a fresh minute of it. Picking the game that's already playing restarts it.
+- **Pick any of the nine games** to start a fresh minute of it. Picking the game that's already playing restarts it.
 - **Leave fuel stop** goes straight back to the system map, skipping the rest of the minute and the shop.
 
 ## After a habitable landing

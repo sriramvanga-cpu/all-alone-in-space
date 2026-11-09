@@ -36,7 +36,7 @@ The game is a single-page React app built with Vite. The scores API is two small
 | `client/src/game/rules.js` | Every rule and number, as pure functions: costs, landing odds, points, ranking, the shop, the fuel price. |
 | `client/src/game/rules.test.js` | Tests for the rules, the star chart, the fuel games, the flight events and the question bank. |
 | `client/src/game/map.js` | The star chart: systems, lanes, planets, orbits and names. |
-| `client/src/game/fuelRounds.js` | The seven fuel games' settings, and the card makers for the games that use choice cards. |
+| `client/src/game/fuelRounds.js` | The nine fuel games' settings, and the card makers for the games that use choice cards. |
 | `client/src/game/events.js` | The flight events. |
 | `client/src/data/questions.json` | The question bank. |
 | `client/src/intro/` | The intro film: `Intro.jsx` picks the 3D film (`Intro3D.jsx`) or the 2D fallback (`ClassicIntro.jsx`, drawn by `draw.js` and `space.js`). `HowTo.jsx` is the How to play reel, and the clips the tips loop. |

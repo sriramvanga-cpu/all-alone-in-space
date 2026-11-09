@@ -65,17 +65,19 @@ The sun's type (yellow star, red giant, black hole, and so on) is only for looks
 
 ## Fuel stops (planets with a drop)
 
-Landing at a fuel stop starts a **fuel minute**: one minute of a quick game that earns credits. There are seven games, and each pilot gets them in their own shuffled order.
+Landing at a fuel stop starts a **fuel minute**: one minute of a quick game that earns credits. There are nine games, and each pilot gets them in their own shuffled order.
 
 | Game | What you do | Credits |
 |---|---|---|
 | Pressure valve | Tap Vent while the needle is in the green | 1 for every 2 |
-| Flight log | Watch the arrows, then tap them back in order (or use the arrow keys) | 1 each |
+| Reactor tap | Tap the overheating reactor cell to vent it (or press its number, 1 to 9). A cold cell is a miss | 1 for every 4 |
 | Colour clash | Pick the colour of the ink, not the word | 1 for every 2 |
 | Asteroid tap | Tap or drag across the asteroids (or press Space) | 1 for every 4 |
 | Fullest tank | Pick the fullest tank | 1 for every 2 |
 | Flight path | Which way does the middle arrow point? | 1 for every 3 |
 | Element check | Name the element from its symbol | 1 each |
+| Planet order | Going out from the Sun, pick the planet that fills the gap ("Mars → ?") | 1 for every 2 |
+| Biggest world | Pick the biggest of four worlds | 1 for every 2 |
 
 Every **5 right in a row** earns a bonus credit. If more than 1 in 10 of your answers are wrong, fuel usually gets more expensive. Colour clash has a "Swap round" button for anyone who can't tell colours apart.
 
@@ -129,7 +131,7 @@ Finished runs appear on the display board (`/board`) within a few seconds. Every
 ## Controls and accessibility
 
 - Questions and choice cards: tap, or press **A to D** or **1 to 4**.
-- Flight log: the **arrow keys**. Asteroid tap: **Space** hits the leading asteroid.
+- Reactor tap: keys **1 to 9** tap the cells. Asteroid tap: **Space** hits the leading asteroid.
 - **Escape** skips the intro film and the How to play reel.
 - First-time tips explain each part of the game with a short clip, and the clock waits while a tip is open.
 - With reduced motion turned on, the intro film is skipped, the How to play reel shows still frames, and Asteroid tap is left out of the fuel games.

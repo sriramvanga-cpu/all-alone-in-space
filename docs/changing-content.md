@@ -48,7 +48,7 @@ The fuel games are listed in `FUEL_ROUNDS` in `client/src/game/fuelRounds.js`:
 
 When adding or removing a game:
 
-- Update the count in the test "seven different fuel rounds".
+- Update the count in the test "nine different fuel rounds".
 - Update the games table in [Playing Nova Grid](playing.md).
 
 The admin panel's fuel game picker lists `FUEL_ROUNDS` by itself.
