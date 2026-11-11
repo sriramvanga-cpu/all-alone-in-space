@@ -2030,14 +2030,16 @@ function Game() {
     else setReplay(kind);
   }
 
-  function finish(reason) {
+  // `at` is when the run stopped: a landing that settles stops it the moment Land was pressed, though its readings
+  // and the win come a few seconds later, so those seconds cost no points.
+  function finish(reason, at = Date.now()) {
     if (game.current.phase === "end") return;
     sfx(reason === "win" ? "win" : "lose");
     commit({
       phase: "end",
       endReason: reason,
       flight: null,
-      stoppedAt: Date.now(),
+      stoppedAt: at,
     });
   }
 
@@ -2273,21 +2275,15 @@ function Game() {
     const first = site();
     const second = scanned && !first;
     const won = first || (second && site());
+    // Every landing goes on to the readings. If it settled, a real run ends when they come back habitable (the Scan
+    // screen says so), counting from now; a cheat run chooses there between settling and flying on.
     const scan = {
       world: g.here,
       readings: scanReadings(won),
       note: second ? "Site 1 was toxic, so the scanner checked a second site." : scanned ? "Scanned from orbit." : "Landed blind.",
+      at: Date.now(),
+      won,
     };
-    if (won) {
-      // A cheat run chooses: settle here and end the run, or keep flying to test more.
-      if (g.cheat) {
-        commit({ power, closed: [...g.closed, g.here], phase: "scan", scan: { ...scan, won: true }, landing: null });
-        return;
-      }
-      game.current = { ...g, power, scan, landing: null };
-      finish("win");
-      return;
-    }
     commit({ power, closed: [...g.closed, g.here], phase: "scan", scan, landing: null });
   }
 
@@ -2443,6 +2439,8 @@ function Game() {
   useEffect(() => {
     const g = game.current;
     if (!g.deadline || g.phase === "end" || g.phase === "name" || g.phase === "intro" || tip) return;
+    // A landing that settled keeps its win however long its readings take: the Scan screen ends the run.
+    if (g.phase === "scan" && g.scan?.won && !g.cheat) return;
     const left = g.deadline - Date.now();
     if (left <= 0) {
       finish("time");
@@ -2901,7 +2899,12 @@ function Game() {
         ) : null}
 
         {snap.phase === "scan" && snap.scan ? (
-          <Scan scan={snap.scan} habitable={Boolean(snap.scan.won)} onDone={leaveScan} onSettle={snap.scan.won ? settle : undefined} />
+          <Scan
+            scan={snap.scan}
+            onDone={snap.scan.won && !snap.cheat ? undefined : leaveScan}
+            onSettle={snap.cheat && snap.scan.won ? settle : undefined}
+            onVerdict={!snap.cheat && snap.scan.won ? () => finish("win", snap.scan.at) : undefined}
+          />
         ) : null}
 
         {snap.phase === "fuel" && snap.fuelRound && !tip ? (
@@ -3014,7 +3017,7 @@ function EndScreen({ snap }) {
   return (
     <>
     {facts.settled ? <Celebration /> : null}
-    {facts.settled && snap.scan ? <Scan scan={snap.scan} habitable /> : null}
+    {facts.settled && snap.scan ? <Scan scan={snap.scan} instant /> : null}
     <section className={facts.settled ? "panel wide end won" : "panel wide end lost"}>
       <div className="end-hero">
         {facts.settled ? (
@@ -3126,12 +3129,15 @@ function CountUp({ value, ms = 1200 }) {
 
 const SCAN_STEP_MS = 450;
 
-// `onSettle` (cheat mode, a habitable world) offers settling here or flying on; otherwise `onDone`
-// returns to the map.
-function Scan({ scan, habitable = false, onDone, onSettle }) {
-  const [done, setDone] = useState(false);
+// `onSettle` (cheat mode, a habitable world) offers settling here or flying on; `onVerdict` (a real run that
+// settled) is called when the readings are all in and say habitable; otherwise `onDone` returns to the map.
+function Scan({ scan, onDone, onSettle, onVerdict, instant = false }) {
+  const habitable = Boolean(scan.won);
+  const [done, setDone] = useState(instant);
   const revealMs = (scan.readings.length + 1) * SCAN_STEP_MS;
   useEffect(() => {
+    // The win screen shows the readings again at once, with no blips or verdict to wait for.
+    if (instant) return undefined;
     // A blip as each reading comes in, then the buzz of a toxic verdict (a win has its own chime).
     const ids = scan.readings.map((_, i) => setTimeout(() => sfx("reading"), (i + 1) * SCAN_STEP_MS));
     ids.push(
@@ -3139,12 +3145,13 @@ function Scan({ scan, habitable = false, onDone, onSettle }) {
         setDone(true);
         if (!habitable) sfx("toxic");
         else if (onSettle) sfx("right");
+        onVerdict?.();
       }, revealMs),
     );
     return () => ids.forEach(clearTimeout);
   }, [revealMs]);
   return (
-    <section className="panel wide scan">
+    <section className={instant ? "panel wide scan instant" : "panel wide scan"}>
       <p className="eyebrow">{scan.world}</p>
       <h1>Scientific readings</h1>
       <p className="hint">{scan.note} {done ? "Scan complete." : "Scanning the surface…"}</p>

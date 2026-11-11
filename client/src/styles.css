@@ -1526,6 +1526,8 @@ button.ghost.reactor-cell.hot {
 .scan-bar i { display: block; height: 100%; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: scanfill linear both; }
 @keyframes scanfill { from { width: 0; } to { width: 100%; } }
 .reading { animation: rise 0.4s var(--ease) both; }
+/* The win screen shows the readings again at once. */
+.scan.instant .reading, .scan.instant .scan-bar i { animation: none; }
 .verdict { margin: 0.4rem 0 0; font: 700 var(--text-lg) var(--font-display); }
 .verdict.yes { color: var(--ok); }
 .verdict.no { color: var(--danger); }
