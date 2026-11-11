@@ -229,7 +229,8 @@ function startLanding(el, face, tex, calls, landing) {
     shuttle.group.add(flame);
     return flame;
   });
-  const pad = glowSprite("#ffd9a0", 0.2);
+  const pad = glowSprite("#ffd9a0", 0.1);
+  pad.material.opacity = 0.5;
   scene.add(pad);
 
   // The scan ring: a cap of the planet's skin round the landing spot, lit as a thin ring that grows and fades.
@@ -309,7 +310,7 @@ function startLanding(el, face, tex, calls, landing) {
     const thrust = since < 0 ? 1 : Math.max(0, 1 - since / 500);
     animateShuttle(shuttle, thrust, now / 1000);
     for (const flame of flames) flame.scale.setScalar(0.05 + 0.5 * thrust);
-    pad.scale.setScalar(0.2 * smooth(0.6, 1, u) * thrust + 0.001);
+    pad.scale.setScalar(0.1 * smooth(0.6, 1, u) * thrust + 0.001);
 
     // The scan ring pulses out from the landing spot while the readings come in.
     const pulse = now - endAt;
