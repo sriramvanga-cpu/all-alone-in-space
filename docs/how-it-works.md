@@ -40,8 +40,8 @@ The game is a single-page React app built with Vite. The scores API is two small
 | `client/src/game/events.js` | The flight events. |
 | `client/src/data/questions.json` | The question bank. |
 | `client/src/intro/` | The intro film: `Intro.jsx` picks the 3D film (`Intro3D.jsx`) or the 2D fallback (`ClassicIntro.jsx`, drawn by `draw.js` and `space.js`). `HowTo.jsx` is the How to play reel, and the clips the tips loop. |
-| `client/src/three/` | three.js: `sprites.js` renders the map art, `artStore.js` hands it to React, `models.js` builds the ships and station, and `planetMaterial.js`, `glsl.js`, `particles.js`, `post.js` and `assets.js` support the renders and the film. |
-| `client/src/art/` | Vector art: stars, planets, the ship, the station, icons, the space backdrop and the warp tunnel. |
+| `client/src/three/` | three.js: `sprites.js` renders the map art (and builds planets for the live views), `artStore.js` hands it to React, `PlanetView.jsx` is the live planet with the ship circling it and the landing film, `models.js` builds the ships and station, and `planetMaterial.js`, `glsl.js`, `particles.js`, `post.js` and `assets.js` support the renders and the films. |
+| `client/src/art/` | Vector art: stars, planets, the ship, the station, icons, the space backdrop and the warp tunnel. `sky.js` holds the seeded maths for a system's asteroid belt, moons and comets (with a test), and `rng.js` the seeded random numbers. |
 | `client/src/sound.js` | Every sound effect and the engine hum, synthesized with Web Audio. |
 | `client/api/` | The scores API: `scores.js` (save a run), `leaderboard.js` (read the board) and `store.js` (database connection, table setup, input checks). |
 | `client/public/textures/` | Planet textures and the sky panorama. |
@@ -86,14 +86,14 @@ stateDiagram-v2
   shop --> map: leave
   pick --> question: choose a topic
   question --> land: answer or time out
-  land --> scan: toxic
-  scan --> map: return to the map
-  land --> over: the landing settles
+  land --> scan: land blind or scan first
+  scan --> over: habitable, in a real run
+  scan --> map: toxic, or Keep flying in an admin run
   map --> over: stranded
   over --> [*]: Next pilot reloads
 ```
 
-Any phase of the run can also end in `end` when the clock runs out. In an admin run, a landing that settles goes to `scan` instead, which offers **Settle here** (to `end`) or **Keep flying** (to `map`).
+Any phase of the run can also end in `end` when the clock runs out, except a landing that settled: the clock can't take that win away while its readings show. Every landing goes to `scan`: a landing film (2.6 s, `DESCENT_MS`) when WebGL and motion allow, then the readings one by one. When they come back habitable, a real run ends (`finish("win", scan.at)` counts the time from the moment Land was pressed, so the film and the readings cost no points), and an admin run is offered **Settle here** (to `end`) or **Keep flying** (to `map`). A toxic landing returns to `map` with its 30 s taken off, and the film's seconds handed back.
 
 ### Timers
 
@@ -129,6 +129,8 @@ The admin panel's switches live in `g.admin`, and each is read in one place:
 ## Rendered art
 
 When the page loads, if WebGL is available, `renderMapArt()` in `three/sprites.js` renders every planet, each kind of star, the black hole, the asteroids, the ship and the station once with three.js, and turns them into images. `artStore.js` publishes the images, and components read them with `useArt()`. Until they're ready, or without WebGL, the maps use the vector art in `client/src/art/`.
+
+Some screens also run a live three.js view (`three/PlanetView.jsx`), in a transparent canvas over the still picture, which stays under it until the first frame: the screens at a world show the planet turning with the ship circling it, and the landing film (`mode="landing"`) is a full-screen layer behind the Scan and win screens. The film follows the wall clock from `scan.at`, so it needs no state from the screens over it, and its sky, haze and scan ring follow the verdict's time. Phones keep the still pictures for the world screens, and nothing live runs under reduced motion or without WebGL. Cards for the Biggest world and Planet order games use `art.worlds`, pictures of twelve worlds rendered by `renderWorlds()` in `sprites.js`.
 
 The 3D intro film is a live three.js scene in one continuous camera move. Its timeline constants and captions are at the top of `Intro3D.jsx`. If WebGL is missing or the textures take more than 9 seconds, it falls back to the 2D film. Under reduced motion, both are skipped.
 

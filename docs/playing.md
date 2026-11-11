@@ -8,11 +8,11 @@ Vulcan's core collapsed, and the planet broke apart. You captain the last starsh
 
 ## The goal
 
-**Land on a habitable world before the 15-minute clock runs out.** You win the moment a landing settles. Your score is:
+**Land on a habitable world before the 15-minute clock runs out.** You win when a landing settles, which is when its readings come back habitable. Your score is:
 
 > **Points = fuel left + 1 point for every 10 seconds left**
 
-So a pilot who lands with 10 fuel and 4:10 on the clock scores 10 + 25 = **35 points**.
+So a pilot who lands with 10 fuel and 4:10 on the clock scores 10 + 25 = **35 points**. The clock stops the moment you press Land, so the landing film and the readings that follow cost no points.
 
 You lose if the clock runs out, or if you're **stranded**: you can't afford any lane out, and there's no planet left to try where you are.
 
@@ -29,7 +29,7 @@ You lose if the clock runs out, or if you're **stranded**: you can't afford any 
 | Fuel | Pays for flying lanes between solar systems. You start with 10. |
 | Power | Pays for scans and for hops between planets. You start with 10. |
 | Credits | Earned at fuel stops and from right answers. Spent in the shop. |
-| Clock | Time left. It starts at 15:00 and turns urgent under 2 minutes. |
+| Clock | Time left. It starts at 15:00 and turns urgent under 2 minutes: the screen edges glow red and frost over, and pulse faster in the last 30 seconds. |
 | Points if you land | What you'd score if a landing settled right now. |
 
 ## The star map
@@ -61,7 +61,7 @@ Planets circle the sun. **Tap a planet to hop there.** A hop costs power by how 
 
 Power recharges while you're in a system: 1 every 20 seconds, up to 10. To leave, use the **Star map** button under the jump point.
 
-The sun's type (yellow star, red giant, black hole, and so on) is only for looks; every system plays the same.
+The sun's type (yellow star, red giant, black hole, and so on) is only for looks; every system plays the same. So are the extras: some systems have an asteroid belt between two orbits, some planets have a moon or two, and a comet crosses now and then.
 
 ## Fuel stops (planets with a drop)
 
@@ -69,15 +69,15 @@ Landing at a fuel stop starts a **fuel minute**: one minute of a quick game that
 
 | Game | What you do | Credits |
 |---|---|---|
-| Pressure valve | Tap Vent while the needle is in the green | 1 for every 2 |
+| Pressure valve | Tap Vent while the needle on the round gauge is in the green zone | 1 for every 2 |
 | Reactor tap | Tap the overheating reactor cell to vent it (or press its number, 1 to 9). A cold cell is a miss | 1 for every 4 |
 | Colour clash | Pick the colour of the ink, not the word | 1 for every 2 |
 | Asteroid tap | Tap or drag across the asteroids (or press Space) | 1 for every 4 |
 | Fullest tank | Pick the fullest tank | 1 for every 2 |
 | Flight path | Which way does the middle arrow point? | 1 for every 3 |
 | Element check | Name the element from its symbol | 1 each |
-| Planet order | Going out from the Sun, pick the planet that fills the gap ("Mars → ?") | 1 for every 2 |
-| Biggest world | Pick the biggest of four worlds | 1 for every 2 |
+| Planet order | Going out from the Sun, pick the planet that fills the gap ("Mars → ?"). A row shows the Sun and a slot for each planet, with one planet pictured and the gap glowing | 1 for every 2 |
+| Biggest world | Pick the biggest of four pictured worlds (all drawn at one size) | 1 for every 2 |
 
 Every **5 right in a row** earns a bonus credit. If more than 1 in 10 of your answers are wrong, fuel usually gets more expensive. Colour clash has a "Swap round" button for anyone who can't tell colours apart.
 
@@ -113,7 +113,7 @@ Each fuel stop can only be visited once.
 4. **Choose how to land:**
    - **Land blind** (free): one landing site, one chance.
    - **Scan first** (1 power): if the first site is toxic, the scanner tries a second one.
-5. **The readings** come in. If the toxic elements are within the safe limit, the world is **habitable and you win**. If not, the failed landing costs **30 seconds**, and you can't try that planet again.
+5. **The landing.** A 2.6 second film plays: the shuttle drops from orbit to the ground. Then the readings come in one by one, while a scan ring pulses across the ground. If the toxic elements are within the safe limit, the world is **habitable**: the sky turns green and you win. If not, the sky turns to red smog, the failed landing costs **30 seconds** (the film's own time is given back), and you can't try that planet again.
 
 ## Strategy
 
@@ -134,5 +134,5 @@ Finished runs appear on the display board (`/board`) within a few seconds. Every
 - Reactor tap: keys **1 to 9** tap the cells. Asteroid tap: **Space** hits the leading asteroid.
 - **Escape** skips the intro film and the How to play reel.
 - First-time tips explain each part of the game with a short clip, and the clock waits while a tip is open.
-- With reduced motion turned on, the intro film is skipped, the How to play reel shows still frames, and Asteroid tap is left out of the fuel games.
+- With reduced motion turned on, the intro film is skipped, the How to play reel shows still frames, and Asteroid tap is left out of the fuel games. The landing film, the live planets, comets, shooting stars and the low-air pulse are left out too, and the loss pictures hold still. Phones keep the still planet pictures.
 - The **Sound** button (bottom right) turns sound on and off, and the game remembers the choice.

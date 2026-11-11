@@ -43,7 +43,7 @@ The fuel games are listed in `FUEL_ROUNDS` in `client/src/game/fuelRounds.js`:
 
 - **`title`** and **`how`** show above the game.
 - **`per`** is how many right answers earn one credit. It evens out fast and slow games, so a typical player earns about 13 credits a minute.
-- **A choice-card game** has a `make(rng)` function that returns a card: `{ prompt, choices, answer }`, with exactly four different choices. Optional fields: `ink` (a colour for the prompt) and `gauge: true` (draws the choices as tank gauges).
+- **A choice-card game** has a `make(rng)` function that returns a card: `{ prompt, choices, answer }`, with exactly four different choices. Optional fields: `ink` (a colour for the prompt), `gauge: true` (draws the choices as tank gauges), `worlds: true` (draws the choices as pictures of famous worlds) and `row: { shown, at, gap }` (the Planet order row: the shown planet's place and the gap's place in `PLANET_ORDER`). A world that appears on a `worlds` card needs a look in `WORLD_LOOKS` in `client/src/three/sprites.js`, and a radius in `WORLD_RADII` if it's one for Biggest world.
 - **An interactive game** has no `make`. It's a component in `App.jsx` that takes `{ onMark }` and calls `onMark("right")`, `onMark("wrong")` or `onMark("skip")` for each try. Register it in `FUEL_GAMES` under the same `id`.
 
 When adding or removing a game:

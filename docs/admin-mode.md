@@ -72,7 +72,7 @@ Every fuel stop in an admin run opens with a **fuel game picker** above the game
 
 ## After a habitable landing
 
-A normal run ends the moment a landing settles. An admin run keeps the habitable readings on screen and offers a choice:
+A normal run ends when a landing's readings come back habitable, and its score counts from the moment Land was pressed. An admin run keeps the habitable readings on screen and offers a choice:
 
 - **Settle here** ends the run with the win and its end screen.
 - **Keep flying** goes back to the map with the run still going. That planet is closed, as after any landing.
