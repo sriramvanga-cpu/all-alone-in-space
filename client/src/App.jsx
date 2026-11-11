@@ -27,7 +27,7 @@ import {
   MAP_SCAN_POWER,
   hopPower,
 } from "./game/rules.js";
-import { FUEL_ROUNDS } from "./game/fuelRounds.js";
+import { FUEL_ROUNDS, PLANET_ORDER } from "./game/fuelRounds.js";
 import { EVENT_CHANCE, FLIGHT_EVENTS, canTake } from "./game/events.js";
 import { engine, sfx, isMuted, setMuted } from "./sound.js";
 import {
@@ -1557,7 +1557,7 @@ function Shop({ result, credits, fuel, power, world, exitFare, stuck, onBuy, onL
 }
 
 // `answer`, from the admin panel, marks the right choice.
-function ChoiceButtons({ choices, onPick, answer, render = (choice) => <span>{choice}</span> }) {
+function ChoiceButtons({ choices, onPick, answer, pictures = false, render = (choice) => <span>{choice}</span> }) {
   // The next card appears under the pointer, so a double click would answer a card nobody read.
   const shownAt = useRef(0);
   const pickRef = useRef(null);
@@ -1582,7 +1582,7 @@ function ChoiceButtons({ choices, onPick, answer, render = (choice) => <span>{ch
     return () => window.removeEventListener("keydown", onKey);
   }, [choices]);
   return (
-    <div className="choices">
+    <div className={pictures ? "choices world-cards" : "choices"}>
       {choices.map((choice, i) => (
         <button
           key={choice}
@@ -1595,6 +1595,45 @@ function ChoiceButtons({ choices, onPick, answer, render = (choice) => <span>{ch
           </span>
           {render(choice)}
         </button>
+      ))}
+    </div>
+  );
+}
+
+// A famous world as a choice: its picture over its name (the name alone if the picture hasn't rendered yet).
+function World({ name, art }) {
+  const url = art.worlds.get(name);
+  return (
+    <span className="world">
+      {url ? <img src={url} alt="" /> : null}
+      <b>{name}</b>
+    </span>
+  );
+}
+
+// The Planet order card as a row: the Sun, then a slot for each planet going out from it. The shown planet is
+// pictured and named in its slot and the gap glows with a "?"; the other slots stay empty, so the row can't be
+// solved by elimination.
+function OrderRow({ row, art }) {
+  const url = art.worlds.get(row.shown);
+  return (
+    <div
+      className="order-row"
+      role="img"
+      aria-label={`Going out from the Sun, ${row.shown} is planet number ${row.at + 1}. Which planet is number ${row.gap + 1}?`}
+    >
+      <span className="order-sun" />
+      {PLANET_ORDER.map((name, i) => (
+        <span key={name} className={i === row.at ? "order-slot shown" : i === row.gap ? "order-slot gap" : "order-slot"}>
+          {i === row.at ? (
+            <>
+              {url ? <img src={url} alt="" /> : null}
+              <small>{row.shown}</small>
+            </>
+          ) : i === row.gap ? (
+            "?"
+          ) : null}
+        </span>
       ))}
     </div>
   );
@@ -1901,6 +1940,7 @@ function Game() {
   const [flyFuel, setFlyFuel] = useState(null);
   // The admin panel can play the intro film or the How to play reel again mid-run.
   const [replay, setReplay] = useState(null);
+  const art = useArt();
   const [view, setView] = useState(() => {
     const w = 520;
     const h = w * (VIEW_H / VIEW_W);
@@ -2589,6 +2629,8 @@ function Game() {
         : "Scan to find the solar systems around you.";
   const domainLabel = DOMAINS.find((d) => d[0] === snap.domain)?.[1] || "";
   const fuelCard = snap.fuelDeck[snap.fuelIndex] ?? null;
+  // Cards that ask for pictures show them once the worlds have rendered, and fall back to words until then.
+  const pictured = Boolean(fuelCard?.worlds) && art.worlds.size > 0;
   const FuelGame = snap.fuelRound && FUEL_GAMES[snap.fuelRound.id];
   const qMs = Math.max(0, snap.qDeadline - now);
   const fuelMs = Math.max(0, snap.fuelDeadline - now);
@@ -2864,7 +2906,9 @@ function Game() {
               <FuelGame key={`${snap.here}-${snap.fuelDeadline}`} onMark={markFuel} />
             ) : fuelCard ? (
               <>
-                {fuelCard.prompt ? (
+                {pictured && fuelCard.row ? (
+                  <OrderRow row={fuelCard.row} art={art} />
+                ) : fuelCard.prompt ? (
                   <p className="prompt" style={fuelCard.ink ? { color: fuelCard.ink } : undefined}>
                     {fuelCard.prompt}
                   </p>
@@ -2872,7 +2916,14 @@ function Game() {
                 <ChoiceButtons
                   choices={fuelCard.choices}
                   answer={snap.cheat && snap.admin.answers ? fuelCard.answer : undefined}
-                  render={fuelCard.gauge ? (level) => <span className="gauge"><i style={{ width: `${level}%` }} /></span> : undefined}
+                  pictures={pictured}
+                  render={
+                    pictured
+                      ? (name) => <World name={name} art={art} />
+                      : fuelCard.gauge
+                        ? (level) => <span className="gauge"><i style={{ width: `${level}%` }} /></span>
+                        : undefined
+                  }
                   onPick={(choice) => markFuel(choice === fuelCard.answer ? "right" : "wrong")}
                 />
                 <div className="row">
