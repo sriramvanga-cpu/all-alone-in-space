@@ -4,6 +4,7 @@ import { publishArt } from "./artStore.js";
 import { NOISE } from "./glsl.js";
 import { makeAtmosphereMaterial, makePlanetMaterial } from "./planetMaterial.js";
 import { animateStarship, buildStarship, buildStation } from "./models.js";
+import { glowSprite } from "./particles.js";
 import { STAR_TINTS } from "../art/starTints.js";
 
 // Renders the map's art once, with real textures and lights, into small images:
@@ -425,6 +426,29 @@ function topDown(renderer, object, half, pxW, pxH, env) {
   return toUrl(renderer.domElement);
 }
 
+// The ship from astern and a little above, for the warp tunnel: its nacelles and stern glow, and the key light
+// comes from the left. Same units as topDown's view; the ship is about 46 long, so the camera sits 36 back.
+function rearView(renderer, ship, env, pxW, pxH) {
+  const scene = new THREE.Scene();
+  scene.environment = env;
+  scene.environmentIntensity = 1.4;
+  scene.add(ship.group);
+  scene.add(new THREE.DirectionalLight("#fff4e6", 2.4).translateOnAxis(new THREE.Vector3(-0.9, 0.8, 0.5).normalize(), 100));
+  scene.add(new THREE.HemisphereLight("#9fbaff", "#3a2a22", 0.5));
+  // Warp glow at each nacelle's stern and a warmer one at the hangar.
+  for (const [x, y, z, size, color] of [[-11.6, 2.6, -8.16, 11, "#7fc8ff"], [-11.6, 2.6, 8.16, 11, "#7fc8ff"], [-10.8, -1.2, 0, 6, "#ffd9a0"]]) {
+    const glow = glowSprite(color, size);
+    glow.position.set(x, y, z);
+    scene.add(glow);
+  }
+  const cam = new THREE.PerspectiveCamera(32, pxW / pxH, 1, 400);
+  cam.position.set(-36, 7, 2);
+  cam.lookAt(0, 0.5, 0);
+  renderer.setSize(pxW, pxH, false);
+  renderer.render(scene, cam);
+  return toUrl(renderer.domElement);
+}
+
 // The famous worlds of the Biggest world and Planet order cards, each as a picture. They are all drawn at one size,
 // so a picture never gives a size away, and Saturn's ring is tucked inside the frame to keep it so.
 const WORLD_PX = 192;
@@ -500,12 +524,13 @@ export async function renderMapArt(faces) {
     const ship = buildStarship();
     animateStarship(ship, 1, 0.5);
     const shipUrl = await topDown(renderer, ship.group, [[24, 22], 11], 736, 352, env);
+    const shipRearUrl = await rearView(renderer, ship, env, 640, 400);
 
     // Station: same units as the SVG station (viewBox -40 -40 80 80).
     const station = buildStation();
     station.group.rotation.y = 0.3;
     const stationUrl = await topDown(renderer, station.group, [[40, 40], 40], 384, 384, env);
-    publishArt({ ship: shipUrl, station: stationUrl });
+    publishArt({ ship: shipUrl, shipRear: shipRearUrl, station: stationUrl });
 
     renderer.setSize(STAR_PX, STAR_PX, false);
     const stars = await renderStars(renderer);

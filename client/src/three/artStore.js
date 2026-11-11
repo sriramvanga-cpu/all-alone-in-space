@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 // Rendered map art (planet, star, famous-world, ship and station images) published once ready, and
 // a WebGL check. Kept free of three.js so the main bundle does not load it.
 
-let art = { planets: new Map(), stars: new Map(), worlds: new Map(), rocks: [], ship: null, station: null };
+let art = { planets: new Map(), stars: new Map(), worlds: new Map(), rocks: [], ship: null, shipRear: null, station: null };
 const listeners = new Set();
 
 export function publishArt(next) {
