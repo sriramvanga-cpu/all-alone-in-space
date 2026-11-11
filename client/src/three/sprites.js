@@ -425,6 +425,58 @@ function topDown(renderer, object, half, pxW, pxH, env) {
   return toUrl(renderer.domElement);
 }
 
+// The famous worlds of the Biggest world and Planet order cards, each as a picture. They are all drawn at one size,
+// so a picture never gives a size away, and Saturn's ring is tucked inside the frame to keep it so.
+const WORLD_PX = 192;
+const WORLD_EXT = 1.45;
+const WORLD_LOOKS = {
+  Mercury: { tex: "mercury", glow: "#c9c2ba", atmo: 0.1, relief: 6 },
+  Venus: { tex: "saturn", tint: "#fff3d6", glow: "#fff0cf", atmo: 1, relief: 0.5, spin: 150 }, // cream cloud tops
+  Earth: { tex: "earth", glow: "#8fc4ff", atmo: 1, relief: 1 },
+  Mars: { tex: "mars", glow: "#ffb08a", atmo: 0.45, relief: 4 },
+  Jupiter: { tex: "jupiter", glow: "#ffe0c0", atmo: 0.9, relief: 1.5 },
+  Saturn: { tex: "saturn", glow: "#f3e2b4", atmo: 0.9, relief: 1.5, ring: true, tilt: -14 },
+  Uranus: { tex: "uranus", tint: "#c8f2f4", glow: "#bff4f6", atmo: 1, relief: 1 },
+  Neptune: { tex: "neptune", tint: "#9bb4ff", glow: "#9cc0ff", atmo: 1, relief: 1 },
+  Moon: { tex: "moon", glow: "#d6d6d6", atmo: 0.05, relief: 6 },
+  Ganymede: { tex: "ceres", tint: "#d8cdbd", glow: "#cfc6b8", atmo: 0.1, relief: 5 },
+  Titan: { tex: "venus", tint: "#e9b36a", glow: "#f3c27a", atmo: 1, relief: 1 }, // orange haze
+  Pluto: { tex: "eris", tint: "#f0d6c2", glow: "#e9d6c8", atmo: 0.15, relief: 4 },
+};
+
+async function renderWorlds(renderer, tex) {
+  const scene = new THREE.Scene();
+  const cam = new THREE.OrthographicCamera(-WORLD_EXT, WORLD_EXT, WORLD_EXT, -WORLD_EXT, 0.1, 20);
+  cam.position.set(0, 0, 5);
+  scene.add(new THREE.DirectionalLight("#ffffff", 2.4).translateOnAxis(LIGHT, 10));
+  scene.add(new THREE.AmbientLight("#ffffff", 0.08));
+  const worlds = new Map();
+  for (const [name, look] of Object.entries(WORLD_LOOKS)) {
+    const planet = buildPlanet(
+      {
+        map: tex[look.tex],
+        tint: new THREE.Color(look.tint ?? "#ffffff"),
+        glow: new THREE.Color(look.glow),
+        atmo: look.atmo,
+        relief: look.relief,
+        ring: Boolean(look.ring),
+        ringIn: 1.17,
+        ringOut: 1.42,
+        ext: WORLD_EXT,
+        spin: look.spin ?? 0,
+        tilt: look.tilt ?? 0,
+      },
+      tex,
+    );
+    scene.add(planet.group);
+    renderer.render(scene, cam);
+    worlds.set(name, await toUrl(renderer.domElement));
+    scene.remove(planet.group);
+    planet.dispose();
+  }
+  return worlds;
+}
+
 let started = false;
 
 // faces: an iterable of planet faces (art/Planet.jsx faceOf); images are keyed by face.uid.
@@ -464,6 +516,9 @@ export async function renderMapArt(faces) {
     renderer.setSize(PLANET_PX, PLANET_PX, false);
     const planets = await renderPlanets(renderer, list, tex);
     publishArt({ planets });
+
+    renderer.setSize(WORLD_PX, WORLD_PX, false);
+    publishArt({ worlds: await renderWorlds(renderer, tex) });
 
     renderer.setSize(ROCK_PX, ROCK_PX, false);
     publishArt({ rocks: await renderRocks(renderer, tex) });

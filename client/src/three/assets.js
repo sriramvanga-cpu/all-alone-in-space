@@ -16,6 +16,8 @@ const FILES = {
   eris: "eris.jpg",
   makemake: "makemake.jpg",
   haumea: "haumea.jpg",
+  earth: "earth.jpg",
+  mars: "mars.jpg",
   ring: "saturn_ring.png",
 };
 
