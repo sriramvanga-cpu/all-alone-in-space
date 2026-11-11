@@ -30,7 +30,7 @@ const FUEL_LOOKS = [
   { tex: ["jupiter", "saturn"], tint: "#c8e060", glow: "#e0ff80", atmo: 1.0, relief: 1.5 }, // toxic clouds: a Class Y world
 ];
 const PLANET_PX = 256;
-const LIGHT = new THREE.Vector3(-0.62, 0.55, 0.56).normalize();
+export const LIGHT = new THREE.Vector3(-0.62, 0.55, 0.56).normalize();
 
 function hash(str) {
   let h = 2166136261;
@@ -60,64 +60,89 @@ function ringUVs(geo, inner, outer) {
   }
 }
 
+// A world's rank among the fuel stops (they take turns through FUEL_LOOKS), set once when the map art
+// starts, so a live view of a fuel stop picks the same look as its map image.
+const fuelRank = new Map();
+
+/**
+ * What a world looks like, as buildPlanet takes it: its texture, tint and glow, how thick its air is,
+ * how rough its ground, and whether it has rings. Pure in the face, so the map image and a live view agree.
+ */
+export function lookOf(face, tex) {
+  const h = hash(face.uid);
+  const look = face.kind === "fuel" ? FUEL_LOOKS[(fuelRank.get(face.uid) ?? h) % FUEL_LOOKS.length] : null;
+  const list = look?.tex || TEXTURES[face.kind] || TEXTURES.rock;
+  return {
+    map: tex[list[h % list.length]],
+    tint: look ? new THREE.Color(look.tint) : tintFor(face),
+    glow: look ? new THREE.Color(look.glow) : new THREE.Color(face.colors[2]),
+    atmo: look?.atmo ?? ATMO[face.kind],
+    relief: look?.relief ?? (face.kind === "gas" ? 1.5 : 6),
+    crack: look?.crack ?? 0,
+    ring: Boolean(face.ring || look?.ring),
+    rimMix: face.kind === "ice" ? 0.5 : 0.15,
+    spin: face.spin,
+    tilt: face.tilt || 0,
+  };
+}
+
+/**
+ * A lit, textured world of radius 1 with its air and (if it has them) rings, as a group to add to a scene.
+ * `spec` is a lookOf result; `ext` (how far a picture of it should reach, in radii) and the ring's
+ * `ringIn` and `ringOut` can be set for pictures that need a tighter frame. Call dispose when done.
+ */
+export function buildPlanet(spec, tex) {
+  const { map, tint, glow, atmo, relief, crack = 0, ring = false, rimMix = 0.15, spin = 0, tilt = 0, ringIn = 1.25, ringOut = 2.1 } = spec;
+  const mat = makePlanetMaterial({ map, tint: [tint.r, tint.g, tint.b], relief });
+  mat.uniforms.crack.value = crack;
+  mat.uniforms.sunDir.value.copy(LIGHT);
+  mat.uniforms.ambient.value = 0.02;
+  mat.uniforms.rimStrength.value = 0.25 + 0.6 * atmo;
+  mat.uniforms.rimColor.value = glow.clone().lerp(new THREE.Color("#9cc8ff"), rimMix);
+  const bodyGeo = new THREE.SphereGeometry(1, 96, 48);
+  const body = new THREE.Mesh(bodyGeo, mat);
+  body.rotation.set(0.3 - tilt * 0.01, (spin * Math.PI) / 180, tilt * 0.008);
+  const group = new THREE.Group();
+  group.add(body);
+  const atm = makeAtmosphereMaterial({ radius: 1, top: 1.08, strength: atmo * 1.6 });
+  atm.uniforms.sunDir.value.copy(LIGHT);
+  atm.uniforms.lowColor.value = glow.clone().lerp(new THREE.Color("#ffffff"), 0.2);
+  atm.uniforms.highColor.value = new THREE.Color("#7fb2ff");
+  const airGeo = new THREE.SphereGeometry(1.08, 64, 32);
+  group.add(new THREE.Mesh(airGeo, atm));
+  const spare = [bodyGeo, airGeo, mat, atm];
+  if (ring) {
+    const ringGeo = new THREE.RingGeometry(ringIn, ringOut, 128, 1);
+    ringUVs(ringGeo, ringIn, ringOut);
+    const ringMat = new THREE.MeshStandardMaterial({ map: tex.ring, color: tint, transparent: true, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, depthWrite: false });
+    const rings = new THREE.Mesh(ringGeo, ringMat);
+    rings.rotation.set(-1.25, 0, (tilt * Math.PI) / 180);
+    group.add(rings);
+    spare.push(ringGeo, ringMat);
+  }
+  return { group, body, mat, atm, ext: spec.ext ?? (ring ? 2.2 : 1.22), dispose: () => spare.forEach((item) => item.dispose()) };
+}
+
 async function renderPlanets(renderer, faces, tex) {
   const scene = new THREE.Scene();
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 20);
   cam.position.set(0, 0, 5);
   scene.add(new THREE.DirectionalLight("#ffffff", 2.4).translateOnAxis(LIGHT, 10));
   scene.add(new THREE.AmbientLight("#ffffff", 0.08));
-  const sphere = new THREE.SphereGeometry(1, 96, 48);
   const planets = new Map();
-  let fuelN = 0;
   for (const face of faces) {
-    const h = hash(face.uid);
-    const look = face.kind === "fuel" ? FUEL_LOOKS[fuelN++ % FUEL_LOOKS.length] : null;
-    const list = look?.tex || TEXTURES[face.kind] || TEXTURES.rock;
-    const map = tex[list[h % list.length]];
-    const tint = look ? new THREE.Color(look.tint) : tintFor(face);
-    const atmo = look?.atmo ?? ATMO[face.kind];
-    const glow = look ? new THREE.Color(look.glow) : new THREE.Color(face.colors[2]);
-    const mat = makePlanetMaterial({ map, tint: [tint.r, tint.g, tint.b], relief: look?.relief ?? (face.kind === "gas" ? 1.5 : 6) });
-    mat.uniforms.crack.value = look?.crack ?? 0;
-    mat.uniforms.sunDir.value.copy(LIGHT);
-    mat.uniforms.ambient.value = 0.02;
-    mat.uniforms.rimStrength.value = 0.25 + 0.6 * atmo;
-    mat.uniforms.rimColor.value = glow.clone().lerp(new THREE.Color("#9cc8ff"), face.kind === "ice" ? 0.5 : 0.15);
-    const body = new THREE.Mesh(sphere, mat);
-    body.rotation.set(0.3 - (face.tilt || 0) * 0.01, (face.spin * Math.PI) / 180, (face.tilt || 0) * 0.008);
-    const group = new THREE.Group();
-    group.add(body);
-    const atm = makeAtmosphereMaterial({ radius: 1, top: 1.08, strength: atmo * 1.6 });
-    atm.uniforms.sunDir.value.copy(LIGHT);
-    atm.uniforms.lowColor.value = glow.clone().lerp(new THREE.Color("#ffffff"), 0.2);
-    atm.uniforms.highColor.value = new THREE.Color("#7fb2ff");
-    group.add(new THREE.Mesh(new THREE.SphereGeometry(1.08, 64, 32), atm));
-    let ext = 1.22;
-    let ringGeo = null;
-    if (face.ring || look?.ring) {
-      ext = 2.2;
-      ringGeo = new THREE.RingGeometry(1.25, 2.1, 128, 1);
-      ringUVs(ringGeo, 1.25, 2.1);
-      const ring = new THREE.Mesh(
-        ringGeo,
-        new THREE.MeshStandardMaterial({ map: tex.ring, color: tint, transparent: true, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, depthWrite: false }),
-      );
-      ring.rotation.set(-1.25, 0, ((face.tilt || 0) * Math.PI) / 180);
-      group.add(ring);
-    }
-    scene.add(group);
-    cam.left = -ext;
-    cam.right = ext;
-    cam.top = ext;
-    cam.bottom = -ext;
+    const planet = buildPlanet(lookOf(face, tex), tex);
+    scene.add(planet.group);
+    cam.left = -planet.ext;
+    cam.right = planet.ext;
+    cam.top = planet.ext;
+    cam.bottom = -planet.ext;
     cam.updateProjectionMatrix();
     renderer.render(scene, cam);
-    planets.set(face.uid, { url: await toUrl(renderer.domElement), ext });
-    scene.remove(group);
-    mat.dispose();
-    ringGeo?.dispose();
+    planets.set(face.uid, { url: await toUrl(renderer.domElement), ext: planet.ext });
+    scene.remove(planet.group);
+    planet.dispose();
   }
-  sphere.dispose();
   return planets;
 }
 
@@ -406,6 +431,9 @@ let started = false;
 export async function renderMapArt(faces) {
   if (started) return;
   started = true;
+  // Fuel stops take their looks in order: note each one's place before anything awaits.
+  const list = [...faces];
+  list.filter((f) => f.kind === "fuel").forEach((f, i) => fuelRank.set(f.uid, i));
   const tex = await loadTextures();
   const canvas = document.createElement("canvas");
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
@@ -434,7 +462,7 @@ export async function renderMapArt(faces) {
     publishArt({ stars });
 
     renderer.setSize(PLANET_PX, PLANET_PX, false);
-    const planets = await renderPlanets(renderer, faces, tex);
+    const planets = await renderPlanets(renderer, list, tex);
     publishArt({ planets });
 
     renderer.setSize(ROCK_PX, ROCK_PX, false);
