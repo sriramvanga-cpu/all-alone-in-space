@@ -745,8 +745,9 @@ button.ghost.admin-toggle {
 
 @media (prefers-reduced-motion: reduce) {
   .backdrop .stars, .backdrop .sky, .panel, .title-card .ship, .meter.clock.urgent, .low-air,
-  .title-planet, .title-big, .end.won .end-orb::before, .pop-in, .at-planet-art, .planet-stage, .chance-track i { animation: none !important; }
+  .title-planet, .title-big, .end.won .end-orb::before, .pop-in, .at-planet-art, .planet-stage, .chance-track i, .end-scene *, .end-tank { animation: none !important; }
   .celebrate, .shooting-star, .map-shoot { display: none; }
+  .end-scene.time .end-ship { filter: brightness(0.5); }
   .delta, .meter-flash, .warp-out { display: none; }
 }
 
@@ -1505,20 +1506,40 @@ button.ghost.reactor-cell.hot {
   animation: float 6s ease-in-out infinite;
 }
 /* A win shows the world you settled, its own art in place of the painted orb, sunburst behind it. */
-.end-orb.end-world { width: 7.5rem; height: auto; border-radius: 0; background: none; box-shadow: none; isolation: isolate; }
+.end-orb.end-world { width: 8.5rem; height: auto; border-radius: 0; background: none; box-shadow: none; isolation: isolate; }
+/* The live planet's ship orbits outside its box, so a win's heading keeps clear of it. */
+.end.won .end-hero { gap: 3.4rem; padding-left: 1.6rem; }
 .end-world .planet-art-box { filter: drop-shadow(0 0 32px rgba(125, 222, 192, 0.45)); }
-.end.lost .end-orb {
-  background: radial-gradient(circle at 34% 30%, #d9a98a 0, #7a3a22 38%, #1a0a08 100%);
-  box-shadow: 0 0 32px rgba(255, 100, 60, 0.3), inset -10px -12px 22px rgba(0, 0, 0, 0.6);
+/* A lost run: the ship adrift with its lights going out (out of air), or sitting still with its engines
+   sputtering and an empty fuel drop blinking (stranded). */
+.end-scene { position: relative; flex: none; width: 11rem; }
+.end-scene .end-ship { display: block; width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 0 12px rgba(120, 170, 255, 0.22)); }
+.end-scene.time .end-ship { animation: ship-drift 9s ease-in-out infinite alternate, lights-out 7s ease-out forwards; }
+.end-scene.time .aura { animation: aura-out 6s ease-out forwards; }
+.end-scene.stranded .plume, .end-scene.stranded .exhaust { fill: #ffb070; animation: sputter 3.2s steps(1) infinite; }
+.end-tank { position: absolute; left: 50%; top: -2.2rem; width: 2.2rem; translate: -50% 0; overflow: visible; animation: blink 1.3s steps(1) infinite; }
+.end-tank path { fill: rgba(255, 176, 32, 0.25); stroke: var(--fuel); stroke-width: 0.9; stroke-linejoin: round; }
+.end-tank .strike { fill: none; stroke: var(--danger); stroke-width: 1.2; stroke-linecap: round; }
+@keyframes ship-drift {
+  from { transform: translate(-4%, 3%) rotate(-8deg); }
+  to { transform: translate(4%, -3%) rotate(8deg); }
 }
-.end.lost .end-orb::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background:
-    linear-gradient(115deg, transparent 46%, rgba(255, 130, 70, 0.95) 47.2%, transparent 49%),
-    linear-gradient(35deg, transparent 52%, rgba(255, 130, 70, 0.85) 53.2%, transparent 55%);
+@keyframes lights-out {
+  0% { filter: drop-shadow(0 0 12px rgba(120, 170, 255, 0.22)) brightness(1); }
+  22% { filter: drop-shadow(0 0 6px rgba(120, 170, 255, 0.1)) brightness(0.6); }
+  28% { filter: brightness(0.95); }
+  40% { filter: brightness(0.42); }
+  47% { filter: brightness(0.75); }
+  70%, 100% { filter: brightness(0.3) saturate(0.6); }
+}
+@keyframes aura-out { to { opacity: 0; } }
+@keyframes sputter {
+  0% { opacity: 0.95; }
+  7% { opacity: 0; }
+  15% { opacity: 0.75; }
+  22% { opacity: 0; }
+  30% { opacity: 0.5; }
+  36%, 100% { opacity: 0; }
 }
 
 .stats {
@@ -1957,6 +1978,9 @@ button.ghost.reactor-cell.hot {
   .end-hero { gap: 0.9rem; }
   .end-orb { width: 3.8rem; height: 3.8rem; }
   .end-orb.end-world { width: 5.2rem; height: auto; }
+  .end-scene { width: 7.5rem; }
+  .end-tank { top: -1.6rem; width: 1.8rem; }
+  .end.won .end-hero { gap: 1.2rem; padding-left: 0; }
   .lb th, .lb td { padding-left: 0.4rem; padding-right: 0.4rem; }
   .lb { font-size: var(--text-sm); }
   .board h1 { font-size: 1.9rem; letter-spacing: 0.04em; }

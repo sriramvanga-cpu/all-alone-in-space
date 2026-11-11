@@ -3056,10 +3056,10 @@ function EndScreen({ snap }) {
       <div className="end-hero">
         {facts.settled ? (
           <div className="end-orb end-world" aria-hidden="true">
-            <PlanetArt id={snap.here} />
+            <PlanetStage id={snap.here} />
           </div>
         ) : (
-          <div className="end-orb" aria-hidden="true" />
+          <EndScene kind={snap.endReason} />
         )}
         <div>
           <p className="eyebrow">{facts.settled ? "Mission complete" : "Run over"}</p>
@@ -3107,6 +3107,22 @@ function EndScreen({ snap }) {
       <BoardTable rows={rows} err={err} />
     </section>
     </>
+  );
+}
+
+// How a run that was lost looks at its end: the ship adrift with its lights going out when the air ran out, or
+// sitting still with its engines sputtering and an empty fuel drop blinking when it was stranded.
+function EndScene({ kind }) {
+  return (
+    <div className={`end-scene ${kind}`} aria-hidden="true">
+      <ShipSvg className="ship end-ship" />
+      {kind === "stranded" ? (
+        <svg className="end-tank" viewBox="-6 -7 12 14">
+          <path d={DROP} />
+          <path className="strike" d="M-5.4 5.4L5.4 -5.4" />
+        </svg>
+      ) : null}
+    </div>
   );
 }
 
