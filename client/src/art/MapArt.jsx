@@ -282,10 +282,38 @@ function meanRadius(ring) {
 const RING_WORDS = { inner: "Hard questions", middle: "Medium questions", outer: "Easy questions" };
 const SHELL_RINGS = ["inner", "middle", "outer"].map((shell) => ({ shell, r: meanRadius(shell), a: ringLabelAngle(shell) }));
 
-// The photo sky shows through the map, so only the faint shell guide rings and their labels are drawn.
+// Each ring also glows faintly in its own colour (the one of its guide ring and label), fading out
+// between rings, so the three bands read at a glance. One gradient, no blur: the map pans and zooms.
+const HAZE = { inner: "#ffb27a", middle: "#6fe0c8", outer: "#9a8cff" };
+const HAZE_W = 0.5 * Math.min(SHELL_RINGS[1].r - SHELL_RINGS[0].r, SHELL_RINGS[2].r - SHELL_RINGS[1].r);
+const HAZE_R = SHELL_RINGS[2].r + HAZE_W;
+const HAZE_STOPS = SHELL_RINGS.flatMap(({ shell, r }) => [
+  [Math.max(0, r - HAZE_W), shell, 0],
+  [r, shell, 0.1],
+  [r + HAZE_W, shell, 0],
+]);
+// Now and then a shooting star crosses the chart: a start, an angle (degrees) and a wait in seconds.
+const SHOOTERS = [
+  { x: -430, y: -250, deg: 21, wait: 4 },
+  { x: 440, y: -90, deg: 158, wait: 12 },
+];
+
+// The photo sky shows through the map, so only the shell guide rings, their labels and the faint ring haze are drawn.
 export function MapBackdrop() {
   return (
     <g className="map-bg">
+      <defs>
+        <radialGradient id="map-haze">
+          {HAZE_STOPS.map(([at, shell, opacity], i) => (
+            <stop key={i} offset={(at / HAZE_R).toFixed(4)} stopColor={HAZE[shell]} stopOpacity={opacity} />
+          ))}
+        </radialGradient>
+        <linearGradient id="map-shoot" gradientUnits="userSpaceOnUse" x1="-90" y1="0" x2="0" y2="0">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="1" stopColor="#ffffff" />
+        </linearGradient>
+      </defs>
+      <circle className="map-haze" r={HAZE_R} fill="url(#map-haze)" />
       {SHELL_RINGS.map((ring) => (
         <circle key={ring.shell} className={`shell-ring ${ring.shell}`} r={ring.r} />
       ))}
@@ -300,6 +328,11 @@ export function MapBackdrop() {
         >
           {RING_WORDS[ring.shell]}
         </text>
+      ))}
+      {SHOOTERS.map((s, i) => (
+        <g key={i} transform={`translate(${s.x} ${s.y}) rotate(${s.deg})`}>
+          <line className="map-shoot" x1="-90" y1="0" x2="0" y2="0" stroke="url(#map-shoot)" style={{ animationDelay: `${s.wait}s` }} />
+        </g>
       ))}
     </g>
   );
