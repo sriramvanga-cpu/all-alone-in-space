@@ -53,7 +53,7 @@ import HowTo, { Reel } from "./intro/HowTo.jsx";
 import WarpTunnel, { JUMP as WARP_JUMP, OUT as WARP_OUT } from "./art/WarpTunnel.jsx";
 import { Starbase } from "./art/Station.jsx";
 import { PlanetDot, faceOf } from "./art/Planet.jsx";
-import { beltOf } from "./art/sky.js";
+import { beltOf, moonAt, moonsOf } from "./art/sky.js";
 import {
   Belt,
   CostPill,
@@ -61,6 +61,7 @@ import {
   JumpGate,
   MapDefs,
   MapBackdrop,
+  Moon,
   NARROW,
   PLANET_ZOOM,
   StarDot,
@@ -117,6 +118,7 @@ const LANDING_MODES = [
 const QUESTION_MS = 60_000;
 const FUEL_WORLDS = new Set(PLANETS.filter((p) => p.shell === "fuel").map((p) => p.id));
 const FACES = new Map(PLANETS.map((p) => [p.id, faceOf(p)]));
+const MOONS = new Map(PLANETS.map((p) => [p.id, moonsOf(p.id, FACES.get(p.id).radius, FACES.get(p.id).ring)]));
 // Realistic map art renders in the background; the map shows vector art until it lands.
 if (webglAvailable()) {
   // While the realistic ship renders, show no ship rather than flash the old vector one.
@@ -1225,6 +1227,13 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
     id = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(id);
   }, []);
+  // Moons fade in a moment after the map opens, and hold still for anyone who asked for less motion.
+  const [still] = useState(stillMotion);
+  const [moonsOn, setMoonsOn] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setMoonsOn(true), 350);
+    return () => clearTimeout(id);
+  }, []);
   const flying = snap.phase === "fly" && snap.flight;
   const options = snap.phase === "map" ? moves(snap, now) : [];
   const byId = new Map(options.map((m) => [m.id, m]));
@@ -1248,6 +1257,11 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
     const classes = ["node", `node-${p.shell}`, p.id === snap.here ? "here" : "", shut.has(p.id) ? "shut" : "", ready ? "ready" : "", short ? "far" : ""]
       .filter(Boolean)
       .join(" ");
+    // The art is lit from the upper left; turn it (and any moons) so the lit side faces the sun.
+    const turn = round2(sunward(at) + 135);
+    const moons = MOONS.get(p.id).map((m, i) => ({ m, i, ...moonAt(m, still ? 0 : now) }));
+    const drawMoons = (front) =>
+      moons.filter((o) => o.front === front).map(({ m, i, x, y }) => <Moon key={i} x={x} y={y} size={m.size} turn={turn} />);
     return (
       <g
         key={p.id}
@@ -1278,10 +1292,11 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
           {move ? `, ${fmtNum(move.power)} power${ready ? "" : ", not enough power"}` : ""}
         </title>
         <circle className="hit" r={Math.max(narrow ? 24 : 14, face.radius + 3)} />
-        {/* The art is lit from the upper left; turn it so its lit side faces the sun. */}
-        <g transform={`rotate(${round2(sunward(at) + 135)})`}>
+        {drawMoons(false)}
+        <g transform={`rotate(${turn})`}>
           <PlanetDot face={face} detail shut={shut.has(p.id)} />
         </g>
+        {drawMoons(true)}
         {p.id === snap.here ? <circle className="here-ring" r={face.radius + 5} /> : null}
         {ready ? <circle className="ready-ring" r={face.radius + 7} /> : null}
         {test ? (
@@ -1312,7 +1327,7 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
     <div className="map-stage system-stage" ref={stageRef}>
       <svg
         ref={svgRef}
-        className={flying ? "map-svg flying" : "map-svg"}
+        className={["map-svg", flying ? "flying" : "", moonsOn ? "moons-on" : ""].filter(Boolean).join(" ")}
         viewBox={box.join(" ")}
         role="img"
         aria-label={`${snap.system} system`}

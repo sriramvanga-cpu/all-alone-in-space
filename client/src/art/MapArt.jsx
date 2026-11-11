@@ -51,6 +51,16 @@ export function JumpGate() {
   );
 }
 
+/** One moon at (x, y) round its planet, a small ball lit from the upper left. `turn` is the rotation the
+ * planet's own art gets, so its lit side faces the sun. Needs MapDefs for its gradient. */
+export function Moon({ x, y, size, turn }) {
+  return (
+    <g className="moon" transform={`translate(${Math.round(x * 10) / 10} ${Math.round(y * 10) / 10}) rotate(${turn})`} aria-hidden="true">
+      <circle r={size} fill="url(#moon-ball)" />
+    </g>
+  );
+}
+
 const BELT_TURN_MS = 150_000;
 
 /** An asteroid belt (from sky.js beltOf) turning slowly round the sun, tilted like the orbits. Its turn
@@ -286,6 +296,11 @@ export function MapDefs() {
       <radialGradient id="hole-glow">
         <stop offset="0.25" stopColor="#ff9a40" stopOpacity="0.35" />
         <stop offset="1" stopColor="#ff9a40" stopOpacity="0" />
+      </radialGradient>
+      <radialGradient id="moon-ball" cx="0.36" cy="0.3" r="0.85">
+        <stop offset="0" stopColor="#f6f2ea" />
+        <stop offset="0.5" stopColor="#aaa59d" />
+        <stop offset="1" stopColor="#34343b" />
       </radialGradient>
       <ShipDefs />
       <StationDefs />

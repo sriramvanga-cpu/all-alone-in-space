@@ -29,3 +29,33 @@ export function beltOf(id, orbits) {
   });
   return { gap, mid, half, specks };
 }
+
+const MOON_CHANCE = 0.35;
+const MOON_TILT = 0.4;
+const hundredth = (v) => Math.round(v * 100) / 100;
+
+/**
+ * The moons of a planet with the given id and map radius: usually none; otherwise one, sometimes two,
+ * { r (orbit radius), size, speed (radians a second, signed for the way round), phase }, all in the
+ * planet's own units. A ringed planet has none, since its rings would be in their way.
+ */
+export function moonsOf(id, radius, ringed) {
+  if (ringed) return [];
+  const rand = rng(hashId(`moons:${id}`));
+  if (rand() >= MOON_CHANCE) return [];
+  const count = rand() < 0.3 ? 2 : 1;
+  return Array.from({ length: count }, (_, i) => ({
+    r: tenth(radius + 6 + i * 5 + rand() * 2),
+    size: tenth(2.2 + rand() * 1.4),
+    // One lap takes 9 to 20 seconds.
+    speed: hundredth(((rand() < 0.5 ? 1 : -1) * 2 * Math.PI) / (9 + rand() * 11)),
+    phase: hundredth(rand() * 2 * Math.PI),
+  }));
+}
+
+/** Where a moon is at wall-clock ms: x and y round its planet (squashed like the orbits), and whether it is on the near side. */
+export function moonAt(moon, ms) {
+  const a = moon.phase + (moon.speed * ms) / 1000;
+  const y = Math.sin(a) * moon.r * MOON_TILT;
+  return { x: Math.cos(a) * moon.r, y, front: y >= 0 };
+}

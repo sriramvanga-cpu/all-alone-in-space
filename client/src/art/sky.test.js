@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { beltOf } from "./sky.js";
+import { beltOf, moonAt, moonsOf } from "./sky.js";
 
 const ids = Array.from({ length: 300 }, (_, i) => `system-${i}`);
 
@@ -21,4 +21,24 @@ test("a belt sits inside one gap between orbits, so no planet flies through it",
   assert.equal(beltOf("lonely", [100]), null);
   // The same id always gives the same belt.
   assert.deepEqual(beltOf(ids[0], orbits), beltOf(ids[0], orbits));
+});
+
+test("moons stay clear of their planet and in front or behind by which side of the orbit they are on", () => {
+  let withMoons = 0;
+  for (const id of ids) {
+    const moons = moonsOf(id, 12, false);
+    if (moons.length) withMoons++;
+    assert.ok(moons.length <= 2, id);
+    for (const m of moons) {
+      assert.ok(m.r > 12 + 5 && m.r < 12 + 14, `${id}: orbit ${m.r}`);
+      assert.ok(m.size >= 2.2 && m.size <= 3.6, `${id}: size ${m.size}`);
+      for (const ms of [0, 1234, 98765]) {
+        const at = moonAt(m, ms);
+        assert.ok(Math.hypot(at.x, at.y / 0.4) > 12 + 5, `${id}: too close`);
+        assert.equal(at.front, at.y >= 0);
+      }
+    }
+  }
+  assert.ok(withMoons > ids.length * 0.2 && withMoons < ids.length * 0.5, `${withMoons} planets with moons`);
+  assert.deepEqual(moonsOf("ringed", 12, true), []);
 });

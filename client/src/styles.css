@@ -1263,6 +1263,10 @@ button.ghost.reactor-cell.hot {
 /* Planetary map */
 .system-stage, .system-stage:active { cursor: default; }
 .orbit { fill: none; stroke: rgba(150, 185, 255, 0.34); stroke-width: 1.2; }
+/* Moons fade in a moment after the map opens: the class is added then, so a moon that swaps from behind
+   its planet to in front (a new element) is already visible. */
+.moon { opacity: 0; transition: opacity 0.8s; pointer-events: none; }
+.moons-on .moon { opacity: 1; }
 /* An asteroid belt: specks turning slowly (against the planets' way) round the sun. */
 .belt { pointer-events: none; }
 .belt circle { fill: #d6c8b4; }
