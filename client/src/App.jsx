@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   START_FUEL,
   START_CREDITS,
@@ -121,7 +121,8 @@ const FUEL_WORLDS = new Set(PLANETS.filter((p) => p.shell === "fuel").map((p) =>
 const FACES = new Map(PLANETS.map((p) => [p.id, faceOf(p)]));
 const MOONS = new Map(PLANETS.map((p) => [p.id, moonsOf(p.id, FACES.get(p.id).radius, FACES.get(p.id).ring)]));
 // Realistic map art renders in the background; the map shows vector art until it lands.
-if (webglAvailable()) {
+const WEBGL = webglAvailable();
+if (WEBGL) {
   // While the realistic ship renders, show no ship rather than flash the old vector one.
   publishArt({ loading: true });
   import("./three/sprites.js")
@@ -874,13 +875,35 @@ function ChanceBar({ landing }) {
   );
 }
 
-// The screens at a possible home show that planet beside the panel, so players remember where they are.
+// three.js only loads when a live planet is first shown.
+const PlanetView = lazy(() => import("./three/PlanetView.jsx"));
+
+// A planet for the screens at a world: live and turning, with the ship circling it, where WebGL and motion allow
+// (not on phones, where the picture is small), over its still picture, which stays until the live view has drawn
+// its first frame and is all there is if it can't start.
+function PlanetStage({ id }) {
+  const [live, setLive] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const narrow = useNarrow();
+  return (
+    <div className={live ? "planet-stage live" : "planet-stage"}>
+      <PlanetArt id={id} />
+      {WEBGL && !failed && !narrow && !stillMotion() ? (
+        <Suspense fallback={null}>
+          <PlanetView face={FACES.get(id)} onReady={() => setLive(true)} onFail={() => setFailed(true)} />
+        </Suspense>
+      ) : null}
+    </div>
+  );
+}
+
+// The screens at a world (a possible home, or a fuel stop) show that planet beside the panel, so players remember where they are.
 function AtPlanet({ id, children }) {
   const shell = planet(id)?.shell;
   return (
-    <div className="at-planet">
+    <div className={shell === "fuel" ? "at-planet at-fuel" : "at-planet"}>
       <figure className="at-planet-art">
-        <PlanetArt id={id} />
+        <PlanetStage id={id} />
         <figcaption>
           {id}
           <small>{shell === "fuel" ? "Fuel stop" : `Possible home · ${SHELL_WORDS[shell]}`}</small>
@@ -2868,6 +2891,7 @@ function Game() {
         ) : null}
 
         {snap.phase === "fuel" && snap.fuelRound && !tip ? (
+          <AtPlanet id={snap.here}>
           <section className="panel fuel">
             {snap.cheat ? (
               <div className="cheat-picker" role="group" aria-label="Cheat mode: play any fuel game">
@@ -2939,6 +2963,7 @@ function Game() {
               </>
             ) : null}
           </section>
+          </AtPlanet>
         ) : null}
 
         {snap.phase === "shop" ? (

@@ -663,9 +663,18 @@ button.ghost.admin-toggle {
   margin: 2vh auto;
 }
 .at-planet > .panel { flex: 0 1 40rem; margin: 0; }
-.at-planet-art { flex: none; width: clamp(8rem, 20vw, 15rem); margin: 0; text-align: center; animation: float 7s ease-in-out infinite; }
+.at-planet-art { flex: none; width: clamp(10rem, 24vw, 19rem); margin: 0; text-align: center; animation: float 7s ease-in-out infinite; }
 .planet-art-box { display: block; width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 0 28px rgba(90, 209, 255, 0.22)); }
-.at-planet-art figcaption { margin-top: 0.5rem; font: 700 var(--text-lg) var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; }
+/* A live planet over its picture: the canvas is 170% of the picture's box, so the ship's orbit has room. It grows
+   in when a world's screen opens, as the map's zoom ends on that world. */
+.planet-stage { position: relative; animation: at-grow 0.7s var(--ease) both; }
+.planet-stage .planet-art-box { transition: opacity 0.5s; }
+.planet-stage.live .planet-art-box { opacity: 0; }
+.planet-view { position: absolute; inset: -35%; opacity: 0; transition: opacity 0.5s; pointer-events: none; }
+.planet-stage.live .planet-view { opacity: 1; }
+.planet-view canvas { display: block; width: 100%; height: 100%; }
+@keyframes at-grow { from { opacity: 0; transform: scale(0.6); } }
+.at-planet-art figcaption { margin-top: 0.9rem; font: 700 var(--text-lg) var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; }
 .at-planet-art small {
   display: block;
   margin-top: 0.2rem;
@@ -718,7 +727,7 @@ button.ghost.admin-toggle {
 
 @media (prefers-reduced-motion: reduce) {
   .backdrop .stars, .backdrop .sky, .panel, .title-card .ship, .meter.clock.urgent, .low-air,
-  .title-planet, .title-big, .end.won .end-orb::before, .pop-in, .at-planet-art, .chance-track i { animation: none !important; }
+  .title-planet, .title-big, .end.won .end-orb::before, .pop-in, .at-planet-art, .planet-stage, .chance-track i { animation: none !important; }
   .celebrate, .shooting-star, .map-shoot { display: none; }
   .delta, .meter-flash, .warp-out { display: none; }
 }
@@ -1945,6 +1954,8 @@ button.ghost.reactor-cell.hot {
   .at-planet { flex-direction: column; gap: 0.3rem; margin-top: 1vh; }
   .at-planet-art { width: auto; }
   .at-planet-art .planet-art-box { width: 6.5rem; margin: 0 auto; }
+  /* A fuel stop's picture is left out on phones, so the game keeps its room. */
+  .at-fuel .at-planet-art { display: none; }
   .at-planet-art figcaption { margin-top: 0.2rem; font-size: var(--text-md); }
 }
 
