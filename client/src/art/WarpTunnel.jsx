@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { easeIn, easeOut, smooth } from "../intro/draw.js";
 import { sfx } from "../sound.js";
+import { getArt } from "../three/artStore.js";
 import { ShipShapes } from "./Ship.jsx";
 import { Belt, DROP, JumpGate, MapDefs, NARROW, PLANET_ZOOM, StarDot, SUN_R, systemBox } from "./MapArt.jsx";
 import { PlanetDot, faceOf } from "./Planet.jsx";
@@ -32,6 +33,8 @@ const popInAt = (i) => 0.77 + i * 0.028;
 const SHIP_K = 1.6;
 const TUNNEL_STARS = 240;
 const SIDE_STARS = 150;
+// Rings of light rush down the tunnel, evenly spaced and wrapping round.
+const RINGS = 7;
 
 const r1 = (n) => Math.round(n * 10) / 10;
 const r3 = (n) => Math.round(n * 1000) / 1000;
@@ -252,6 +255,22 @@ export default function WarpTunnel({ ms, resume, paused, from, to, closed }) {
       }
     };
     cue("charge", "warpCharge", 0, 0);
+    // What the tunnel shows besides stars: the ship from astern and the star it is flying to, from the
+    // rendered art (skipped while that hasn't finished).
+    const art = getArt();
+    const load = (url) => {
+      if (!url) return null;
+      const img = new Image();
+      img.src = url;
+      return img;
+    };
+    const ready = (img) => img && img.complete && img.naturalWidth > 0;
+    const starArt = to === STATION ? null : art.stars.get(system(to)?.star);
+    const rear = load(art.shipRear);
+    const dest = load(to === STATION ? art.station : starArt?.url);
+    // A star's picture reaches this many radii out; the station's picture is drawn edge to edge.
+    const destExt = starArt?.ext ?? 1;
+    let ringTravel = 0;
     let resumed = flight.current.resume;
     let started = performance.now() - resumed * flight.current.ms;
     let last = performance.now();
@@ -392,6 +411,37 @@ export default function WarpTunnel({ ms, resume, paused, from, to, closed }) {
           ctx.moveTo(cx + (Math.cos(s.a) * k) / zt, cy + (Math.sin(s.a) * k) / zt);
           ctx.lineTo(x1, y1);
           ctx.stroke();
+        }
+
+        // Rings of light rush past: violet far off, cyan near, fading in at the far end and out at the glass.
+        ringTravel += speed * dt;
+        for (let i = 0; i < RINGS; i++) {
+          const z = 0.1 + 0.9 * ((((i / RINGS - ringTravel) % 1) + 1) % 1);
+          const alpha = 0.5 * level * (1 - smooth(0.7, 1, z)) * smooth(0.1, 0.3, z);
+          if (alpha <= 0.01) continue;
+          ctx.strokeStyle = `rgba(${Math.round(90 + 48 * z)}, ${Math.round(209 - 84 * z)}, 255, ${r3(alpha)})`;
+          ctx.lineWidth = 1.2 + 3.4 * (1 - z) * (1 - z);
+          ctx.beginPath();
+          ctx.arc(cx, cy, (lens * 1.1) / z, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // The star the ship is flying to grows from a point at the end of the tunnel.
+        const fadeEnd = 1 - smooth(OUT - 0.02, OUT, t);
+        if (ready(dest)) {
+          const size = reach * (0.012 + 0.2 * easeIn(smooth(IN, OUT, t))) * 2 * destExt;
+          ctx.globalAlpha = r3(smooth(IN, IN + 0.06, t) * fadeEnd);
+          ctx.drawImage(dest, cx - size / 2, cy - size / 2, size, size);
+          ctx.globalAlpha = 1;
+        }
+
+        // And the ship, seen from astern, low in the middle of the glass, bobbing a little.
+        if (ready(rear)) {
+          const w = Math.min(width * 0.55, 640);
+          const h = (w * rear.naturalHeight) / rear.naturalWidth;
+          ctx.globalAlpha = r3(smooth(IN, IN + 0.05, t) * fadeEnd);
+          ctx.drawImage(rear, cx - w / 2, cy + height * 0.2 - h / 2 + Math.sin(now / 700) * height * 0.006, w, h);
+          ctx.globalAlpha = 1;
         }
       }
 
