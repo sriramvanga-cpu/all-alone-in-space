@@ -371,11 +371,19 @@ test("nine different fuel rounds, and every card has one right answer among four
       const [a, b] = c.prompt.split(" → ");
       const [inner, outer] = a === "?" ? [c.answer, b] : [a, c.answer];
       assert.equal(PLANET_ORDER.indexOf(outer) - PLANET_ORDER.indexOf(inner), 1, c.prompt);
+      // The row the screen draws says the same as the words: the shown planet's slot, and the gap beside it.
+      const { shown, at, gap } = c.row;
+      assert.equal(c.worlds, true);
+      assert.equal(PLANET_ORDER[at], shown, c.prompt);
+      assert.equal(PLANET_ORDER[gap], c.answer, c.prompt);
+      assert.equal(Math.abs(at - gap), 1, c.prompt);
+      assert.equal(c.prompt, gap > at ? `${shown} → ?` : `? → ${shown}`);
     },
     size: (c) => {
       const [first, second] = [...c.choices].sort((x, y) => WORLD_RADII[y] - WORLD_RADII[x]);
       assert.equal(c.answer, first);
       assert.ok(WORLD_RADII[first] >= WORLD_RADII[second] * 1.2, c.choices.join());
+      assert.equal(c.worlds, true);
     },
   };
   for (const round of FUEL_ROUNDS) {

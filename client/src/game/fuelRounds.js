@@ -60,6 +60,8 @@ function makeArrowCard(rng = Math.random) {
 export const PLANET_ORDER = ["Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
 
 // Planet order: the planet just out from ("Mars → ?") or just in from ("? → Mars") the one shown.
+// `worlds` asks for pictures on the choices, and `row` says where in the order the shown planet and the gap are
+// (indexes into PLANET_ORDER), for the screen to draw as a row of slots; `prompt` is the same card in words.
 function makeOrderCard(rng = Math.random) {
   const i = rollInt(rng, 0, PLANET_ORDER.length - 2);
   const outward = rng() < 0.5;
@@ -67,7 +69,13 @@ function makeOrderCard(rng = Math.random) {
   const shown = outward ? inner : outer;
   const answer = outward ? outer : inner;
   const others = shuffleWith(PLANET_ORDER.filter((p) => p !== shown && p !== answer), rng).slice(0, 3);
-  return { prompt: outward ? `${shown} → ?` : `? → ${shown}`, choices: shuffleWith([answer, ...others], rng), answer };
+  return {
+    prompt: outward ? `${shown} → ?` : `? → ${shown}`,
+    choices: shuffleWith([answer, ...others], rng),
+    answer,
+    worlds: true,
+    row: { shown, at: outward ? i : i + 1, gap: outward ? i + 1 : i },
+  };
 }
 
 // Well-known worlds and their mean radius in km.
@@ -83,7 +91,7 @@ function makeSizeCard(rng = Math.random) {
   for (;;) {
     const four = shuffleWith(worlds, rng).slice(0, 4);
     const [first, second] = [...four].sort((a, b) => WORLD_RADII[b] - WORLD_RADII[a]);
-    if (WORLD_RADII[first] >= WORLD_RADII[second] * 1.2) return { choices: four, answer: first };
+    if (WORLD_RADII[first] >= WORLD_RADII[second] * 1.2) return { worlds: true, choices: four, answer: first };
   }
 }
 
