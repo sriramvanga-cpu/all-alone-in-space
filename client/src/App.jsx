@@ -1579,6 +1579,19 @@ function ChoiceButtons({ choices, onPick, answer, render = (choice) => <span>{ch
 }
 
 const VALVE_BAND = 0.2;
+// The gauge is an arc 220° wide, centred on straight up; a needle position 0..1 turns it from -110° to +110°.
+const VALVE_SWEEP = 110;
+const VALVE_HUB = { x: 120, y: 116, r: 90 };
+const valvePoint = (deg, r) => [
+  round2(VALVE_HUB.x + r * Math.sin((deg * Math.PI) / 180)),
+  round2(VALVE_HUB.y - r * Math.cos((deg * Math.PI) / 180)),
+];
+const VALVE_ARC = `M${valvePoint(-VALVE_SWEEP, VALVE_HUB.r).join(" ")}A${VALVE_HUB.r} ${VALVE_HUB.r} 0 1 1 ${valvePoint(VALVE_SWEEP, VALVE_HUB.r).join(" ")}`;
+// Eleven ticks around the outside, longer at 0, 50 and 100%.
+const VALVE_TICKS = Array.from({ length: 11 }, (_, i) => {
+  const deg = -VALVE_SWEEP + i * (VALVE_SWEEP / 5);
+  return `M${valvePoint(deg, 101).join(" ")}L${valvePoint(deg, i % 5 === 0 ? 110 : 106).join(" ")}`;
+}).join("");
 
 // A needle sweeps the gauge back and forth; a tap inside the green band is a hit, anywhere else a miss.
 function Valve({ onMark }) {
@@ -1600,7 +1613,7 @@ function Valve({ onMark }) {
     let id;
     const step = () => {
       drawn.current = at();
-      if (needle.current) needle.current.style.left = `${drawn.current * 100}%`;
+      needle.current?.setAttribute("transform", `rotate(${round2(-VALVE_SWEEP + 2 * VALVE_SWEEP * drawn.current)} ${VALVE_HUB.x} ${VALVE_HUB.y})`);
       id = requestAnimationFrame(step);
     };
     id = requestAnimationFrame(step);
@@ -1624,10 +1637,19 @@ function Valve({ onMark }) {
 
   return (
     <div className="valve">
-      <div className="valve-track">
-        <span className="valve-band" style={{ left: `${(band - VALVE_BAND / 2) * 100}%`, width: `${VALVE_BAND * 100}%` }} />
-        <span className="valve-needle" ref={needle} />
-      </div>
+      <svg className="valve-gauge" viewBox="0 0 240 152" aria-hidden="true">
+        <path className="valve-rim" d={VALVE_ARC} />
+        <path className="valve-arc" d={VALVE_ARC} />
+        {/* The band is the same arc with one dash of the arc's own length, slid to where the band sits. */}
+        <path className="valve-band" d={VALVE_ARC} pathLength="1" strokeDasharray={`${VALVE_BAND} 2`} strokeDashoffset={-(band - VALVE_BAND / 2)} />
+        <path className="valve-ticks" d={VALVE_TICKS} />
+        <g ref={needle}>
+          <line className="valve-glow" x1={VALVE_HUB.x} y1={VALVE_HUB.y} x2={VALVE_HUB.x} y2={VALVE_HUB.y - 84} />
+          <line className="valve-needle" x1={VALVE_HUB.x} y1={VALVE_HUB.y} x2={VALVE_HUB.x} y2={VALVE_HUB.y - 84} />
+        </g>
+        <circle className="valve-hub" cx={VALVE_HUB.x} cy={VALVE_HUB.y} r="8" />
+        <circle className="valve-pin" cx={VALVE_HUB.x} cy={VALVE_HUB.y} r="3" />
+      </svg>
       <div className="row">
         {/* Judge the press, not the release: a click lands ~0.1 s later, when the needle has moved on. */}
         <button
@@ -2513,8 +2535,7 @@ function Game() {
   const fuelShown = snap.phase === "fly" && flyFuel != null ? flyFuel : snap.fuel;
   // A cheat run shows ∞ while it tops fuel, power and credits up, and while its clock is longer than a run.
   const endless = snap.cheat && snap.admin.refill;
-  const endlessClock = snap.cheat && clockMs > ROUND_MS;
-  // What landing right now would score, the same sum the board ranks by.
+  const endlessClock = snap.cheat && clockMs > ROUND_MS;  // What landing right now would score, the same sum the board ranks by.
   const pointsShown =
     snap.phase === "end"
       ? runFacts(snap).settled

@@ -1017,17 +1017,17 @@ button.ghost.admin-toggle {
 .gauge { flex: 1; height: 0.9rem; overflow: hidden; background: rgba(255, 255, 255, 0.08); border-radius: var(--radius-pill); }
 .gauge i { display: block; height: 100%; background: linear-gradient(90deg, #4a7cff, #7be0ff); }
 
-.valve-track {
-  position: relative;
-  height: 2.6rem;
-  margin: 1.4rem 0 0.4rem;
-  overflow: hidden;
-  background: rgba(5, 9, 20, 0.6);
-  border: 1px solid var(--glass-line);
-  border-radius: var(--radius-md);
-}
-.valve-band { position: absolute; inset-block: 0; background: rgba(61, 220, 132, 0.3); border-inline: 2px solid #3ddc84; }
-.valve-needle { position: absolute; inset-block: 0; width: 4px; translate: -50%; background: #fff; box-shadow: 0 0 12px #fff; }
+/* The pressure gauge: a dark arc, a green zone slid along it, and a needle turning on a hub. */
+.valve-gauge { display: block; width: min(100%, 21rem); height: auto; margin: 0.6rem auto 0.3rem; overflow: visible; }
+.valve-rim, .valve-arc, .valve-band { fill: none; }
+.valve-rim { stroke: var(--glass-line); stroke-width: 22; opacity: 0.55; }
+.valve-arc { stroke: rgba(5, 9, 20, 0.78); stroke-width: 18; }
+.valve-band { stroke: rgba(61, 220, 132, 0.88); stroke-width: 18; }
+.valve-ticks { fill: none; stroke: rgba(160, 190, 255, 0.55); stroke-width: 1.6; stroke-linecap: round; }
+.valve-glow { stroke: #fff; stroke-width: 9; stroke-linecap: round; opacity: 0.2; }
+.valve-needle { stroke: #fff; stroke-width: 3.2; stroke-linecap: round; }
+.valve-hub { fill: #e9f0ff; }
+.valve-pin { fill: #0a1326; }
 .valve .row { align-items: center; }
 .valve .row button { min-width: 9rem; }
 .flash { font: 700 var(--text-md) var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; animation: pop 0.5s var(--ease) both; }
