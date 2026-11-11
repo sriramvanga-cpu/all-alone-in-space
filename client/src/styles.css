@@ -694,8 +694,30 @@ button.ghost.admin-toggle {
   50% { box-shadow: 0 0 18px rgba(255, 90, 110, 0.55); }
 }
 
+/* The last two minutes: the screen edges glow red and frost over, building as the air runs out
+   (--air runs 0 to 1) and pulsing faster in the last half minute. Clicks pass straight through. */
+.low-air {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+  box-shadow: inset 0 0 calc(50px + 150px * var(--air)) calc(6px * var(--air)) rgba(255, 50, 80, calc(0.14 + 0.42 * var(--air)));
+  animation: air-pulse 2.4s ease-in-out infinite;
+}
+.low-air.last { animation-duration: 1.1s; }
+.low-air::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='360'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.02 0.03' numOctaves='3' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.82  0 0 0 0 0.93  0 0 0 0 1  0 0 0 2.4 -0.9'/></filter><rect width='360' height='360' filter='url(%23f)'/></svg>");
+  opacity: calc(0.12 + 0.6 * var(--air));
+  -webkit-mask: radial-gradient(ellipse farthest-corner at 50% 50%, transparent 52%, #000 100%);
+  mask: radial-gradient(ellipse farthest-corner at 50% 50%, transparent 52%, #000 100%);
+}
+@keyframes air-pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+
 @media (prefers-reduced-motion: reduce) {
-  .backdrop .stars, .backdrop .sky, .panel, .title-card .ship, .meter.clock.urgent,
+  .backdrop .stars, .backdrop .sky, .panel, .title-card .ship, .meter.clock.urgent, .low-air,
   .title-planet, .title-big, .end.won .end-orb::before, .pop-in, .at-planet-art, .chance-track i { animation: none !important; }
   .celebrate, .shooting-star { display: none; }
   .delta, .meter-flash, .warp-out { display: none; }

@@ -2535,7 +2535,10 @@ function Game() {
   const fuelShown = snap.phase === "fly" && flyFuel != null ? flyFuel : snap.fuel;
   // A cheat run shows ∞ while it tops fuel, power and credits up, and while its clock is longer than a run.
   const endless = snap.cheat && snap.admin.refill;
-  const endlessClock = snap.cheat && clockMs > ROUND_MS;  // What landing right now would score, the same sum the board ranks by.
+  const endlessClock = snap.cheat && clockMs > ROUND_MS;
+  // Under two minutes the screen edges glow red and frost over: 0 at two minutes, 1 at none left.
+  const lowAir = LIVE_PHASES.has(snap.phase) && !endlessClock && clockMs <= 120_000 ? Math.round((1 - clockMs / 120_000) * 100) / 100 : null;
+  // What landing right now would score, the same sum the board ranks by.
   const pointsShown =
     snap.phase === "end"
       ? runFacts(snap).settled
@@ -2571,6 +2574,7 @@ function Game() {
 
   return (
     <div className="play">
+      {lowAir != null ? <div className={clockMs <= 30_000 ? "low-air last" : "low-air"} style={{ "--air": lowAir }} aria-hidden="true" /> : null}
       <header className="hud">
         <div>
           <p className="eyebrow">
