@@ -61,6 +61,23 @@ export function Moon({ x, y, size, turn }) {
   );
 }
 
+const COMET_TAIL = Array.from({ length: 22 }, (_, i) => i);
+const tenth = (v) => Math.round(v * 10) / 10;
+
+/** A comet (from sky.js cometAt): a glowing head and a tail of overlapping dust that thins out, pointing away from the sun. */
+export function Comet({ comet }) {
+  // It fades in and out at the two ends of its crossing, which lie off the map anyway.
+  const fade = Math.min(1, comet.u * 8, (1 - comet.u) * 8);
+  return (
+    <g className="comet" opacity={Math.round(fade * 100) / 100} aria-hidden="true">
+      <circle className="glow" cx={tenth(comet.x)} cy={tenth(comet.y)} r="10" opacity="0.16" />
+      {COMET_TAIL.map((i) => (
+        <circle key={i} cx={tenth(comet.x + comet.tx * i * 4)} cy={tenth(comet.y + comet.ty * i * 4)} r={tenth(4.2 - i * 0.17)} opacity={Math.round((0.9 - i * 0.04) * 100) / 100} />
+      ))}
+    </g>
+  );
+}
+
 const BELT_TURN_MS = 150_000;
 
 /** An asteroid belt (from sky.js beltOf) turning slowly round the sun, tilted like the orbits. Its turn

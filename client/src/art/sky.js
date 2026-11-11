@@ -59,3 +59,41 @@ export function moonAt(moon, ms) {
   const y = Math.sin(a) * moon.r * MOON_TILT;
   return { x: Math.cos(a) * moon.r, y, front: y >= 0 };
 }
+
+const COMET_CYCLE_MS = 30_000;
+const COMET_RUN_MS = 8_000;
+const COMET_CHANCE = 0.4;
+// A comet's straight line starts and ends this far from the sun, and misses it by at least MISS_MIN.
+const COMET_REACH = 560;
+const COMET_MISS_MIN = 90;
+
+/**
+ * The comet of a system in its cycle number `cycle` (a 30-second slot), or null: about two slots in
+ * five have one. It is a straight line at angle (dx, dy) that passes the sun at `miss`, always at
+ * least 90 away, so a comet never crosses the sun.
+ */
+export function cometOf(id, cycle) {
+  const rand = rng(hashId(`comet:${id}:${cycle}`));
+  if (rand() >= COMET_CHANCE) return null;
+  const a = rand() * 2 * Math.PI;
+  const side = rand() < 0.5 ? -1 : 1;
+  return { dx: Math.cos(a), dy: Math.sin(a), miss: side * (COMET_MISS_MIN + rand() * 90) };
+}
+
+/**
+ * The comet crossing a system at wall-clock ms, or null: its head at (x, y) round the sun, the unit
+ * direction (tx, ty) its tail points in (away from the sun, as a real comet's does) and how far
+ * along its 8-second crossing it is (u, 0 to 1). The same for everyone, since it follows the clock.
+ */
+export function cometAt(id, ms) {
+  const cycle = Math.floor(ms / COMET_CYCLE_MS);
+  const u = (ms - cycle * COMET_CYCLE_MS) / COMET_RUN_MS;
+  if (u >= 1) return null;
+  const c = cometOf(id, cycle);
+  if (!c) return null;
+  const s = (2 * u - 1) * COMET_REACH;
+  const x = c.dx * s - c.dy * c.miss;
+  const y = c.dy * s + c.dx * c.miss;
+  const d = Math.hypot(x, y);
+  return { x, y, tx: x / d, ty: y / d, u };
+}

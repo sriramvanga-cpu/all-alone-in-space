@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { beltOf, moonAt, moonsOf } from "./sky.js";
+import { beltOf, cometAt, cometOf, moonAt, moonsOf } from "./sky.js";
 
 const ids = Array.from({ length: 300 }, (_, i) => `system-${i}`);
 
@@ -41,4 +41,27 @@ test("moons stay clear of their planet and in front or behind by which side of t
   }
   assert.ok(withMoons > ids.length * 0.2 && withMoons < ids.length * 0.5, `${withMoons} planets with moons`);
   assert.deepEqual(moonsOf("ringed", 12, true), []);
+});
+
+test("a comet misses the sun, its tail points away from it, and it only crosses in the first 8 seconds of a slot", () => {
+  let slots = 0;
+  let total = 0;
+  for (const id of ids) {
+    for (let cycle = 0; cycle < 10; cycle++) {
+      total++;
+      const c = cometOf(id, cycle);
+      if (!c) continue;
+      slots++;
+      assert.ok(Math.abs(c.miss) >= 90 && Math.abs(c.miss) <= 180, `${id}: miss ${c.miss}`);
+      for (const u of [0, 0.2, 0.5, 0.8, 0.99]) {
+        const at = cometAt(id, cycle * 30_000 + u * 8_000);
+        assert.ok(at, `${id}: no comet at ${u}`);
+        assert.ok(Math.hypot(at.x, at.y) >= 90, `${id}: ${Math.hypot(at.x, at.y)} from the sun`);
+        assert.ok(at.tx * at.x + at.ty * at.y > 0, `${id}: tail points at the sun`);
+      }
+      assert.equal(cometAt(id, cycle * 30_000 + 8_000), null);
+      assert.equal(cometAt(id, cycle * 30_000 + 29_000), null);
+    }
+  }
+  assert.ok(slots > total * 0.3 && slots < total * 0.5, `${slots} of ${total} slots`);
 });
