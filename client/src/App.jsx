@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   START_FUEL,
   START_CREDITS,
@@ -53,7 +53,9 @@ import HowTo, { Reel } from "./intro/HowTo.jsx";
 import WarpTunnel, { JUMP as WARP_JUMP, OUT as WARP_OUT } from "./art/WarpTunnel.jsx";
 import { Starbase } from "./art/Station.jsx";
 import { PlanetDot, faceOf } from "./art/Planet.jsx";
+import { beltOf } from "./art/sky.js";
 import {
+  Belt,
   CostPill,
   DROP,
   JumpGate,
@@ -1229,6 +1231,7 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
   const jumping = snap.cheat && snap.admin.jump;
   const shut = new Set(snap.closed);
   const planets = planetsOf(snap.system);
+  const belt = useMemo(() => beltOf(snap.system, planets.map((p) => p.orbit)), [snap.system]);
   const ship = positionAt(snap.here, now);
   // Facing the sun, in degrees.
   const sunward = (at) => (Math.atan2(-at.y, -at.x) * 180) / Math.PI;
@@ -1318,6 +1321,7 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
         {planets.map((p) => (
           <ellipse key={p.id} className="orbit" rx={p.orbit} ry={p.orbit * TILT} />
         ))}
+        {belt ? <Belt belt={belt} /> : null}
         {placed.filter(({ at }) => at.y < 0).map(drawPlanet)}
         <g className="sun">
           <StarDot kind={system(snap.system).star} r={SUN_R} sun />

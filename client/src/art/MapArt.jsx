@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { JUMP_R, SYSTEMS, TILT, ringLabelAngle } from "../game/map.js";
 import { useArt } from "../three/artStore.js";
 import { ShipDefs } from "./Ship.jsx";
@@ -50,6 +50,25 @@ export function JumpGate() {
     </g>
   );
 }
+
+const BELT_TURN_MS = 150_000;
+
+/** An asteroid belt (from sky.js beltOf) turning slowly round the sun, tilted like the orbits. Its turn
+ * is set by the wall clock, so the belt in a warp's last frame and the map after it always agree. */
+export const Belt = memo(function Belt({ belt }) {
+  const [delay] = useState(() => -(Date.now() % BELT_TURN_MS) / 1000);
+  return (
+    <g className="belt" transform={`scale(1 ${TILT})`} aria-hidden="true">
+      {/* A faint band of dust under the specks, so the belt reads as one thing and not as more stars. */}
+      <circle className="belt-dust" r={belt.mid} strokeWidth={belt.half * 1.7} />
+      <g className="belt-turn" style={{ animationDuration: `${BELT_TURN_MS / 1000}s`, animationDelay: `${delay.toFixed(2)}s` }}>
+        {belt.specks.map((s, i) => (
+          <circle key={i} cx={s.x} cy={s.y} r={s.r} opacity={s.o} />
+        ))}
+      </g>
+    </g>
+  );
+});
 
 // The fuel-stop badge: a drop, filled from MapDefs' fuel-drop gradient.
 export const DROP = "M0 -4.8C2.7 -1 4 1 4 2.7A4 4 0 0 1 -4 2.7C-4 1 -2.7 -1 0 -4.8Z";

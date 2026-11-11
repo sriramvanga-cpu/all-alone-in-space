@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { useArt } from "../three/artStore.js";
+import { hashId, rng } from "./rng.js";
 
 // Planets are drawn in unit space (radius 1) and scaled by face.radius.
 // One key light sits at the upper left of the whole chart, so every world shares
@@ -42,23 +43,6 @@ export const PLANET_COLORS = {
 // How glossy and how thick the atmosphere is, per surface kind.
 const SHINE = { gas: 0.5, ice: 0.6, fuel: 0.55, rock: 0.2, dust: 0.16 };
 const ATMO = { gas: 0.55, ice: 0.6, fuel: 0.75, rock: 0.34, dust: 0.3 };
-
-export function hashId(id) {
-  let h = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-export function rng(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
 
 function rgb(hex) {
   const n = parseInt(hex.slice(1), 16);

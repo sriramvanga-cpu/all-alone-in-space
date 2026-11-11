@@ -2,8 +2,9 @@ import { memo, useEffect, useRef, useState } from "react";
 import { easeIn, easeOut, smooth } from "../intro/draw.js";
 import { sfx } from "../sound.js";
 import { ShipShapes } from "./Ship.jsx";
-import { DROP, JumpGate, MapDefs, NARROW, PLANET_ZOOM, StarDot, SUN_R, systemBox } from "./MapArt.jsx";
+import { Belt, DROP, JumpGate, MapDefs, NARROW, PLANET_ZOOM, StarDot, SUN_R, systemBox } from "./MapArt.jsx";
 import { PlanetDot, faceOf } from "./Planet.jsx";
+import { beltOf } from "./sky.js";
 import { Starbase } from "./Station.jsx";
 import { JUMP_R, STATION, TILT, orbitAt, planetsOf, system } from "../game/map.js";
 
@@ -59,6 +60,7 @@ function sceneOf(id, closed, narrow) {
     station,
     box: systemBox(reach, narrow),
     star: system(id)?.star,
+    belt: station ? null : beltOf(id, planets.map((p) => p.orbit)),
     worlds: planets.map((p) => ({ p, face: faceOf(p), shut: closed.includes(p.id) })),
   };
 }
@@ -105,9 +107,13 @@ const Scene = memo(function Scene({ scene, zoom }) {
         {scene.station ? (
           <Starbase x="-48" y="-48" width="96" height="96" />
         ) : (
-          <g className="sun">
-            <StarDot kind={scene.star} r={SUN_R} sun />
-          </g>
+          <>
+            {/* The belt pops in and out with the sun, as the map draws it between the orbits. */}
+            {scene.belt ? <Belt belt={scene.belt} /> : null}
+            <g className="sun">
+              <StarDot kind={scene.star} r={SUN_R} sun />
+            </g>
+          </>
         )}
       </g>
       {scene.worlds.map((w, i) => (far(w) ? null : world(w, i)))}

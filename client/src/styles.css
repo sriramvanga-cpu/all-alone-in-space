@@ -1263,6 +1263,12 @@ button.ghost.reactor-cell.hot {
 /* Planetary map */
 .system-stage, .system-stage:active { cursor: default; }
 .orbit { fill: none; stroke: rgba(150, 185, 255, 0.34); stroke-width: 1.2; }
+/* An asteroid belt: specks turning slowly (against the planets' way) round the sun. */
+.belt { pointer-events: none; }
+.belt circle { fill: #d6c8b4; }
+.belt .belt-dust { fill: none; stroke: rgba(214, 200, 180, 0.07); }
+.belt-turn { transform-origin: 0 0; animation: belt-turn linear infinite; }
+@keyframes belt-turn { to { transform: rotate(-360deg); } }
 .sun .star-glow { transform-box: fill-box; transform-origin: center; animation: corona 4s ease-in-out infinite alternate; }
 /* A sun's rendered surface turns slowly, so its granulation drifts like boiling gas. */
 .sun .surface { transform-box: fill-box; transform-origin: center; animation: spin 240s linear infinite; }
@@ -1834,7 +1840,7 @@ button.ghost.reactor-cell.hot {
 
 @media (prefers-reduced-motion: reduce) {
   .streak, .link-flow, .ready-ring, .beacon-pulse, .navlight, .plume, .exhaust, .end-orb, .live::before,
-  .scan-btn, .node.system, .sun .star-glow, .sun .surface, .gate-core, .gate-spin, .sweep, .star .rays, .star .beams, .star .pair,
+  .scan-btn, .node.system, .sun .star-glow, .sun .surface, .gate-core, .gate-spin, .sweep, .star .rays, .star .beams, .star .pair, .belt-turn,
   .starbase .spin, .starbase .core, .reading, .scan-bar i, .pod, .pod.p1::before, .pod .rank::after,
   .board-empty, .board-empty-art .planet-art-box, .board-ship, .reactor-cell.hot .reactor-rod {
     animation: none !important;
