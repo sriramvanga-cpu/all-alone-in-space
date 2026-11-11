@@ -49,6 +49,7 @@ import bank from "./data/questions.json";
 import SpaceBackdrop from "./art/SpaceBackdrop.jsx";
 import { SAUCER_X, ShipShapes, ShipSvg } from "./art/Ship.jsx";
 import Intro from "./intro/Intro.jsx";
+import { smooth } from "./intro/draw.js";
 import HowTo, { Reel } from "./intro/HowTo.jsx";
 import WarpTunnel, { JUMP as WARP_JUMP, OUT as WARP_OUT } from "./art/WarpTunnel.jsx";
 import { Starbase } from "./art/Station.jsx";
@@ -90,6 +91,8 @@ function warpPower(t) {
   return 1 - 0.7 * ((t - WARP_OUT) / (1 - WARP_OUT));
 }
 const HOP_MS = 1600;
+// How much closer the planetary map pushes in at the end of a hop.
+const HOP_PUSH = 2.4;
 const VIEW_W = 720;
 const VIEW_H = 640;
 const SWEEP_MS = 1200;
@@ -1270,6 +1273,17 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
   // Facing the sun, in degrees.
   const sunward = (at) => (Math.atan2(-at.y, -at.x) * 180) / Math.PI;
   const box = systemBox(Math.max(...planets.map((p) => p.orbit)), narrow);
+  // The last part of a hop pushes the map in on the world it is flying to (where that world will be when the ship
+  // gets there), and the world's own screen grows out of it. Admin jumps have no flight to push in on.
+  const hop = snap.flight;
+  const push = flying && !still && hop.at && hop.ms ? smooth(0.55, 1, (now - hop.at) / hop.ms) : 0;
+  let view = box;
+  if (push > 0) {
+    const goal = positionAt(hop.to, hop.at + hop.ms);
+    const [w, h] = [box[2] / HOP_PUSH, box[3] / HOP_PUSH];
+    const close = [goal.x - w / 2, goal.y - h / 2, w, h];
+    view = box.map((v, i) => v + (close[i] - v) * push);
+  }
   const placed = planets.map((p) => ({ p, at: orbitAt(p, now) }));
   // Planets on the far side of the star are drawn before it, the near side after, so they pass behind it.
   const drawPlanet = ({ p, at }) => {
@@ -1353,7 +1367,7 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
       <svg
         ref={svgRef}
         className={["map-svg", flying ? "flying" : "", moonsOn ? "moons-on" : ""].filter(Boolean).join(" ")}
-        viewBox={box.join(" ")}
+        viewBox={view.join(" ")}
         role="img"
         aria-label={`${snap.system} system`}
       >
@@ -1387,7 +1401,7 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
         )}
       </svg>
       {actions ? (
-        <div className="map-actions" ref={pinRef}>
+        <div className="map-actions" ref={pinRef} style={push > 0 ? { opacity: Math.max(0, 1 - 3 * push) } : undefined}>
           {actions}
         </div>
       ) : null}
@@ -2065,7 +2079,7 @@ function Game() {
         here: id,
         power: g.power - move.power,
         note: "",
-        flight: { from: g.here, to: id, d, ms: HOP_MS, fromFuel: g.fuel, actual: 0, event: null, paused: false, resume: 0 },
+        flight: { from: g.here, to: id, d, ms: HOP_MS, fromFuel: g.fuel, actual: 0, event: null, paused: false, resume: 0, at: now },
       });
       return;
     }
