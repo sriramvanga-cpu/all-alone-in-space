@@ -235,6 +235,16 @@ const SOUNDS = {
     tone(80, 40, 0.5, { gain: 0.18, delay: 0.32, send: 0.3 });
     [2093, 1568, 1319].forEach((f, i) => tone(f, f, 0.3, { type: "triangle", gain: 0.035, delay: 0.38 + i * 0.07, send: 0.6 }));
   },
+  // The shuttle's descent to a landing: rushing air and a thruster roar that settles.
+  descent: () => {
+    noise(2.6, { type: "lowpass", f0: 5200, f1: 500, gain: 0.1, attack: 0.5, send: 0.35 });
+    tone(120, 62, 2.6, { type: "sawtooth", gain: 0.045, lp: 500, lpTo: 220, attack: 0.4, send: 0.25 });
+  },
+  // Touchdown: a soft thump and a puff of dust.
+  touchdown: () => {
+    tone(90, 38, 0.35, { gain: 0.2, send: 0.3 });
+    noise(0.7, { type: "lowpass", f0: 1600, f1: 200, gain: 0.07, attack: 0.02, send: 0.3 });
+  },
   // A quake on Vulcan in the intro: a low rolling rumble.
   quake: () => {
     noise(1.6, { type: "lowpass", f0: 320, f1: 80, gain: 0.16, attack: 0.06, send: 0.35 });

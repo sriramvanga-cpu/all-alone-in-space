@@ -133,7 +133,10 @@ if (WEBGL) {
     .catch((err) => {
       console.warn("Realistic map art unavailable, keeping vector art:", err);
       publishArt({ loading: false });
-    });
+    })
+    // Fetch the live planet view too, so the first world screen and the first landing film don't wait on it.
+    .then(() => import("./three/PlanetView.jsx"))
+    .catch(() => {});
 }
 
 const DOMAINS = [
@@ -896,6 +899,29 @@ function PlanetStage({ id }) {
           <PlanetView face={FACES.get(id)} onReady={() => setLive(true)} onFail={() => setFailed(true)} />
         </Suspense>
       ) : null}
+    </div>
+  );
+}
+
+// The landing film, behind the screens while a landing's readings come in and, after a win, behind the win card: the
+// shuttle drops to the ground, the scan ring pulses, and the sky takes on the verdict's colour. It runs on the clock
+// from the moment Land was pressed, so it needs nothing from those screens, and it fades in once it has drawn.
+function LandingFilm({ scan }) {
+  const [on, setOn] = useState(false);
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  const verdictAt = scan.at + DESCENT_MS + (scan.readings.length + 1) * SCAN_STEP_MS;
+  return (
+    <div className={on ? "landing-film on" : "landing-film"} aria-hidden="true">
+      <Suspense fallback={null}>
+        <PlanetView
+          mode="landing"
+          face={FACES.get(scan.world)}
+          landing={{ at: scan.at, descentMs: DESCENT_MS, verdictAt, habitable: Boolean(scan.won) }}
+          onReady={() => setOn(true)}
+          onFail={() => setFailed(true)}
+        />
+      </Suspense>
     </div>
   );
 }
@@ -2283,6 +2309,8 @@ function Game() {
       note: second ? "Site 1 was toxic, so the scanner checked a second site." : scanned ? "Scanned from orbit." : "Landed blind.",
       at: Date.now(),
       won,
+      // The film needs WebGL and a player who hasn't asked for less motion.
+      film: WEBGL && !stillMotion(),
     };
     commit({ power, closed: [...g.closed, g.here], phase: "scan", scan, landing: null });
   }
@@ -2295,10 +2323,13 @@ function Game() {
       return;
     }
     // The 30 s comes off here, not at touchdown, so the clock can't give the result away before the readings do.
+    // The film's seconds are handed back, so showing it costs the player nothing.
+    const back = g.scan.film ? DESCENT_MS : 0;
     commit({
       phase: "map",
       scan: null,
-      deadline: g.deadline - LAND_FAIL_MS,
+      deadline: g.deadline - LAND_FAIL_MS + back,
+      pausedMs: g.pausedMs + back,
       note: `${g.here} isn't habitable, and the failed landing cost ${LAND_FAIL_MS / 1000} s. You can't land here again.`,
     });
   }
@@ -2674,6 +2705,9 @@ function Game() {
   return (
     <div className="play">
       {lowAir != null ? <div className={clockMs <= 30_000 ? "low-air last" : "low-air"} style={{ "--air": lowAir }} aria-hidden="true" /> : null}
+      {(snap.phase === "scan" || (snap.phase === "end" && snap.endReason === "win")) && snap.scan?.film ? (
+        <LandingFilm key={snap.scan.at} scan={snap.scan} />
+      ) : null}
       <header className="hud">
         <div>
           <p className="eyebrow">
@@ -3128,28 +3162,50 @@ function CountUp({ value, ms = 1200 }) {
 }
 
 const SCAN_STEP_MS = 450;
+// The landing film: the shuttle's descent, shown before the readings start.
+const DESCENT_MS = 2600;
 
 // `onSettle` (cheat mode, a habitable world) offers settling here or flying on; `onVerdict` (a real run that
 // settled) is called when the readings are all in and say habitable; otherwise `onDone` returns to the map.
 function Scan({ scan, onDone, onSettle, onVerdict, instant = false }) {
   const habitable = Boolean(scan.won);
+  // With the landing film the screen shows only a caption until the shuttle is down; the readings start then.
+  const wait = !instant && scan.film ? Math.max(0, scan.at + DESCENT_MS - Date.now()) : 0;
+  const [filming, setFilming] = useState(wait > 0);
   const [done, setDone] = useState(instant);
   const revealMs = (scan.readings.length + 1) * SCAN_STEP_MS;
   useEffect(() => {
     // The win screen shows the readings again at once, with no blips or verdict to wait for.
     if (instant) return undefined;
+    const ids = [];
+    if (wait > 0) {
+      sfx("descent");
+      ids.push(
+        setTimeout(() => {
+          setFilming(false);
+          sfx("touchdown");
+        }, wait),
+      );
+    }
     // A blip as each reading comes in, then the buzz of a toxic verdict (a win has its own chime).
-    const ids = scan.readings.map((_, i) => setTimeout(() => sfx("reading"), (i + 1) * SCAN_STEP_MS));
+    scan.readings.forEach((_, i) => ids.push(setTimeout(() => sfx("reading"), wait + (i + 1) * SCAN_STEP_MS)));
     ids.push(
       setTimeout(() => {
         setDone(true);
         if (!habitable) sfx("toxic");
         else if (onSettle) sfx("right");
         onVerdict?.();
-      }, revealMs),
+      }, wait + revealMs),
     );
     return () => ids.forEach(clearTimeout);
   }, [revealMs]);
+  if (filming) {
+    return (
+      <p className="landing-caption" role="status">
+        Landing on {scan.world}…
+      </p>
+    );
+  }
   return (
     <section className={instant ? "panel wide scan instant" : "panel wide scan"}>
       <p className="eyebrow">{scan.world}</p>

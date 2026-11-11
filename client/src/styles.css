@@ -674,6 +674,24 @@ button.ghost.admin-toggle {
 .planet-stage.live .planet-view { opacity: 1; }
 .planet-view canvas { display: block; width: 100%; height: 100%; }
 @keyframes at-grow { from { opacity: 0; transform: scale(0.6); } }
+
+/* The landing film: a full-screen layer behind the screens (over the star backdrop), faded in once it has drawn. */
+.landing-film { position: fixed; inset: 0; z-index: -1; opacity: 0; transition: opacity 0.4s; pointer-events: none; }
+.landing-film.on { opacity: 1; }
+.planet-view.film { inset: 0; opacity: 1; }
+.planet-view.film canvas { width: 100%; height: 100%; }
+.landing-caption {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 14vh;
+  margin: 0;
+  text-align: center;
+  font: 700 var(--text-xl) var(--font-display);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-shadow: 0 0 18px rgba(90, 209, 255, 0.85), 0 2px 10px rgba(0, 0, 0, 0.7);
+}
 .at-planet-art figcaption { margin-top: 0.9rem; font: 700 var(--text-lg) var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; }
 .at-planet-art small {
   display: block;
