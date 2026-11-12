@@ -79,7 +79,7 @@ Landing at a fuel stop starts a **fuel minute**: one minute of a quick game that
 | Planet order | Going out from the Sun, pick the planet that fills the gap ("Mars → ?"). A row shows the Sun and a slot for each planet, with one planet pictured and the gap glowing | 1 for every 2 |
 | Biggest world | Pick the biggest of four pictured worlds (all drawn at one size) | 1 for every 2 |
 
-Every **5 right in a row** earns a bonus credit. A **wrong answer jams the game** for 1.5 seconds (it dims, with a draining red "Jammed" bar), so guessing at random earns less than playing. If more than 1 in 10 of your answers are wrong, fuel usually gets more expensive. Colour clash has a "Swap round" button for anyone who can't tell colours apart.
+Every **5 right in a row** earns a bonus credit. A **wrong answer jams the game** for 1.5 seconds (it dims, with a draining red "Jammed" bar), so guessing at random earns less than playing. If more than 1 in 10 of your answers are wrong, fuel usually gets more expensive. Colour clash has a "Swap round" button for anyone who can't tell colours apart. It shows until your first answer (skipping doesn't count), so skip a card if the colours all look alike.
 
 After the minute comes the **shop**. Buy as many packs as you can pay for, then leave:
 

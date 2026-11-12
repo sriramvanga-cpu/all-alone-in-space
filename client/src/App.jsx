@@ -393,6 +393,8 @@ function runFacts(snap) {
 }
 
 const fuelKey = (card) => card.prompt ?? card.choices.join();
+// Whether this fuel minute has a right or wrong answer yet.
+const answeredFuel = (g) => g.fuelAnswers.some((a) => a !== "skip");
 
 // Interactive rounds have no cards.
 function drawFuelCard(round, seen) {
@@ -2401,10 +2403,12 @@ function Game() {
     });
   }
 
-  // Colour clash needs colour vision, so a player can trade it for the next round in their order.
+  // Colour clash needs colour vision, so a player can trade it for the next round in their order. Only before their
+  // first answer (skips don't count): the minute's credits come from its right answers at the round's rate, so a later
+  // swap would re-price the answers already given.
   function swapFuelRound() {
     const g = game.current;
-    if (g.phase !== "fuel" || g.fuelRound?.id !== "ink") return;
+    if (g.phase !== "fuel" || g.fuelRound?.id !== "ink" || answeredFuel(g)) return;
     const others = g.fuelOrder.filter((r) => r.id !== "ink");
     if (!others.length) return;
     const at = g.fuelOrder.indexOf(g.fuelRound);
@@ -3027,7 +3031,7 @@ function Game() {
                   <button type="button" className="ghost" onClick={() => markFuel("skip")}>
                     Skip
                   </button>
-                  {snap.fuelRound.id === "ink" ? (
+                  {snap.fuelRound.id === "ink" && !answeredFuel(snap) ? (
                     <button type="button" className="ghost" onClick={swapFuelRound}>
                       Can't tell colours apart? Swap round
                     </button>
