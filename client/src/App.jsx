@@ -694,7 +694,7 @@ const TIPS = {
   fuel: ["Fuel stop", "Play for one minute to earn credits, then spend them in the shop on fuel and power. Get more than 1 in 10 wrong and fuel costs more."],
   test: [
     "A possible home",
-    "Answer one question, then try to land. The chance starts at 0% and climbs faster as the clock runs, to 60% at 15 minutes. A right answer adds 10% and pays 15 credits; a wrong one halves the chance and makes fuel cost more. A failed landing costs 30 s. Each planet can be tried once.",
+    "Answer one question, then try to land. The chance starts at 0% and climbs faster as the clock runs, to 60% at 15 minutes. A right answer raises the chance by a tenth of itself (15% becomes 17%) and pays 15 credits; a wrong one halves the chance and makes fuel cost more. A failed landing costs 30 s. Each planet can be tried once.",
   ],
 };
 
@@ -2269,7 +2269,7 @@ function Game() {
     const result = answerPlanet({ credits: g.credits, variable: g.variable }, correct);
     sfx(correct ? "right" : "wrong");
     // Right or wrong, the player now tries to land; the odds come from the time flown (the clock's
-    // view of it, so paused tips don't count), plus 10 for a right answer or halved for a wrong one.
+    // view of it, so paused tips don't count), plus a tenth for a right answer or halved for a wrong one.
     const elapsed = roundMs(g) - (g.deadline - Date.now());
     commit({
       phase: "land",
@@ -2898,7 +2898,7 @@ function Game() {
                 resolveQuestion(choice === game.current.card.answer, false);
               }}
             />
-            <p className="hint">Then you try to land. A right answer adds 10% to the chance and pays 15 credits; a wrong one halves it.</p>
+            <p className="hint">Then you try to land. A right answer raises the chance by a tenth of itself and pays 15 credits; a wrong one halves it.</p>
           </section>
           </AtPlanet>
         ) : null}

@@ -88,7 +88,7 @@ Every rule is a constant or a pure function in `client/src/game/rules.js`:
 | `HOP_K` | Power per unit of distance for a hop | 0.0167 |
 | `SHOP_PACKS` | The shop's packs | 5, 10 or 15 fuel; 5 power |
 | `HAB_TOP`, `HAB_RAMP_MS` | The time part of the landing chance, and how long it takes to reach the top | 60%, 15 minutes |
-| `HAB_RIGHT`, `HAB_CAP` | A right answer's bonus, and the highest chance | +10, 65% |
+| `HAB_RIGHT`, `HAB_CAP` | A right answer's bonus, as a share of the chance, and the highest chance | a tenth (×1.1), 65% |
 | `LAND_FAIL_MS` | Time lost to a failed landing | 30 s |
 | `TOXIC_LIMIT` | The safe limit shown in the readings | 50 ppm |
 | `STREAK` | Right answers in a row for a bonus credit | 5 |

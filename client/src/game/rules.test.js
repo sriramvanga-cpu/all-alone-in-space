@@ -122,7 +122,7 @@ test("a penalty discounts to the cheapest exit but not below 1", () => {
   assert.equal(affordableVariable(2, 2, [8]), 1);
 });
 
-test("the landing chance climbs from 0% to 60% over 15 minutes, slowly at first; right adds 10 (up to 65), wrong halves it", () => {
+test("the landing chance climbs from 0% to 60% over 15 minutes, slowly at first; right adds a tenth of it (up to 65), wrong halves it", () => {
   const min = 60_000;
   assert.equal(timeChance(0), 0);
   assert.equal(timeChance(-1000), 0);
@@ -131,9 +131,10 @@ test("the landing chance climbs from 0% to 60% over 15 minutes, slowly at first;
   assert.equal(timeChance(10 * min), 27);
   assert.equal(timeChance(15 * min), 60);
   assert.equal(timeChance(20 * min), 60);
-  assert.equal(landingChance(0, true), 10);
+  assert.equal(landingChance(0, true), 0);
   assert.equal(landingChance(0, false), 0);
-  assert.equal(landingChance(10 * min, true), 37);
+  assert.equal(landingChance(7.5 * min, true), 17);
+  assert.equal(landingChance(10 * min, true), 30);
   assert.equal(landingChance(10 * min, false), 14);
   assert.equal(landingChance(15 * min, true), 65);
   assert.equal(landingChance(15 * min, false), 30);

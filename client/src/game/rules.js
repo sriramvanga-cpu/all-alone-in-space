@@ -35,10 +35,10 @@ export function rollInt(rng, lo, hi) {
 
 // Landing odds grow with the time flown and are the same for every planet: 0% when the clock starts,
 // climbing slowly at first and fastest near the end, to 60% at 15 minutes (the time flown, squared).
-// A right answer adds 10 for that landing, up to 65; a wrong one halves it.
+// A right answer raises that landing's chance by a tenth of itself (15% becomes 17%), up to 65; a wrong one halves it.
 export const HAB_TOP = 60;
 export const HAB_RAMP_MS = 15 * 60 * 1000;
-export const HAB_RIGHT = 10;
+export const HAB_RIGHT = 0.1;
 export const HAB_CAP = 65;
 // A failed landing takes this much off the clock.
 export const LAND_FAIL_MS = 30_000;
@@ -49,10 +49,10 @@ export function timeChance(elapsedMs) {
   return Math.round(HAB_TOP * t * t);
 }
 
-/** The landing chance in whole percent: a right answer adds HAB_RIGHT (up to HAB_CAP), a wrong one halves it. */
+/** The landing chance in whole percent: a right answer raises it by HAB_RIGHT of itself (up to HAB_CAP), a wrong one halves it. */
 export function landingChance(elapsedMs, correct) {
   const base = timeChance(elapsedMs);
-  return correct ? Math.min(HAB_CAP, base + HAB_RIGHT) : Math.round(base / 2);
+  return correct ? Math.min(HAB_CAP, Math.round(base * (1 + HAB_RIGHT))) : Math.round(base / 2);
 }
 
 /** One landing site: it settles when a roll of 0–99 comes in under the chance. */

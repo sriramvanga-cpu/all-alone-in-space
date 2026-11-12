@@ -98,7 +98,7 @@ Each fuel stop can only be visited once.
 2. **Answer one question** within 60 seconds. Outer-ring systems ask easy questions, the middle ring medium ones, and the inner ring hard ones.
 3. **Try to land.** The landing chance shows as a bar:
    - Most of it comes from the **time flown**. It starts at 0% and climbs slowly at first, then faster, to 60% at 15 minutes.
-   - A **right answer** adds 10% (up to 65%) and pays 15 credits.
+   - A **right answer** raises the chance by a tenth of itself (15% becomes 17%, 30% becomes 33%, up to 65%) and pays 15 credits. Early on, when the chance is small, it adds little.
    - A **wrong answer** (or running out of time) halves the chance, and usually makes fuel more expensive.
 
    | Time flown | Chance from time |
@@ -119,7 +119,7 @@ Each fuel stop can only be visited once.
 
 - **Early landings are long shots.** The chance starts at 0%, so the first minutes are for scouting, refuelling and getting into position.
 - **But time is points.** Every 10 seconds left is a point, so waiting for better odds costs score. That's the game's main trade-off.
-- **Outer systems ask easier questions** (more right answers, so +10% instead of halving), but their lanes cost the most fuel.
+- **Outer systems ask easier questions** (more right answers, so a tenth more instead of halving), but their lanes cost the most fuel.
 - **Hop when planets line up.** The same hop can cost much less a few seconds later.
 - **Keep enough fuel to leave.** Being stranded ends the run.
 - **Wrong answers cost twice:** they halve the landing chance and usually raise fuel prices.
