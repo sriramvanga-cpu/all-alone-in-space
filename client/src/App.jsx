@@ -55,6 +55,7 @@ import WarpTunnel, { JUMP as WARP_JUMP, OUT as WARP_OUT } from "./art/WarpTunnel
 import { Starbase } from "./art/Station.jsx";
 import { PlanetDot, faceOf } from "./art/Planet.jsx";
 import { beltOf, cometAt, moonAt, moonsOf } from "./art/sky.js";
+import { clock } from "./game/clock.js";
 import {
   Belt,
   Comet,
@@ -283,7 +284,7 @@ function jumpMoves(g) {
   return [STATION, ...SYSTEMS.map((s) => s.id)].filter((id) => id !== g.here).map((id) => ({ id, distance: 0, fuel: 0 }));
 }
 
-function moves(g, ms = Date.now()) {
+function moves(g, ms = clock()) {
   if (g.cheat && g.admin.jump) return jumpMoves(g);
   if (g.system) {
     return planetsOf(g.system)
@@ -1270,11 +1271,11 @@ function SystemMap({ snap, shipRef, onLaunch, onBlocked, actions, children }) {
   const pinRef = useRef(null);
   // The way back to the star map sits under the jump point, where ships leave a system.
   usePin(stageRef, svgRef, pinRef, JUMP_SPOT, 17, 34, [narrow, !actions]);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => clock());
   useEffect(() => {
     let id = 0;
     const tick = () => {
-      setNow(Date.now());
+      setNow(clock());
       id = requestAnimationFrame(tick);
     };
     id = requestAnimationFrame(tick);
@@ -1999,7 +2000,7 @@ function Game() {
   const game = useRef(null);
   if (!game.current) game.current = fresh();
   const [tick, setTick] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => clock());
   const [flyFuel, setFlyFuel] = useState(null);
   // The admin panel can play the intro film or the How to play reel again mid-run.
   const [replay, setReplay] = useState(null);
@@ -2038,7 +2039,7 @@ function Game() {
   // The clock: `ms` left as in a normal run, or null for the day-long cheat clock.
   function setClock(ms) {
     const g = game.current;
-    if (g.cheat && g.phase !== "end") commit({ deadline: Date.now() + (ms ?? CHEAT_ROUND_MS), admin: { ...g.admin, clock: ms != null } });
+    if (g.cheat && g.phase !== "end") commit({ deadline: clock() + (ms ?? CHEAT_ROUND_MS), admin: { ...g.admin, clock: ms != null } });
   }
 
   // Time passes as if flown: less on the clock, better landing odds.
@@ -2058,7 +2059,7 @@ function Game() {
 
   // `at` is when the run stopped: a landing that settles stops it the moment Land was pressed, though its readings
   // and the win come a few seconds later, so those seconds cost no points.
-  function finish(reason, at = Date.now()) {
+  function finish(reason, at = clock()) {
     if (game.current.phase === "end") return;
     sfx(reason === "win" ? "win" : "lose");
     commit({
@@ -2076,14 +2077,14 @@ function Game() {
   // The run's clock starts as the How to play reel hands over, finished or skipped.
   function dock() {
     if (game.current.phase !== "howto") return;
-    commit({ phase: "map", deadline: Date.now() + roundMs(game.current) });
+    commit({ phase: "map", deadline: clock() + roundMs(game.current) });
   }
 
   // A lane on the star map costs fuel; a hop inside a system costs the power its label shows now.
   function launch(id) {
     const g = game.current;
     if (g.phase !== "map" || tipFor(g)) return;
-    const now = Date.now();
+    const now = clock();
     if (g.deadline && now >= g.deadline) {
       finish("time");
       return;
@@ -2150,12 +2151,12 @@ function Game() {
   function scanHere() {
     const g = game.current;
     if (g.phase !== "map" || tipFor(g) || g.system || g.scanned.includes(g.here) || g.power + 1e-9 < MAP_SCAN_POWER) return;
-    if (g.deadline && Date.now() >= g.deadline) {
+    if (g.deadline && clock() >= g.deadline) {
       finish("time");
       return;
     }
     sfx("scan");
-    commit({ power: g.power - MAP_SCAN_POWER, scanned: [...g.scanned, g.here], scanAt: Date.now(), note: "" });
+    commit({ power: g.power - MAP_SCAN_POWER, scanned: [...g.scanned, g.here], scanAt: clock(), note: "" });
   }
 
   function enterSystem() {
@@ -2189,7 +2190,7 @@ function Game() {
   function arrive() {
     const g = game.current;
     if (g.phase !== "fly" || !g.flight) return;
-    if (g.deadline && Date.now() >= g.deadline) {
+    if (g.deadline && clock() >= g.deadline) {
       finish("time");
       return;
     }
@@ -2197,7 +2198,7 @@ function Game() {
     if (!g.system) {
       // A lane flight: a system opens its planetary map; the station stays on the star map.
       // The warp's last frame already shows a system as its planetary map will; only the station fades in.
-      commit({ phase: "map", flight: null, system: id === STATION ? null : id, warpAt: id === STATION ? Date.now() : 0 });
+      commit({ phase: "map", flight: null, system: id === STATION ? null : id, warpAt: id === STATION ? clock() : 0 });
       return;
     }
     const visited = g.visited.includes(id) ? g.visited : [...g.visited, id];
@@ -2218,7 +2219,7 @@ function Game() {
         fuelIndex: 0,
         fuelAnswers: [],
         fuelSeen: card ? [...g.fuelSeen, fuelKey(card)] : g.fuelSeen,
-        fuelDeadline: Date.now() + QUESTION_MS,
+        fuelDeadline: clock() + QUESTION_MS,
       });
       return;
     }
@@ -2245,7 +2246,7 @@ function Game() {
   function chooseDomain(domain) {
     const g = game.current;
     if (g.phase !== "pick") return;
-    if (g.deadline && Date.now() >= g.deadline) {
+    if (g.deadline && clock() >= g.deadline) {
       finish("time");
       return;
     }
@@ -2255,14 +2256,14 @@ function Game() {
       phase: "question",
       domain,
       card,
-      qDeadline: Date.now() + QUESTION_MS,
+      qDeadline: clock() + QUESTION_MS,
     });
   }
 
   function resolveQuestion(correct, timedOut) {
     const g = game.current;
     if (g.phase !== "question") return;
-    if (g.deadline && Date.now() >= g.deadline) {
+    if (g.deadline && clock() >= g.deadline) {
       finish("time");
       return;
     }
@@ -2270,7 +2271,7 @@ function Game() {
     sfx(correct ? "right" : "wrong");
     // Right or wrong, the player now tries to land; the odds come from the time flown (the clock's
     // view of it, so paused tips don't count), plus a tenth for a right answer or halved for a wrong one.
-    const elapsed = roundMs(g) - (g.deadline - Date.now());
+    const elapsed = roundMs(g) - (g.deadline - clock());
     commit({
       phase: "land",
       card: null,
@@ -2289,7 +2290,7 @@ function Game() {
   function land(scanned) {
     const g = game.current;
     if (g.phase !== "land" || !g.landing) return;
-    if (g.deadline && Date.now() >= g.deadline) {
+    if (g.deadline && clock() >= g.deadline) {
       finish("time");
       return;
     }
@@ -2307,7 +2308,7 @@ function Game() {
       world: g.here,
       readings: scanReadings(won),
       note: second ? "Site 1 was toxic, so the scanner checked a second site." : scanned ? "Scanned from orbit." : "Landed blind.",
-      at: Date.now(),
+      at: clock(),
       won,
       // The film needs WebGL and a player who hasn't asked for less motion.
       film: WEBGL && !stillMotion(),
@@ -2343,7 +2344,7 @@ function Game() {
   function closeFuelMinute() {
     const g = game.current;
     if (g.phase !== "fuel") return;
-    if (g.deadline && Date.now() >= g.deadline) {
+    if (g.deadline && clock() >= g.deadline) {
       finish("time");
       return;
     }
@@ -2366,7 +2367,7 @@ function Game() {
   function markFuel(kind) {
     const g = game.current;
     if (g.phase !== "fuel") return;
-    if (g.deadline && Date.now() >= g.deadline) {
+    if (g.deadline && clock() >= g.deadline) {
       finish("time");
       return;
     }
@@ -2418,7 +2419,7 @@ function Game() {
       fuelAnswers: [],
       creditFloor: g.credits,
       fuelSeen: card ? [...g.fuelSeen, fuelKey(card)] : g.fuelSeen,
-      fuelDeadline: Date.now() + QUESTION_MS,
+      fuelDeadline: clock() + QUESTION_MS,
     });
   }
 
@@ -2442,7 +2443,7 @@ function Game() {
     const g = game.current;
     const id = tipFor(g);
     if (!id) return;
-    const paused = g.tipAt ? Date.now() - g.tipAt : 0;
+    const paused = g.tipAt ? clock() - g.tipAt : 0;
     commit({
       tipsSeen: [...g.tipsSeen, id],
       tipAt: 0,
@@ -2455,7 +2456,7 @@ function Game() {
   function leaveShop() {
     const g = game.current;
     if (g.phase !== "shop") return;
-    if (g.deadline && Date.now() >= g.deadline) {
+    if (g.deadline && clock() >= g.deadline) {
       finish("time");
       return;
     }
@@ -2463,7 +2464,7 @@ function Game() {
   }
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 100);
+    const id = setInterval(() => setNow(clock()), 100);
     return () => clearInterval(id);
   }, []);
 
@@ -2472,7 +2473,7 @@ function Game() {
     if (!g.deadline || g.phase === "end" || g.phase === "name" || g.phase === "intro" || tip) return;
     // A landing that settled keeps its win however long its readings take: the Scan screen ends the run.
     if (g.phase === "scan" && g.scan?.won && !g.cheat) return;
-    const left = g.deadline - Date.now();
+    const left = g.deadline - clock();
     if (left <= 0) {
       finish("time");
       return;
@@ -2482,15 +2483,15 @@ function Game() {
   }, [snap.phase, snap.deadline, tip]);
 
   useEffect(() => {
-    if (tip && !game.current.tipAt) commit({ tipAt: Date.now() });
+    if (tip && !game.current.tipAt) commit({ tipAt: clock() });
   }, [tip]);
 
   useEffect(() => {
     if (game.current.phase !== "question") return;
-    const left = game.current.qDeadline - Date.now();
+    const left = game.current.qDeadline - clock();
     const id = setTimeout(() => {
       if (game.current.phase !== "question") return;
-      if (game.current.deadline && Date.now() >= game.current.deadline) {
+      if (game.current.deadline && clock() >= game.current.deadline) {
         finish("time");
         return;
       }
@@ -2501,7 +2502,7 @@ function Game() {
 
   useEffect(() => {
     if (game.current.phase !== "fuel" || tip) return;
-    const left = game.current.fuelDeadline - Date.now();
+    const left = game.current.fuelDeadline - clock();
     const id = setTimeout(() => {
       if (game.current.phase !== "fuel") return;
       closeFuelMinute();
@@ -3186,7 +3187,7 @@ const DESCENT_MS = 2600;
 function Scan({ scan, onDone, onSettle, onVerdict, instant = false }) {
   const habitable = Boolean(scan.won);
   // With the landing film the screen shows only a caption until the shuttle is down; the readings start then.
-  const wait = !instant && scan.film ? Math.max(0, scan.at + DESCENT_MS - Date.now()) : 0;
+  const wait = !instant && scan.film ? Math.max(0, scan.at + DESCENT_MS - clock()) : 0;
   const [filming, setFilming] = useState(wait > 0);
   const [done, setDone] = useState(instant);
   const revealMs = (scan.readings.length + 1) * SCAN_STEP_MS;

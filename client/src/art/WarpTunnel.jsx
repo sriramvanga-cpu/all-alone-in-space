@@ -8,6 +8,7 @@ import { PlanetDot, faceOf } from "./Planet.jsx";
 import { beltOf } from "./sky.js";
 import { Starbase } from "./Station.jsx";
 import { JUMP_R, STATION, TILT, orbitAt, planetsOf, system } from "../game/map.js";
+import { clock } from "../game/clock.js";
 
 // A lane flight between systems as a warp jump, in three shots over the flight (t from 0 to 1).
 // Leaving: the old system as its planetary map showed it, the ship at the jump point facing out.
@@ -71,7 +72,7 @@ function sceneOf(id, closed, narrow) {
 // The planets, orbits, sun and jump point, drawn as SystemMap draws them. Rendered once: the frame
 // loop moves and pops them through the warp-* classes.
 const Scene = memo(function Scene({ scene, zoom }) {
-  const now = Date.now();
+  const now = clock();
   const world = ({ p, face, shut }, i) => (
     <g key={p.id} className="warp-world" data-i={i}>
       <circle className="warp-spark" r="0" opacity="0" />
@@ -286,7 +287,7 @@ export default function WarpTunnel({ ms, resume, paused, from, to, closed }) {
         started = now - resume * ms;
       }
       const t = paused ? resume || 0.5 : Math.min(1, (now - started) / ms);
-      const wall = Date.now();
+      const wall = clock();
       const inside = paused || (t >= IN && t < OUT);
       const leaving = !paused && t < IN;
       const arriving = !paused && t >= OUT;

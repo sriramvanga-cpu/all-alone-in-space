@@ -53,7 +53,7 @@ export function moonsOf(id, radius, ringed) {
   }));
 }
 
-/** Where a moon is at wall-clock ms: x and y round its planet (squashed like the orbits), and whether it is on the near side. */
+/** Where a moon is at game-clock ms: x and y round its planet (squashed like the orbits), and whether it is on the near side. */
 export function moonAt(moon, ms) {
   const a = moon.phase + (moon.speed * ms) / 1000;
   const y = Math.sin(a) * moon.r * MOON_TILT;
@@ -81,7 +81,7 @@ export function cometOf(id, cycle) {
 }
 
 /**
- * The comet crossing a system at wall-clock ms, or null: its head at (x, y) round the sun, the unit
+ * The comet crossing a system at game-clock ms, or null: its head at (x, y) round the sun, the unit
  * direction (tx, ty) its tail points in (away from the sun, as a real comet's does) and how far
  * along its 8-second crossing it is (u, 0 to 1). The same for everyone, since it follows the clock.
  */

@@ -1,5 +1,6 @@
 import { memo, useState } from "react";
 import { JUMP_R, SYSTEMS, TILT, ringLabelAngle } from "../game/map.js";
+import { clock } from "../game/clock.js";
 import { useArt } from "../three/artStore.js";
 import { ShipDefs } from "./Ship.jsx";
 import { StationDefs } from "./Station.jsx";
@@ -81,9 +82,9 @@ export function Comet({ comet }) {
 const BELT_TURN_MS = 150_000;
 
 /** An asteroid belt (from sky.js beltOf) turning slowly round the sun, tilted like the orbits. Its turn
- * is set by the wall clock, so the belt in a warp's last frame and the map after it always agree. */
+ * is set by the game clock, so the belt in a warp's last frame and the map after it always agree. */
 export const Belt = memo(function Belt({ belt }) {
-  const [delay] = useState(() => -(Date.now() % BELT_TURN_MS) / 1000);
+  const [delay] = useState(() => -(clock() % BELT_TURN_MS) / 1000);
   return (
     <g className="belt" transform={`scale(1 ${TILT})`} aria-hidden="true">
       {/* A faint band of dust under the specks, so the belt reads as one thing and not as more stars. */}

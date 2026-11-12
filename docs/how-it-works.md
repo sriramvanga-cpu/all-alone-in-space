@@ -60,7 +60,7 @@ The main fields:
 | `scanned` | The places scanned from, which decide the lanes the star map shows. |
 | `fuel`, `power`, `credits` | The three resources. |
 | `variable` | The fuel price multiplier. It starts at 1, and wrong answers usually raise it. |
-| `deadline` | When the clock runs out, as a timestamp. |
+| `deadline` | When the clock runs out, as a timestamp on the game clock (`game/clock.js`): the wall time at page load plus `performance.now()`, so changing the device's clock mid-run moves nothing. |
 | `visited`, `closed` | Planets landed on, and planets that can't be visited again. |
 | `flight` | The flight in progress: where from and to, its path, and its event if it has one. |
 | `landing`, `scan`, `card` | The landing chance, the readings after a landing, and the current question. |
@@ -130,7 +130,7 @@ The admin panel's switches live in `g.admin`, and each is read in one place:
 
 When the page loads, if WebGL is available, `renderMapArt()` in `three/sprites.js` renders every planet, each kind of star, the black hole, the asteroids, the ship and the station once with three.js, and turns them into images. `artStore.js` publishes the images, and components read them with `useArt()`. Until they're ready, or without WebGL, the maps use the vector art in `client/src/art/`.
 
-Some screens also run a live three.js view (`three/PlanetView.jsx`), in a transparent canvas over the still picture, which stays under it until the first frame: the screens at a world show the planet turning with the ship circling it, and the landing film (`mode="landing"`) is a full-screen layer behind the Scan and win screens. The film follows the wall clock from `scan.at`, so it needs no state from the screens over it, and its sky, haze and scan ring follow the verdict's time. Phones keep the still pictures for the world screens, and nothing live runs under reduced motion or without WebGL. Cards for the Biggest world and Planet order games use `art.worlds`, pictures of twelve worlds rendered by `renderWorlds()` in `sprites.js`.
+Some screens also run a live three.js view (`three/PlanetView.jsx`), in a transparent canvas over the still picture, which stays under it until the first frame: the screens at a world show the planet turning with the ship circling it, and the landing film (`mode="landing"`) is a full-screen layer behind the Scan and win screens. The film follows the game clock from `scan.at`, so it needs no state from the screens over it, and its sky, haze and scan ring follow the verdict's time. Phones keep the still pictures for the world screens, and nothing live runs under reduced motion or without WebGL. Cards for the Biggest world and Planet order games use `art.worlds`, pictures of twelve worlds rendered by `renderWorlds()` in `sprites.js`.
 
 The 3D intro film is a live three.js scene in one continuous camera move. Its timeline constants and captions are at the top of `Intro3D.jsx`. If WebGL is missing or the textures take more than 9 seconds, it falls back to the 2D film. Under reduced motion, both are skipped.
 

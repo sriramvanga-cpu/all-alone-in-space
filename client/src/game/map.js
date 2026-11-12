@@ -154,7 +154,7 @@ export const JUMP_R = 365;
 // Each system is seen at a tilt, so its orbits are ovals this much flatter than they are wide.
 export const TILT = 0.62;
 
-/** Where a planet is at wall-clock time ms, in system units around its sun. */
+/** Where a planet is at game-clock time ms (game/clock.js), in system units around its sun. */
 export function orbitAt(p, ms) {
   const a = p.phase - (2 * Math.PI * ms) / p.period;
   return { x: p.orbit * Math.cos(a), y: p.orbit * TILT * Math.sin(a) };

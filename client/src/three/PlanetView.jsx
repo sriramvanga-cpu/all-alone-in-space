@@ -4,11 +4,12 @@ import { loadTextures } from "./assets.js";
 import { animateShuttle, animateStarship, buildShuttle, buildStarship } from "./models.js";
 import { LIGHT, buildPlanet, lookOf } from "./sprites.js";
 import { glowSprite } from "./particles.js";
+import { clock } from "../game/clock.js";
 
 // Two live views of a world, each drawn into a transparent canvas that fills its box:
 // - "orbit": the planet turning slowly with the player's ship circling it, for the screens at a world;
 // - "landing": the film of the shuttle's descent to the ground, the readings' scan ring, and the sky and haze
-//   taking on the verdict's colour. It follows the wall clock (landing.at), so it needs no state from the screens
+//   taking on the verdict's colour. It follows the game clock (landing.at), so it needs no state from the screens
 //   over it.
 // The caller keeps the planet's still picture (or the plain backdrop) under either, for the moments before the first
 // frame and if WebGL can't start.
@@ -271,7 +272,7 @@ function startLanding(el, face, tex, calls, landing) {
   let shown = false;
   const frame = (ms) => {
     raf = requestAnimationFrame(frame);
-    const now = Date.now();
+    const now = clock();
     const u = clamp((now - landing.at) / landing.descentMs);
     const quiet = now > landing.verdictAt + 1800;
     // Full rate while it descends, then half, then an occasional frame once the scene has settled.
