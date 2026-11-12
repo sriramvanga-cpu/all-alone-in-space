@@ -2359,6 +2359,7 @@ function Game() {
       return;
     }
     const result = fuelMinute(g.variable, g.fuelAnswers);
+    const variable = affordableVariable(result.variable, g.fuel, laneExits(g));
     const count = (kind) => g.fuelAnswers.filter((a) => a === kind).length;
     commit({
       fuelResult: {
@@ -2366,10 +2367,11 @@ function Game() {
         wrong: count("wrong"),
         earned: g.credits - g.creditFloor,
         bonus: fuelStreak(g.fuelAnswers).bonus,
-        pricier: result.applied,
+        // The multiplier can come out under 1, and the cap can undo it, so say so only when the price went up.
+        pricier: variable > g.variable,
       },
       phase: "shop",
-      variable: affordableVariable(result.variable, g.fuel, laneExits(g)),
+      variable,
       closed: g.closed.includes(g.here) ? g.closed : [...g.closed, g.here],
     });
   }
