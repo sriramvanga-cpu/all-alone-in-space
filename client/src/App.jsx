@@ -2287,7 +2287,7 @@ function Game() {
       phase: "land",
       card: null,
       credits: result.credits,
-      variable: correct ? g.variable : affordableVariable(result.variable, g.fuel, laneExits(g)),
+      variable: correct ? g.variable : affordableVariable(g.variable, result.variable, g.fuel, laneExits(g)),
       landing: {
         chance: landingChance(elapsed, correct),
         base: timeChance(elapsed),
@@ -2360,7 +2360,7 @@ function Game() {
       return;
     }
     const result = fuelMinute(g.variable, g.fuelAnswers);
-    const variable = affordableVariable(result.variable, g.fuel, laneExits(g));
+    const variable = affordableVariable(g.variable, result.variable, g.fuel, laneExits(g));
     const count = (kind) => g.fuelAnswers.filter((a) => a === kind).length;
     commit({
       fuelResult: {

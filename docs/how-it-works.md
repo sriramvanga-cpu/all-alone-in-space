@@ -59,7 +59,7 @@ The main fields:
 | `here`, `system` | Where the ship is: a system or the station on the star map, or a planet inside `system`. |
 | `scanned` | The places scanned from, which decide the lanes the star map shows. |
 | `fuel`, `power`, `credits` | The three resources. |
-| `variable` | The fuel price multiplier. It starts at 1, and wrong answers usually raise it. |
+| `variable` | The fuel price multiplier. It starts at 1, and wrong answers usually raise it. A rise is held down only to keep the cheapest lane out payable when the tank could pay for it before (`affordableVariable`); with a tank that couldn't, the rise stands in full. |
 | `deadline` | When the clock runs out, as a timestamp on the game clock (`game/clock.js`): the wall time at page load plus `performance.now()`, so changing the device's clock mid-run moves nothing. |
 | `visited`, `closed` | Planets landed on, and planets that can't be visited again. |
 | `flight` | The flight in progress: where from and to, its path, and its event if it has one. |

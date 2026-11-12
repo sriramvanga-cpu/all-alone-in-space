@@ -114,12 +114,20 @@ test("settled runs rank above losses; wins rank by points, losses by worlds, fue
   assert.ok(compareRuns(lasted, quit) < 0);
 });
 
-test("a penalty discounts to the cheapest exit but not below 1", () => {
-  assert.equal(affordableVariable(2, 5, [8]), 1.25);
-  assert.equal(affordableVariable(0.4, 5, [8]), 0.4);
-  assert.equal(affordableVariable(2, 0, [8]), 2);
-  assert.equal(affordableVariable(2, 5, []), 2);
-  assert.equal(affordableVariable(2, 2, [8]), 1);
+test("a price rise is held to the cheapest exit the tank could pay for, and stands when it couldn't", () => {
+  // 5 fuel covers a lane of 8 up to x1.25.
+  assert.equal(affordableVariable(1, 2, 5, [8, 16]), 1.25);
+  assert.equal(affordableVariable(1.2, 2, 5, [8]), 1.25);
+  assert.equal(affordableVariable(1, 1.1, 5, [8]), 1.1);
+  // At x1.5 the tank already couldn't pay for the lane, so the rise stands.
+  assert.equal(affordableVariable(1.5, 2, 5, [8]), 2);
+  // A low tank (2 fuel, lanes of 16) or an empty one can't wipe out the rise.
+  assert.equal(affordableVariable(1, 1.8, 2, [16]), 1.8);
+  assert.equal(affordableVariable(1, 2, 0, [8]), 2);
+  // A price that didn't rise, or no lanes, is left alone.
+  assert.equal(affordableVariable(2, 1.5, 5, [8]), 1.5);
+  assert.equal(affordableVariable(3, 3, 1, [16]), 3);
+  assert.equal(affordableVariable(1, 2, 5, []), 2);
 });
 
 test("the landing chance climbs from 0% to 60% over 15 minutes, slowly at first; right adds a tenth of it (up to 65), wrong halves it", () => {

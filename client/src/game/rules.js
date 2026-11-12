@@ -103,12 +103,16 @@ export function compareRuns(a, b) {
   return (a.id ?? 0) - (b.id ?? 0);
 }
 
-/** Keep the cheapest exit affordable, but never discount below 1. A lower variable is left alone. */
-export function affordableVariable(variable, fuel, distances) {
-  if (!(fuel > 0) || !distances.length) return variable;
-  const cheapest = Math.min(...distances);
-  const cap = (2 * fuel) / cheapest;
-  return Math.min(variable, Math.max(1, cap));
+/**
+ * The price after a rise from `before` to `after`. A rise never takes away the cheapest exit the tank could already
+ * pay for: it is held to what the fuel covers, never below `before`. If the tank couldn't reach a lane even at the
+ * old price (the player is about to refuel), the rise stands in full, so a low tank can't wipe out the penalty.
+ * A price that didn't rise is left alone.
+ */
+export function affordableVariable(before, after, fuel, distances) {
+  if (after <= before || !distances.length) return after;
+  const cap = (2 * fuel) / Math.min(...distances);
+  return cap < before ? after : Math.min(after, cap);
 }
 
 /**
