@@ -65,6 +65,7 @@ The main fields:
 | `flight` | The flight in progress: where from and to, its path, and its event if it has one. |
 | `landing`, `scan`, `card` | The landing chance, the readings after a landing, and the current question. |
 | `fuelRound`, `fuelDeck`, `fuelAnswers`, `fuelDeadline` | The fuel minute in progress. |
+| `fuelLock` | Until when a wrong answer jams the fuel game (`MISS_LOCK_MS`, 1.5 s). `markFuel` takes nothing before then. |
 | `tipsSeen`, `tipAt`, `pausedMs` | Which tips have been shown, and the clock pause while one is open. |
 | `admin` | The admin panel's switches (admin runs only). |
 | `runId`, `postState` | The saved run's id and whether it reached the board. |

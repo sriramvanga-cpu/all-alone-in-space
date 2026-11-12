@@ -201,6 +201,8 @@ export function fuelMinute(variable, answers, rng = Math.random) {
 }
 
 export const STREAK = 5;
+// A wrong answer in a fuel minute jams the game this long, so mashing at random earns less than playing.
+export const MISS_LOCK_MS = 1500;
 
 /** Right answers in a row at the end of a fuel minute, and 1 bonus credit for every STREAK in a row. A wrong answer resets the run; a skip doesn't. */
 export function fuelStreak(answers) {
