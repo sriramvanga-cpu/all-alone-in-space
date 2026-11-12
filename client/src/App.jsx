@@ -1937,13 +1937,15 @@ function AsteroidTap({ onMark }) {
     setRocks((list) => list.filter((r) => r.n !== n));
     setBooms((list) => [...list, { n, x: box.left + box.width / 2 - area.left, y: box.top + box.height / 2 - area.top }]);
   }
-  // Keyboard players fire with Space or Enter at the rock closest to escaping off the left edge.
+  // Keyboard players fire with Space or Enter at the rock closest to escaping off the left edge, one shot per
+  // press: a held key would clear the round on its own.
   const hitRef = useRef(hit);
   hitRef.current = hit;
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== " " && e.key !== "Enter") return;
       e.preventDefault();
+      if (e.repeat) return;
       const area = field.current?.getBoundingClientRect();
       if (!area) return;
       const lead = [...field.current.querySelectorAll(".rock")]
