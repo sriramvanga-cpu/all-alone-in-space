@@ -2265,7 +2265,8 @@ function Game() {
     commit({
       phase: "question",
       domain,
-      card,
+      // Shuffled each time, so a repeat player can't learn which letter is right.
+      card: { ...card, choices: shuffle(card.choices) },
       qDeadline: clock() + QUESTION_MS,
     });
   }

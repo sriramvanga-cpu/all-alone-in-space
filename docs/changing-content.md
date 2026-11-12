@@ -27,7 +27,7 @@ The question bank is `client/src/data/questions.json`, with one list of cards pe
 
 - **`id`** must be unique across the whole bank.
 - **`level`** is `easy`, `medium` or `hard`. Outer-ring systems ask easy questions, the middle ring medium ones, and the inner ring hard ones.
-- **`choices`** must be exactly four different answers. They show in the order written, so vary where the right one sits.
+- **`choices`** must be exactly four different answers. The game shuffles them each time a card is asked, so don't write choices that depend on their order ("Both A and B", "All of the above").
 - **`answer`** must match one of the choices exactly.
 - Each topic needs at least 16 easy, 12 medium and 12 hard cards.
 
