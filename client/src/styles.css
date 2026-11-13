@@ -405,6 +405,8 @@ input:focus {
 .reel-ring-text { fill: var(--ink); font: 700 15px var(--font-display); }
 .reel-rock { fill: url(#reel-rock); }
 .reel-boom { fill: url(#reel-boom); }
+.reel-bomb { fill: url(#reel-bomb); stroke: #ff5a5a; stroke-width: 2; }
+.reel-spark { fill: #ffd24a; }
 .reel-pack { fill: rgba(5, 9, 20, 0.5); stroke: rgba(160, 190, 255, 0.2); }
 .reel-pack.lit { stroke: var(--fuel); }
 .reel-buy { fill: #2563eb; stroke: rgba(190, 200, 255, 0.55); }

@@ -281,6 +281,8 @@ function drawHop(t) {
 // 4 · Refuel: a fuel stop's one-minute game earns credits, and the shop turns them into fuel.
 const ROCKS = [80, 104, 92, 116].map((y, i) => ({ y, from: 0.5 + 0.62 * i, pop: 0.95 + 0.62 * i }));
 const rockX = (rock, t) => 456 - 200 * (t - rock.from);
+// A bomb drifts through between the second and third rocks, is left alone, and fades before the timer.
+const BOMB = { y: 98, from: 0.5 + 0.62 * 1.5, life: 1 };
 const RING = 2 * Math.PI * 24;
 
 function drawRefuel(t) {
@@ -313,6 +315,15 @@ function drawRefuel(t) {
       {ROCKS.map((rock, i) =>
         t >= rock.from && t < rock.pop ? <circle key={i} className="reel-rock" cx={r1(rockX(rock, t))} cy={rock.y} r="10" /> : null,
       )}
+      {t >= BOMB.from && t < BOMB.from + BOMB.life ? (
+        <g
+          transform={`translate(${r1(rockX(BOMB, t))} ${BOMB.y})`}
+          opacity={r2(1 - smooth(BOMB.from + 0.75, BOMB.from + BOMB.life, t))}
+        >
+          <circle className="reel-bomb" r="10" />
+          <circle className="reel-spark" cx="3" cy="-13" r="3" />
+        </g>
+      ) : null}
       {ROCKS.map((rock, i) => {
         const k = clamp((t - rock.pop) / 0.35);
         return k > 0 && k < 1 ? (
@@ -658,6 +669,11 @@ function ReelDefs() {
         <stop offset="0" stopColor="#a58b77" />
         <stop offset="0.62" stopColor="#5a463a" />
         <stop offset="1" stopColor="#33271f" />
+      </radialGradient>
+      <radialGradient id="reel-bomb" cx="0.4" cy="0.36" r="0.7">
+        <stop offset="0" stopColor="#3a4256" />
+        <stop offset="0.68" stopColor="#141824" />
+        <stop offset="1" stopColor="#07090f" />
       </radialGradient>
       <radialGradient id="reel-boom">
         <stop offset="0.14" stopColor="#ffffff" />
