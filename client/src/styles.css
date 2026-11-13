@@ -1233,6 +1233,43 @@ button.ghost.reactor-cell.miss { animation: cell-shake 0.32s ease-in-out; }
   from { left: 100%; top: var(--y0); }
   to { left: calc(-1 * var(--size)); top: var(--y1); }
 }
+/* A bomb among the rocks: a dark sphere with a lit fuse and a red glow that says "don't touch". */
+.rock.bomb {
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 30%, #7d8799 0 9%, transparent 10%),
+    radial-gradient(circle at 40% 36%, #3a4256, #141824 68%, #07090f 100%);
+  box-shadow: 0 0 0 2px rgba(255, 90, 90, 0.9), 0 0 1.1rem rgba(255, 60, 60, 0.75);
+  animation: fly var(--fly) linear forwards, bomb-pulse 0.5s ease-in-out infinite alternate;
+}
+.rock.bomb::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -0.4rem;
+  width: 0.14rem;
+  height: 0.5rem;
+  background: #b9a07a;
+  transform: translateX(-50%) rotate(18deg);
+}
+.rock.bomb::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -0.8rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  translate: -10% 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 25%, #ffd24a 45%, rgba(255, 120, 40, 0) 72%);
+  animation: spark 0.25s steps(2) infinite alternate;
+}
+@keyframes bomb-pulse {
+  to { box-shadow: 0 0 0 2px rgba(255, 90, 90, 0.9), 0 0 1.7rem rgba(255, 60, 60, 1); }
+}
+@keyframes spark {
+  to { scale: 1.5; opacity: 0.6; }
+}
 .boom {
   position: absolute;
   width: 3.4rem;
@@ -1246,6 +1283,12 @@ button.ghost.reactor-cell.miss { animation: cell-shake 0.32s ease-in-out; }
 @keyframes boom {
   from { scale: 0.3; opacity: 1; }
   to { scale: 1.6; opacity: 0; }
+}
+/* A bomb that went off: bigger and red, so the mistake reads at a glance. */
+.boom.bad {
+  width: 5.2rem;
+  height: 5.2rem;
+  background: radial-gradient(circle, #fff 0 12%, #ff8a8a 28%, rgba(255, 40, 40, 0.65) 50%, transparent 72%);
 }
 
 /* Right answers in a row during a fuel minute */
