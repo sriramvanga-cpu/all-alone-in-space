@@ -19,7 +19,6 @@ import {
   scanReadings,
   TOXIC_LIMIT,
   STREAK,
-  MISS_LOCK_MS,
   fuelStreak,
   SCAN_POWER,
   START_POWER,
@@ -347,8 +346,6 @@ function fresh() {
     fuelSeen: [],
     fuelDeadline: 0,
     creditFloor: 0,
-    // Until when a wrong answer jams the fuel game (MISS_LOCK_MS).
-    fuelLock: 0,
     visited: [],
     landing: null,
     // Every event shows once before any repeats.
@@ -697,7 +694,7 @@ const TIPS = {
     "Solar system",
     "Planets circle the sun. Tap one to hop there: a hop costs power, less when the planets line up. Planets with a drop refuel you. Planets marked ! could be home. Power recharges while you're in a system.",
   ],
-  fuel: ["Fuel stop", "Play for one minute to earn credits, then spend them in the shop on fuel and power. A wrong answer jams the game for a moment, and more than 1 in 10 wrong makes fuel cost more."],
+  fuel: ["Fuel stop", "Play for one minute to earn credits, then spend them in the shop on fuel and power. Get more than 1 in 10 wrong and fuel costs more."],
   test: [
     "A possible home",
     "Answer one question, then try to land. The chance starts at 0% and climbs faster as the clock runs, to 60% at 15 minutes. A right answer raises the chance by a tenth of itself (15% becomes 17%) and pays 15 credits; a wrong one halves the chance and makes fuel cost more. A failed landing costs 30 s. Each planet can be tried once.",
@@ -1625,13 +1622,13 @@ function Shop({ result, credits, fuel, power, world, exitFare, stuck, onBuy, onL
   );
 }
 
-// `answer`, from the admin panel, marks the right choice. `locked` (a jammed fuel game) ignores picks.
-function ChoiceButtons({ choices, onPick, answer, locked = false, pictures = false, render = (choice) => <span>{choice}</span> }) {
+// `answer`, from the admin panel, marks the right choice.
+function ChoiceButtons({ choices, onPick, answer, pictures = false, render = (choice) => <span>{choice}</span> }) {
   // The next card appears under the pointer, so a double click would answer a card nobody read.
   const shownAt = useRef(0);
   const pickRef = useRef(null);
   pickRef.current = (choice) => {
-    if (locked || performance.now() - shownAt.current < 300) return;
+    if (performance.now() - shownAt.current < 300) return;
     onPick(choice);
   };
   useEffect(() => {
@@ -1724,8 +1721,7 @@ const VALVE_TICKS = Array.from({ length: 11 }, (_, i) => {
 }).join("");
 
 // A needle sweeps the gauge back and forth; a tap inside the green band is a hit, anywhere else a miss.
-// While `locked` (jammed by a miss) presses do nothing.
-function Valve({ onMark, locked }) {
+function Valve({ onMark }) {
   const needle = useRef(null);
   // Where the needle was last drawn: presses are judged against what the player saw.
   const drawn = useRef(0);
@@ -1752,7 +1748,6 @@ function Valve({ onMark, locked }) {
   }, []);
 
   function vent() {
-    if (locked) return;
     const hit = Math.abs(drawn.current - band) <= VALVE_BAND / 2;
     onMark(hit ? "right" : "wrong");
     setFlash((f) => ({ hit, n: (f?.n ?? 0) + 1 }));
@@ -1815,7 +1810,7 @@ const FLARE_MS = 1300;
 const FLARE_MIN_MS = 750;
 const FLARE_GAP_MS = 250;
 
-function ReactorTap({ onMark, locked }) {
+function ReactorTap({ onMark }) {
   const [hot, setHot] = useState(-1);
   const [burst, setBurst] = useState(null);
   const hotRef = useRef(-1);
@@ -1846,7 +1841,6 @@ function ReactorTap({ onMark, locked }) {
   }, []);
 
   function tap(cell) {
-    if (locked) return;
     const hit = cell === hotRef.current;
     onMark(hit ? "right" : "wrong");
     setBurst((b) => ({ cell, hit, n: (b?.n ?? 0) + 1 }));
@@ -2380,13 +2374,10 @@ function Game() {
   function markFuel(kind) {
     const g = game.current;
     if (g.phase !== "fuel") return;
-    const at = clock();
-    if (g.deadline && at >= g.deadline) {
+    if (g.deadline && clock() >= g.deadline) {
       finish("time");
       return;
     }
-    // A jammed game takes nothing, not even a skip, until the lock runs out.
-    if (at < g.fuelLock) return;
     const answers = [...g.fuelAnswers, kind];
     const card = drawFuelCard(g.fuelRound, g.fuelSeen);
     const right = answers.filter((answer) => answer === "right").length;
@@ -2402,7 +2393,6 @@ function Game() {
       fuelDeck: [card],
       fuelSeen: card ? [...g.fuelSeen, fuelKey(card)] : g.fuelSeen,
       credits,
-      fuelLock: kind === "wrong" ? at + MISS_LOCK_MS : g.fuelLock,
     });
   }
 
@@ -2721,8 +2711,6 @@ function Game() {
   const qMs = Math.max(0, snap.qDeadline - now);
   const fuelMs = Math.max(0, snap.fuelDeadline - now);
   const streak = fuelStreak(snap.fuelAnswers);
-  // `now` trails the clock, so this stays on until markFuel takes answers again.
-  const jammed = snap.phase === "fuel" && now < snap.fuelLock;
 
   return (
     <div className="play">
@@ -2999,14 +2987,8 @@ function Game() {
               {snap.fuelRound.per === 1 ? "1 credit each." : `1 credit for every ${snap.fuelRound.per}.`}{" "}
               Every {STREAK} in a row earns a bonus credit. You have {snap.credits}.
             </p>
-            <div className={jammed ? "fuel-play jammed" : "fuel-play"}>
-            {jammed ? (
-              <p key={snap.fuelLock} className="jam" role="status" style={{ "--lock": `${MISS_LOCK_MS}ms` }}>
-                Jammed
-              </p>
-            ) : null}
             {FuelGame ? (
-              <FuelGame key={`${snap.here}-${snap.fuelDeadline}`} onMark={markFuel} locked={jammed} />
+              <FuelGame key={`${snap.here}-${snap.fuelDeadline}`} onMark={markFuel} />
             ) : fuelCard ? (
               <>
                 {pictured && fuelCard.row ? (
@@ -3019,7 +3001,6 @@ function Game() {
                 <ChoiceButtons
                   choices={fuelCard.choices}
                   answer={snap.cheat && snap.admin.answers ? fuelCard.answer : undefined}
-                  locked={jammed}
                   pictures={pictured}
                   render={
                     pictured
@@ -3042,7 +3023,6 @@ function Game() {
                 </div>
               </>
             ) : null}
-            </div>
           </section>
           </AtPlanet>
         ) : null}
