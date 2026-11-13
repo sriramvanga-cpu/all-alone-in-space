@@ -30,6 +30,7 @@ The question bank is `client/src/data/questions.json`, with one list of cards pe
 - **`choices`** must be exactly four different answers. The game shuffles them each time a card is asked, so don't write choices that depend on their order ("Both A and B", "All of the above").
 - **`answer`** must match one of the choices exactly.
 - Each topic needs at least 16 easy, 12 medium and 12 hard cards.
+- **Write cards that take thought**, not facts a player simply knows: two-step sums, reasoning puzzles, estimates, code to trace. Aim for about 10–20 seconds on an easy card, 20–40 on a medium one and 30–60 on a hard one (the timer is 60 seconds). Keep a prompt under about 190 characters and a choice under about 48; prompts over 100 characters are shown in a smaller size so they fit a phone. Check each answer by working it out, not from memory.
 
 The tests check every one of these rules. A pilot doesn't see the same card twice in a run until that topic's level runs out. Adding a new topic takes code changes in `App.jsx` (the `DOMAINS` list, its icon in `DOMAIN_ICONS`, and the used-card sets in `Game`) and in the question bank test.
 
