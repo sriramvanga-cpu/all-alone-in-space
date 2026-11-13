@@ -418,7 +418,7 @@ function drawAnswer(t, v) {
         +{RIGHT_BONUS} right answer
       </Label>
       <Label x={BAR.x + BAR.w / 2} y={234} tone="dim" show={smooth(5, 5.4, t)}>
-        A wrong answer halves it. Skip: no change.
+        A wrong answer halves it. Skip: new question.
       </Label>
     </>
   );
