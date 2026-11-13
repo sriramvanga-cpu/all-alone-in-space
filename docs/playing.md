@@ -94,12 +94,11 @@ Each fuel stop can only be visited once.
 ## Possible homes (planets marked !)
 
 1. **Pick a topic:** General knowledge, Mental ability or Technology.
-2. **Answer one question** within 60 seconds, or **Skip** it if you don't know. Outer-ring systems ask easy questions, the middle ring medium ones, and the inner ring hard ones.
+2. **Answer one question** within 60 seconds. If you don't know it, **Skip** swaps it for another of the same topic; the 60 seconds keep running. Outer-ring systems ask easy questions, the middle ring medium ones, and the inner ring hard ones.
 3. **Try to land.** The landing chance shows as a bar:
    - Most of it comes from the **time flown**. It starts at 0% and climbs slowly at first, then faster, to 60% at 15 minutes.
    - A **right answer** raises the chance by a tenth of itself (15% becomes 17%, 30% becomes 33%, up to 65%) and pays 15 credits. Early on, when the chance is small, it adds little.
    - A **wrong answer** (or running out of time) halves the chance, and usually makes fuel more expensive.
-   - A **skip** changes nothing: no credits, no price rise, and the chance stays at what the time flown gives. The answer is shown, and the planet's one question is used up.
 
    | Time flown | Chance from time |
    |---|---|

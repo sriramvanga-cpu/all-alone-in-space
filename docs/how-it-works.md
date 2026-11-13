@@ -85,7 +85,8 @@ stateDiagram-v2
   fuel --> shop: minute over
   shop --> map: leave
   pick --> question: choose a topic
-  question --> land: answer, skip or time out
+  question --> land: answer or time out
+  question --> question: skip
   land --> scan: land blind or scan first
   scan --> over: habitable, in a real run
   scan --> map: toxic, or Keep flying in an admin run
