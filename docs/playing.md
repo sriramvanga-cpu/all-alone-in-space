@@ -70,7 +70,7 @@ Landing at a fuel stop starts a **fuel minute**: one minute of a quick game that
 | Game | What you do | Credits |
 |---|---|---|
 | Pressure valve | Tap Vent while the needle on the round gauge is in the green zone | 1 for every 2 |
-| Reactor tap | Tap the overheating reactor cell to vent it (or press its number, 1 to 9). A cold cell is a miss | 1 for every 4 |
+| Reactor tap | Four coloured cells light up one by one, each with its own note. Tap them back in the same order (or press 1 to 4). A wrong tap is a miss, and the cell that was due gets a white ring | 1 for each order |
 | Colour clash | Pick the colour of the ink, not the word | 1 for every 2 |
 | Asteroid tap | Tap or drag across the asteroids (or press Space) | 1 for every 4 |
 | Fullest tank | Pick the fullest tank | 1 for every 2 |
@@ -130,7 +130,7 @@ Finished runs appear on the display board (`/board`) within a few seconds. Every
 ## Controls and accessibility
 
 - Questions and choice cards: tap, or press **A to D** or **1 to 4**.
-- Reactor tap: keys **1 to 9** tap the cells. Asteroid tap: **Space** hits the leading asteroid.
+- Reactor tap: keys **1 to 4** tap the cells, left to right and top to bottom; each cell shows its number. Asteroid tap: **Space** hits the leading asteroid.
 - **Escape** skips the intro film and the How to play reel.
 - First-time tips explain each part of the game with a short clip, and the clock waits while a tip is open.
 - With reduced motion turned on, the intro film is skipped, the How to play reel shows still frames, and Asteroid tap is left out of the fuel games. The landing film, the live planets, comets, shooting stars and the low-air pulse are left out too, and the loss pictures hold still. Phones keep the still planet pictures.

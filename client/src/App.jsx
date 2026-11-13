@@ -1801,62 +1801,86 @@ function Valve({ onMark }) {
   );
 }
 
-// Reactor tap: one of nine fuel cells overheats at a time, with a heat bar draining. Tap it (or press
-// its number) to vent it before it cools off on its own; a missed flare costs nothing, but a cold cell
-// tapped is a miss. Each vent shortens the next flare a little, down to a floor, like the valve
-// speeding up. About one vent a second keeps the pay close to the other rounds'.
-const REACTOR_CELLS = 9;
-const FLARE_MS = 1300;
-const FLARE_MIN_MS = 750;
-const FLARE_GAP_MS = 250;
+// Reactor tap: four coloured cells light up one by one in a random order, then the player taps them (or presses
+// 1 to 4) in that same order. A whole order right is a right answer; a wrong tap is a miss, the cell that was due
+// is outlined, and a new order plays. Each cell sounds its own note, so the order can be heard as well as seen.
+const REACTOR_CELLS = [
+  { name: "Red", hue: "#ff5a5a" },
+  { name: "Blue", hue: "#4f8bff" },
+  { name: "Green", hue: "#3ddc84" },
+  { name: "Yellow", hue: "#ffd23f" },
+];
+const CELL_LIT_MS = 550;
+const CELL_GAP_MS = 200;
+const ORDER_PAUSE_MS = 800;
+const TAP_FLASH_MS = 180;
 
 function ReactorTap({ onMark }) {
-  const [hot, setHot] = useState(-1);
-  const [burst, setBurst] = useState(null);
-  const hotRef = useRef(-1);
-  const lastRef = useRef(-1);
-  const life = useRef(FLARE_MS);
-  const timer = useRef(0);
+  // Which cell is lit (by the order playing, or by a tap), how many of the order are tapped right so far
+  // (-1 while it plays or after it ends), and how the last order ended.
+  const [lit, setLit] = useState(-1);
+  const [step, setStepState] = useState(-1);
+  const [result, setResult] = useState(null);
+  // Refs, so two taps before a redraw are still judged one after the other.
+  const order = useRef([]);
+  const stepRef = useRef(-1);
+  const timers = useRef([]);
+  const setStep = (n) => {
+    stepRef.current = n;
+    setStepState(n);
+  };
+  const later = (ms, fn) => timers.current.push(setTimeout(fn, ms));
 
-  // After `after` ms a different cell flares; if nobody vents it, it cools and the next one follows.
-  function flare(after) {
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      let next = lastRef.current;
-      while (next === lastRef.current) next = Math.floor(Math.random() * REACTOR_CELLS);
-      lastRef.current = next;
-      hotRef.current = next;
-      setHot(next);
-      timer.current = setTimeout(() => {
-        hotRef.current = -1;
-        setHot(-1);
-        flare(FLARE_GAP_MS);
-      }, life.current);
-    }, after);
+  // After `after` ms, light the four cells in a new order, then hand over to the player.
+  function play(after) {
+    order.current = shuffle([0, 1, 2, 3]);
+    order.current.forEach((cell, i) => {
+      const at = after + i * (CELL_LIT_MS + CELL_GAP_MS);
+      later(at, () => {
+        if (i === 0) setResult(null);
+        setLit(cell);
+        sfx(`cell${cell}`);
+      });
+      later(at + CELL_LIT_MS, () => setLit(-1));
+    });
+    later(after + order.current.length * (CELL_LIT_MS + CELL_GAP_MS), () => setStep(0));
   }
 
   useEffect(() => {
-    flare(600);
-    return () => clearTimeout(timer.current);
+    play(600);
+    return () => timers.current.forEach(clearTimeout);
   }, []);
 
   function tap(cell) {
-    const hit = cell === hotRef.current;
-    onMark(hit ? "right" : "wrong");
-    setBurst((b) => ({ cell, hit, n: (b?.n ?? 0) + 1 }));
-    if (!hit) return;
-    life.current = Math.max(FLARE_MIN_MS, life.current * 0.95);
-    hotRef.current = -1;
-    setHot(-1);
-    flare(FLARE_GAP_MS);
+    const at = stepRef.current;
+    if (at < 0) return;
+    const due = order.current[at];
+    setLit(cell);
+    later(TAP_FLASH_MS, () => setLit((l) => (l === cell ? -1 : l)));
+    if (cell !== due) {
+      setStep(-1);
+      setResult({ hit: false, cell, due });
+      onMark("wrong");
+      play(ORDER_PAUSE_MS);
+      return;
+    }
+    if (at + 1 < order.current.length) {
+      sfx(`cell${cell}`);
+      setStep(at + 1);
+      return;
+    }
+    setStep(-1);
+    setResult({ hit: true });
+    onMark("right");
+    play(ORDER_PAUSE_MS);
   }
 
-  // Keys 1 to 9 tap the cells, left to right and top to bottom.
+  // Keys 1 to 4 tap the cells, left to right and top to bottom.
   const tapRef = useRef(tap);
   tapRef.current = tap;
   useEffect(() => {
     const onKey = (e) => {
-      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-9]$/.test(e.key)) return;
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-4]$/.test(e.key)) return;
       e.preventDefault();
       tapRef.current(Number(e.key) - 1);
     };
@@ -1864,27 +1888,45 @@ function ReactorTap({ onMark }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const missed = result && !result.hit;
   return (
-    <div className="reactor-core" role="group" aria-label="Reactor cells">
-      {Array.from({ length: REACTOR_CELLS }, (_, i) => (
-        <button
-          key={i}
-          type="button"
-          className={i === hot ? "ghost reactor-cell hot" : "ghost reactor-cell"}
-          style={i === hot ? { "--life": `${life.current}ms` } : undefined}
-          aria-label={i === hot ? `Cell ${i + 1}, overheating` : `Cell ${i + 1}`}
-          // Judge the press, not the release, like the valve.
-          onPointerDown={(e) => e.button === 0 && tap(i)}
-          onKeyDown={(e) => {
-            if (e.key !== " " && e.key !== "Enter") return;
-            e.preventDefault();
-            if (!e.repeat) tap(i);
-          }}
-        >
-          <span className="reactor-rod" aria-hidden="true" />
-          {burst?.cell === i ? <span key={burst.n} className={burst.hit ? "reactor-burst" : "reactor-burst miss"} aria-hidden="true" /> : null}
-        </button>
-      ))}
+    <div className="reactor">
+      <div className={result?.hit ? "reactor-core done" : "reactor-core"} role="group" aria-label="Reactor cells">
+        {REACTOR_CELLS.map((c, i) => (
+          <button
+            key={c.name}
+            type="button"
+            className={[
+              "ghost reactor-cell",
+              lit === i ? "lit" : "",
+              missed && result.due === i ? "due" : "",
+              missed && result.cell === i ? "miss" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            style={{ "--hue": c.hue }}
+            aria-label={`${c.name}, key ${i + 1}`}
+            aria-disabled={step < 0}
+            // Judge the press, not the release, like the valve.
+            onPointerDown={(e) => e.button === 0 && tap(i)}
+            onKeyDown={(e) => {
+              if (e.key !== " " && e.key !== "Enter") return;
+              e.preventDefault();
+              if (!e.repeat) tap(i);
+            }}
+          >
+            <small aria-hidden="true">{i + 1}</small>
+          </button>
+        ))}
+      </div>
+      <p className={missed ? "reactor-status miss" : "reactor-status"} aria-live="polite">
+        <span>{step >= 0 ? "Your turn" : result ? (result.hit ? "Right order" : "Wrong order") : "Watch"}</span>
+        <span className="reactor-pips" aria-hidden="true">
+          {REACTOR_CELLS.map((c, k) => (
+            <i key={c.name} className={result?.hit || step > k ? "on" : undefined} />
+          ))}
+        </span>
+      </p>
     </div>
   );
 }

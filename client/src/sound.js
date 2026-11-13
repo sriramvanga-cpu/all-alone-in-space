@@ -172,6 +172,8 @@ const SOUNDS = {
     tone(233, 156, 0.38, { type: "square", gain: 0.035, lp: 900 });
     noise(0.22, { type: "lowpass", f0: 700, gain: 0.03 });
   },
+  // Reactor tap's four cells (red, blue, green, yellow), each its own note of a major chord.
+  ...Object.fromEntries([392, 494, 587, 784].map((f, i) => [`cell${i}`, () => tone(f, f, 0.32, { type: "triangle", gain: 0.08, send: 0.3 })])),
   // A coin: two quick bright notes.
   credit: () => {
     tone(1319, 1319, 0.08, { type: "square", gain: 0.03, lp: 5000, send: 0.1 });
