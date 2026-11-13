@@ -377,7 +377,7 @@ function drawAnswer(t, v) {
       <rect className="reel-line" x="180" y="56" width="150" height="7" rx="3.5" />
       {KEYS.map(([key, color], i) => {
         const x = 180 + (i % 2) * 142;
-        const y = 76 + Math.floor(i / 2) * 36;
+        const y = 68 + Math.floor(i / 2) * 36;
         const good = right && key === "B";
         return (
           <g key={key}>
@@ -396,6 +396,10 @@ function drawAnswer(t, v) {
           </g>
         );
       })}
+      <rect className="reel-skip" x="180" y="138" width="46" height="11" rx="5.5" />
+      <text className="reel-skip-text" x="203" y="146.5" textAnchor="middle">
+        SKIP
+      </text>
       <text className="reel-card-title" x={BAR.x} y="175">
         LANDING CHANCE
       </text>
@@ -414,7 +418,7 @@ function drawAnswer(t, v) {
         +{RIGHT_BONUS} right answer
       </Label>
       <Label x={BAR.x + BAR.w / 2} y={234} tone="dim" show={smooth(5, 5.4, t)}>
-        A wrong answer halves it.
+        A wrong answer halves it. Skip: no change.
       </Label>
     </>
   );

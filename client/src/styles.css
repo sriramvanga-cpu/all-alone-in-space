@@ -396,6 +396,8 @@ input:focus {
 .reel-tile.right { fill: rgba(125, 222, 192, 0.18); stroke: var(--ok); }
 .reel-key { fill: rgba(5, 9, 20, 0.6); stroke: var(--k); }
 .reel-key-text { fill: var(--k); font: 700 12px var(--font-body); }
+.reel-skip { fill: rgba(255, 255, 255, 0.05); stroke: var(--glass-line); }
+.reel-skip-text { fill: var(--dim); font: 700 7px var(--font-body); letter-spacing: 0.12em; }
 .reel-track { fill: rgba(255, 255, 255, 0.1); }
 .reel-time { fill: url(#reel-time); }
 .reel-right { fill: var(--ok); }
