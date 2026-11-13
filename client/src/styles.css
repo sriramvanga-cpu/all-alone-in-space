@@ -1033,7 +1033,7 @@ button.ghost.admin-toggle {
 .choices .choice:nth-child(3) .key { --key: var(--pink); color: var(--pink); background: rgba(255, 121, 198, 0.12); border-color: rgba(255, 121, 198, 0.5); }
 .choices .choice:nth-child(4) .key { --key: var(--gold); color: var(--gold); background: rgba(255, 224, 138, 0.12); border-color: rgba(255, 224, 138, 0.5); }
 
-/* Picture cards (Biggest world, Planet order): the choices as a row of worlds, each picture over its name. */
+/* Picture cards (Planet order): the choices as a row of worlds, each picture over its name. */
 .choices.world-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; }
 .world-cards .choice { position: relative; flex-direction: column; justify-content: center; gap: 0.3rem; padding: 0.7rem 0.4rem 0.6rem; text-align: center; }
 .world-cards .choice .key { position: absolute; top: 0.35rem; left: 0.35rem; width: 1.55rem; height: 1.55rem; }

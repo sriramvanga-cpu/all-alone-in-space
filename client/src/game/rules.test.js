@@ -370,9 +370,9 @@ test("a hop is cheapest when two planets line up across the oval and dearest on 
   assert.equal(hopPower(100), 1.7);
 });
 
-test("nine different fuel rounds, and every card has one right answer among four", async () => {
-  const { FUEL_ROUNDS, PLANET_ORDER, WORLD_RADII } = await import("./fuelRounds.js");
-  assert.equal(new Set(FUEL_ROUNDS.map((r) => r.id)).size, 9);
+test("eight different fuel rounds, and every card has one right answer among four", async () => {
+  const { FUEL_ROUNDS, PLANET_ORDER } = await import("./fuelRounds.js");
+  assert.equal(new Set(FUEL_ROUNDS.map((r) => r.id)).size, 8);
   const checks = {
     ink: (c) => assert.notEqual(c.answer.toUpperCase(), c.prompt),
     tank: (c) => assert.equal(c.answer, String(Math.max(...c.choices.map(Number)))),
@@ -387,12 +387,6 @@ test("nine different fuel rounds, and every card has one right answer among four
       assert.equal(PLANET_ORDER[gap], c.answer, c.prompt);
       assert.equal(Math.abs(at - gap), 1, c.prompt);
       assert.equal(c.prompt, gap > at ? `${shown} → ?` : `? → ${shown}`);
-    },
-    size: (c) => {
-      const [first, second] = [...c.choices].sort((x, y) => WORLD_RADII[y] - WORLD_RADII[x]);
-      assert.equal(c.answer, first);
-      assert.ok(WORLD_RADII[first] >= WORLD_RADII[second] * 1.2, c.choices.join());
-      assert.equal(c.worlds, true);
     },
   };
   for (const round of FUEL_ROUNDS) {

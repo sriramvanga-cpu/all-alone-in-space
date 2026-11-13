@@ -449,8 +449,8 @@ function rearView(renderer, ship, env, pxW, pxH) {
   return toUrl(renderer.domElement);
 }
 
-// The famous worlds of the Biggest world and Planet order cards, each as a picture. They are all drawn at one size,
-// so a picture never gives a size away, and Saturn's ring is tucked inside the frame to keep it so.
+// The eight planets of the Planet order cards, each as a picture, all drawn at one size with Saturn's ring tucked
+// inside the frame, so the choices sit evenly in their tiles.
 const WORLD_PX = 192;
 const WORLD_EXT = 1.45;
 const WORLD_LOOKS = {
@@ -462,10 +462,6 @@ const WORLD_LOOKS = {
   Saturn: { tex: "saturn", glow: "#f3e2b4", atmo: 0.9, relief: 1.5, ring: true, tilt: -14 },
   Uranus: { tex: "uranus", tint: "#c8f2f4", glow: "#bff4f6", atmo: 1, relief: 1 },
   Neptune: { tex: "neptune", tint: "#9bb4ff", glow: "#9cc0ff", atmo: 1, relief: 1 },
-  Moon: { tex: "moon", glow: "#d6d6d6", atmo: 0.05, relief: 6 },
-  Ganymede: { tex: "ceres", tint: "#d8cdbd", glow: "#cfc6b8", atmo: 0.1, relief: 5 },
-  Titan: { tex: "venus", tint: "#e9b36a", glow: "#f3c27a", atmo: 1, relief: 1 }, // orange haze
-  Pluto: { tex: "eris", tint: "#f0d6c2", glow: "#e9d6c8", atmo: 0.15, relief: 4 },
 };
 
 async function renderWorlds(renderer, tex) {

@@ -65,7 +65,7 @@ The sun's type (yellow star, red giant, black hole, and so on) is only for looks
 
 ## Fuel stops (planets with a drop)
 
-Landing at a fuel stop starts a **fuel minute**: one minute of a quick game that earns credits. There are nine games, and each pilot gets them in their own shuffled order.
+Landing at a fuel stop starts a **fuel minute**: one minute of a quick game that earns credits. There are eight games, and each pilot gets them in their own shuffled order.
 
 | Game | What you do | Credits |
 |---|---|---|
@@ -77,7 +77,6 @@ Landing at a fuel stop starts a **fuel minute**: one minute of a quick game that
 | Flight path | Which way does the middle arrow point? | 1 for every 3 |
 | Element check | Name the element from its symbol | 1 each |
 | Planet order | Going out from the Sun, pick the planet that fills the gap ("Mars → ?"). A row shows the Sun and a slot for each planet, with one planet pictured and the gap glowing | 1 for every 2 |
-| Biggest world | Pick the biggest of four pictured worlds (all drawn at one size) | 1 for every 2 |
 
 Every **5 right in a row** earns a bonus credit. If more than 1 in 10 of your answers are wrong, fuel usually gets more expensive. Colour clash has a "Swap round" button for anyone who can't tell colours apart. It shows until your first answer (skipping doesn't count), so skip a card if the colours all look alike.
 

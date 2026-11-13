@@ -36,7 +36,7 @@ The game is a single-page React app built with Vite. The scores API is two small
 | `client/src/game/rules.js` | Every rule and number, as pure functions: costs, landing odds, points, ranking, the shop, the fuel price. |
 | `client/src/game/rules.test.js` | Tests for the rules, the star chart, the fuel games, the flight events and the question bank. |
 | `client/src/game/map.js` | The star chart: systems, lanes, planets, orbits and names. |
-| `client/src/game/fuelRounds.js` | The nine fuel games' settings, and the card makers for the games that use choice cards. |
+| `client/src/game/fuelRounds.js` | The eight fuel games' settings, and the card makers for the games that use choice cards. |
 | `client/src/game/events.js` | The flight events. |
 | `client/src/data/questions.json` | The question bank. |
 | `client/src/intro/` | The intro film: `Intro.jsx` picks the 3D film (`Intro3D.jsx`) or the 2D fallback (`ClassicIntro.jsx`, drawn by `draw.js` and `space.js`). `HowTo.jsx` is the How to play reel, and the clips the tips loop. |
@@ -130,7 +130,7 @@ The admin panel's switches live in `g.admin`, and each is read in one place:
 
 When the page loads, if WebGL is available, `renderMapArt()` in `three/sprites.js` renders every planet, each kind of star, the black hole, the asteroids, the ship and the station once with three.js, and turns them into images. `artStore.js` publishes the images, and components read them with `useArt()`. Until they're ready, or without WebGL, the maps use the vector art in `client/src/art/`.
 
-Some screens also run a live three.js view (`three/PlanetView.jsx`), in a transparent canvas over the still picture, which stays under it until the first frame: the screens at a world show the planet turning with the ship circling it, and the landing film (`mode="landing"`) is a full-screen layer behind the Scan and win screens. The film follows the game clock from `scan.at`, so it needs no state from the screens over it, and its sky, haze and scan ring follow the verdict's time. Phones keep the still pictures for the world screens, and nothing live runs under reduced motion or without WebGL. Cards for the Biggest world and Planet order games use `art.worlds`, pictures of twelve worlds rendered by `renderWorlds()` in `sprites.js`.
+Some screens also run a live three.js view (`three/PlanetView.jsx`), in a transparent canvas over the still picture, which stays under it until the first frame: the screens at a world show the planet turning with the ship circling it, and the landing film (`mode="landing"`) is a full-screen layer behind the Scan and win screens. The film follows the game clock from `scan.at`, so it needs no state from the screens over it, and its sky, haze and scan ring follow the verdict's time. Phones keep the still pictures for the world screens, and nothing live runs under reduced motion or without WebGL. Planet order cards use `art.worlds`, pictures of the eight planets rendered by `renderWorlds()` in `sprites.js`.
 
 The 3D intro film is a live three.js scene in one continuous camera move. Its timeline constants and captions are at the top of `Intro3D.jsx`. If WebGL is missing or the textures take more than 9 seconds, it falls back to the 2D film. Under reduced motion, both are skipped.
 

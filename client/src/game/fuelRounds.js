@@ -1,5 +1,5 @@
 // Fuel-stop challenges. Each player gets them in a shuffled order (App.jsx), so none repeats until
-// all nine have been played. `per` is how many right answers
+// all eight have been played. `per` is how many right answers
 // earn one credit; it evens out fast rounds so a typical player earns about 13 credits a minute.
 // Rounds without `make` are interactive games drawn in App.jsx.
 import { rollInt, shuffleWith } from "./rules.js";
@@ -78,23 +78,6 @@ function makeOrderCard(rng = Math.random) {
   };
 }
 
-// Well-known worlds and their mean radius in km.
-export const WORLD_RADII = Object.freeze({
-  Jupiter: 69911, Saturn: 58232, Uranus: 25362, Neptune: 24622, Earth: 6371, Venus: 6052,
-  Mars: 3390, Ganymede: 2634, Titan: 2575, Mercury: 2440, Moon: 1737, Pluto: 1188,
-});
-
-// Biggest world: four worlds, and the biggest is at least 20% bigger than the next, so near-twins
-// (Earth and Venus, Uranus and Neptune) never decide a card.
-function makeSizeCard(rng = Math.random) {
-  const worlds = Object.keys(WORLD_RADII);
-  for (;;) {
-    const four = shuffleWith(worlds, rng).slice(0, 4);
-    const [first, second] = [...four].sort((a, b) => WORLD_RADII[b] - WORLD_RADII[a]);
-    if (WORLD_RADII[first] >= WORLD_RADII[second] * 1.2) return { worlds: true, choices: four, answer: first };
-  }
-}
-
 export const FUEL_ROUNDS = Object.freeze(
   [
     { id: "valve", title: "Pressure valve", how: "Tap Vent while the needle is in the green.", per: 2 },
@@ -105,6 +88,5 @@ export const FUEL_ROUNDS = Object.freeze(
     { id: "arrows", title: "Flight path", how: "Which way does the middle arrow point?", per: 3, make: makeArrowCard },
     { id: "element", title: "Element check", how: "Name the element from its symbol.", per: 1, make: makeElementCard },
     { id: "order", title: "Planet order", how: "Going out from the Sun, which planet fills the gap?", per: 2, make: makeOrderCard },
-    { id: "size", title: "Biggest world", how: "Pick the biggest world.", per: 2, make: makeSizeCard },
   ].map(Object.freeze),
 );
