@@ -2963,7 +2963,7 @@ function Game() {
                 <h1>{domainLabel}</h1>
               </div>
             </div>
-            <p className="prompt">{snap.card.prompt}</p>
+            <p className={snap.card.prompt.length > 100 ? "prompt long" : "prompt"}>{snap.card.prompt}</p>
             <ChoiceButtons
               choices={snap.card.choices}
               answer={snap.cheat && snap.admin.answers ? snap.card.answer : undefined}

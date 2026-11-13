@@ -1106,6 +1106,8 @@ button.ghost.admin-toggle {
 
 .qhead { display: flex; gap: 1rem; align-items: center; }
 .prompt { margin: 1rem 0; font-size: var(--text-2xl); line-height: 1.35; }
+/* A long question gets a smaller size so it and all four choices still fit on a phone. */
+.prompt.long { font-size: var(--text-xl); }
 .fuel-result {
   margin: 0.4rem 0 0.8rem;
   padding: 0.6rem 0.9rem;
