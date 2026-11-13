@@ -688,16 +688,16 @@ function Board() {
 const TIPS = {
   star: [
     "Star map",
-    `Scan (${MAP_SCAN_POWER} power) to find the solar systems one lane away, then tap one to fly there. Lanes cost fuel. Outer systems ask easier questions, but they are the farthest away.`,
+    `Scan (${MAP_SCAN_POWER} power) to find nearby systems, then tap one to fly there. Lanes cost fuel.`,
   ],
   system: [
     "Solar system",
-    "Planets circle the sun. Tap one to hop there: a hop costs power, less when the planets line up. Planets with a drop refuel you. Planets marked ! could be home. Power recharges while you're in a system.",
+    "Tap a planet to hop there. Hops cost power, which recharges here. A drop means fuel; a ! could be home.",
   ],
-  fuel: ["Fuel stop", "Play for one minute to earn credits, then spend them in the shop on fuel and power. Get more than 1 in 10 wrong and fuel costs more."],
+  fuel: ["Fuel stop", "Play for a minute to earn credits, then buy fuel and power. Over 1 in 10 wrong and fuel costs more."],
   test: [
     "A possible home",
-    "Answer one question, then try to land. The chance starts at 0% and climbs faster as the clock runs, to 60% at 15 minutes. A right answer raises the chance by a tenth of itself (15% becomes 17%) and pays 15 credits; a wrong one halves the chance and makes fuel cost more. A failed landing costs 30 s. Each planet can be tried once.",
+    `Answer, then try to land. The chance grows with the clock. Right answers raise it and pay 15 credits; wrong ones halve it and make fuel cost more. A failed landing costs ${LAND_FAIL_MS / 1000} s.`,
   ],
 };
 
