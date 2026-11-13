@@ -1,7 +1,6 @@
 // Fuel-stop challenges. Each player gets them in a shuffled order (App.jsx), so none repeats until
-// all eight have been played. `per` is how many right answers
-// earn one credit; it evens out fast rounds so a typical player earns about 13 credits a minute.
-// Rounds without `make` are interactive games drawn in App.jsx.
+// all eight have been played. `per` is how many right answers earn one credit; it is 1 in every
+// game now. Rounds without `make` are interactive games drawn in App.jsx.
 import { rollInt, shuffleWith } from "./rules.js";
 
 const pick = (list, rng) => list[rollInt(rng, 0, list.length - 1)];
@@ -80,13 +79,13 @@ function makeOrderCard(rng = Math.random) {
 
 export const FUEL_ROUNDS = Object.freeze(
   [
-    { id: "valve", title: "Pressure valve", how: "Tap Vent while the needle is in the green.", per: 2 },
+    { id: "valve", title: "Pressure valve", how: "Tap Vent while the needle is in the green.", per: 1 },
     { id: "reactor", title: "Reactor tap", how: "Watch the four cells light up, then tap them in the same order (or press 1 to 4).", per: 1 },
-    { id: "ink", title: "Colour clash", how: "Pick the colour of the ink, not the word.", per: 2, make: makeInkCard },
+    { id: "ink", title: "Colour clash", how: "Pick the colour of the ink, not the word.", per: 1, make: makeInkCard },
     { id: "rocks", title: "Asteroid tap", how: "Tap or drag across the asteroids as they fly past, or press Space to hit the leading one. Leave the bombs alone.", per: 1 },
-    { id: "tank", title: "Fullest tank", how: "Pick the fullest tank.", per: 2, make: makeTankCard },
-    { id: "arrows", title: "Flight path", how: "Which way does the middle arrow point?", per: 3, make: makeArrowCard },
+    { id: "tank", title: "Fullest tank", how: "Pick the fullest tank.", per: 1, make: makeTankCard },
+    { id: "arrows", title: "Flight path", how: "Which way does the middle arrow point?", per: 1, make: makeArrowCard },
     { id: "element", title: "Element check", how: "Name the element from its symbol.", per: 1, make: makeElementCard },
-    { id: "order", title: "Planet order", how: "Going out from the Sun, which planet fills the gap?", per: 2, make: makeOrderCard },
+    { id: "order", title: "Planet order", how: "Going out from the Sun, which planet fills the gap?", per: 1, make: makeOrderCard },
   ].map(Object.freeze),
 );
