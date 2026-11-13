@@ -1,9 +1,38 @@
 // Fuel-stop challenges. Each player gets them in a shuffled order (App.jsx), so none repeats until
-// all eight have been played. `per` is how many right answers earn one credit; it is 1 in every
+// all nine have been played. `per` is how many right answers earn one credit; it is 1 in every
 // game now. Rounds without `make` are interactive games drawn in App.jsx.
 import { rollInt, shuffleWith } from "./rules.js";
 
 const pick = (list, rng) => list[rollInt(rng, 0, list.length - 1)];
+
+// A fresh sum, difference or product each time, so there is no list to learn. The wrong choices sit a
+// few off the answer.
+function makeMathsCard(rng = Math.random) {
+  let a;
+  let b;
+  let op;
+  let answer;
+  const kind = rollInt(rng, 0, 2);
+  if (kind === 0) {
+    a = rollInt(rng, 12, 89);
+    b = rollInt(rng, 12, 89);
+    [op, answer] = ["+", a + b];
+  } else if (kind === 1) {
+    a = rollInt(rng, 24, 99);
+    b = rollInt(rng, 3, Math.min(40, a - 3));
+    [op, answer] = ["−", a - b];
+  } else {
+    a = rollInt(rng, 3, 12);
+    b = rollInt(rng, 3, 12);
+    [op, answer] = ["×", a * b];
+  }
+  const choices = new Set([String(answer)]);
+  for (let guard = 0; choices.size < 4 && guard < 40; guard++) {
+    const n = answer + rollInt(rng, 1, 9) * (rng() < 0.5 ? -1 : 1);
+    if (n >= 0) choices.add(String(n));
+  }
+  return { prompt: `${a} ${op} ${b}`, choices: shuffleWith([...choices], rng), answer: String(answer) };
+}
 
 const INKS = [
   ["Red", "#ff5a5a"],
@@ -79,6 +108,7 @@ function makeOrderCard(rng = Math.random) {
 
 export const FUEL_ROUNDS = Object.freeze(
   [
+    { id: "maths", title: "Quick maths", how: "Pick the right answer.", per: 1, make: makeMathsCard },
     { id: "valve", title: "Pressure valve", how: "Tap Vent while the needle is in the green.", per: 1 },
     { id: "reactor", title: "Reactor tap", how: "Watch the four cells light up, then tap them in the same order (or press 1 to 4).", per: 1 },
     { id: "ink", title: "Colour clash", how: "Pick the colour of the ink, not the word.", per: 1, make: makeInkCard },
