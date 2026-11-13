@@ -1931,11 +1931,18 @@ function ReactorTap({ onMark }) {
   );
 }
 
-// Asteroids drift across a scanner screen; tap one to blast it. A miss costs nothing, but the cannon
-// takes a moment to recharge, so tapping everywhere doesn't pay. One rock a second keeps the pay
-// close to the valve's.
+// Asteroids drift across a scanner screen; tap one to blast it for a credit. A miss costs nothing, but the
+// cannon takes a moment to recharge, so tapping everywhere doesn't pay. Now and then a bomb drifts through
+// the gap between two rocks: touching one counts as a wrong answer, like a wrong pick in the other rounds.
 const ROCK_EVERY_MS = 1000;
+const BOMB_CHANCE = 0.3;
 const SHOT_MS = 250;
+
+// Where a drifting object enters and leaves the field, and how long the crossing takes.
+function lane() {
+  const y0 = 6 + Math.random() * 70;
+  return { y0, y1: Math.max(2, Math.min(78, y0 + (Math.random() - 0.5) * 40)), ms: 2600 + Math.random() * 1600 };
+}
 
 function AsteroidTap({ onMark }) {
   const rockArt = useArt().rocks;
@@ -1944,11 +1951,12 @@ function AsteroidTap({ onMark }) {
   const field = useRef(null);
   const lastShot = useRef(0);
   const count = useRef(0);
+  // Ids already hit, so two pointer moves before the rock leaves the screen pay (or cost) once.
+  const gone = useRef(new Set());
   useEffect(() => {
+    let late = 0;
     const id = setInterval(() => {
       const n = ++count.current;
-      const y0 = 6 + Math.random() * 70;
-      const y1 = Math.max(2, Math.min(78, y0 + (Math.random() - 0.5) * 40));
       // A lumpy outline: eleven corners at uneven distances, so no two rocks look alike.
       const outline = Array.from({ length: 11 }, (_, i) => {
         const a = (i / 11) * 2 * Math.PI;
@@ -1956,27 +1964,39 @@ function AsteroidTap({ onMark }) {
         return `${(50 + d * Math.cos(a)).toFixed(1)}% ${(50 + d * Math.sin(a)).toFixed(1)}%`;
       }).join(", ");
       const size = 2.4 + Math.random() * 1.4;
-      setRocks((list) => [...list, { n, y0, y1, ms: 2600 + Math.random() * 1600, size, squash: 0.7 + Math.random() * 0.3, outline }]);
+      const rock = { n, ...lane(), size, squash: 0.7 + Math.random() * 0.3, outline };
+      setRocks((list) => [...list, rock]);
+      if (Math.random() < BOMB_CHANCE) {
+        late = setTimeout(() => {
+          const bomb = { n: ++count.current, ...lane(), size: 2.6, bomb: true };
+          setRocks((list) => [...list, bomb]);
+        }, ROCK_EVERY_MS / 2);
+      }
     }, ROCK_EVERY_MS);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      clearTimeout(late);
+    };
   }, []);
   // Pointer hits land at once, so a drag can slice through rocks side by side; the key waits SHOT_MS.
   function hit(el, keyed = false) {
     const n = Number(el?.dataset?.rock);
-    if (!n) return;
+    if (!n || gone.current.has(n)) return;
     if (keyed) {
       const now = performance.now();
       if (now - lastShot.current < SHOT_MS) return;
       lastShot.current = now;
     }
+    gone.current.add(n);
     const box = el.getBoundingClientRect();
     const area = field.current.getBoundingClientRect();
-    onMark("right");
+    const bomb = el.classList.contains("bomb");
+    onMark(bomb ? "wrong" : "right");
     setRocks((list) => list.filter((r) => r.n !== n));
-    setBooms((list) => [...list, { n, x: box.left + box.width / 2 - area.left, y: box.top + box.height / 2 - area.top }]);
+    setBooms((list) => [...list, { n, bomb, x: box.left + box.width / 2 - area.left, y: box.top + box.height / 2 - area.top }]);
   }
-  // Keyboard players fire with Space or Enter at the rock closest to escaping off the left edge, one shot per
-  // press: a held key would clear the round on its own.
+  // Keyboard players fire with Space or Enter at the rock closest to escaping off the left edge (never a bomb),
+  // one shot per press: a held key would clear the round on its own.
   const hitRef = useRef(hit);
   hitRef.current = hit;
   useEffect(() => {
@@ -1986,7 +2006,7 @@ function AsteroidTap({ onMark }) {
       if (e.repeat) return;
       const area = field.current?.getBoundingClientRect();
       if (!area) return;
-      const lead = [...field.current.querySelectorAll(".rock")]
+      const lead = [...field.current.querySelectorAll(".rock:not(.bomb)")]
         .map((el) => ({ el, box: el.getBoundingClientRect() }))
         .filter(({ box }) => box.right > area.left && box.left < area.right)
         .sort((a, b) => a.box.left - b.box.left)[0];
@@ -2011,17 +2031,19 @@ function AsteroidTap({ onMark }) {
       {rocks.map((r) => (
         <span
           key={r.n}
-          className="rock"
+          className={r.bomb ? "rock bomb" : "rock"}
           data-rock={r.n}
           style={{
             "--y0": `${r.y0}%`,
             "--y1": `${r.y1}%`,
             "--size": `${r.size}rem`,
             "--fly": `${r.ms}ms`,
-            // A rendered asteroid brings its own outline; the CSS rock is cut to a lumpy one.
-            ...(rockArt.length
-              ? { height: `${r.size}rem`, background: `url(${rockArt[r.n % rockArt.length]}) center / 120% no-repeat` }
-              : { height: `${r.size * r.squash}rem`, clipPath: `polygon(${r.outline})` }),
+            // A rendered asteroid brings its own outline; the CSS rock is cut to a lumpy one. A bomb is a plain sphere.
+            ...(r.bomb
+              ? { height: `${r.size}rem` }
+              : rockArt.length
+                ? { height: `${r.size}rem`, background: `url(${rockArt[r.n % rockArt.length]}) center / 120% no-repeat` }
+                : { height: `${r.size * r.squash}rem`, clipPath: `polygon(${r.outline})` }),
           }}
           onAnimationEnd={(e) => e.animationName === "fly" && setRocks((list) => list.filter((x) => x.n !== r.n))}
         />
@@ -2029,7 +2051,7 @@ function AsteroidTap({ onMark }) {
       {booms.map((b) => (
         <span
           key={b.n}
-          className="boom"
+          className={b.bomb ? "boom bad" : "boom"}
           style={{ left: b.x, top: b.y }}
           onAnimationEnd={() => setBooms((list) => list.filter((x) => x.n !== b.n))}
         />
