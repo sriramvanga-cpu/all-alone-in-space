@@ -858,7 +858,7 @@ const SHELL_WORDS = { inner: "Hard questions", middle: "Medium questions", outer
 // The landing chance as a bar: the part the time flown earns, then the right answer's bonus, or the
 // part a wrong answer (or running out of time) halved away, struck through.
 function ChanceBar({ landing }) {
-  const { chance, base, correct, timedOut } = landing;
+  const { chance, base, correct, timedOut, skipped } = landing;
   const extra = correct ? chance - base : base - chance;
   return (
     <div className="chance" role="img" aria-label={`Landing chance ${chance}%`}>
@@ -872,7 +872,7 @@ function ChanceBar({ landing }) {
       </div>
       <p className="chance-key">
         <span className="time">{base}% for the time flown</span>
-        {correct ? (
+        {skipped ? null : correct ? (
           <span className="bonus">+{extra} for the right answer</span>
         ) : (
           <span className="lost">
@@ -2356,6 +2356,23 @@ function Game() {
     });
   }
 
+  // Skipping earns nothing and costs nothing: no credits, no price rise, and the landing chance stays at what the
+  // time flown gives. The answer is shown, as after a miss.
+  function skipQuestion() {
+    const g = game.current;
+    if (g.phase !== "question") return;
+    if (g.deadline && clock() >= g.deadline) {
+      finish("time");
+      return;
+    }
+    const base = timeChance(roundMs(g) - (g.deadline - clock()));
+    commit({
+      phase: "land",
+      card: null,
+      landing: { chance: base, base, correct: false, timedOut: false, skipped: true, answer: g.card?.answer ?? "" },
+    });
+  }
+
   function land(scanned) {
     const g = game.current;
     if (g.phase !== "land" || !g.landing) return;
@@ -2972,7 +2989,12 @@ function Game() {
                 resolveQuestion(choice === game.current.card.answer, false);
               }}
             />
-            <p className="hint">Then you try to land. A right answer raises the chance by a tenth of itself and pays 15 credits; a wrong one halves it.</p>
+            <div className="row">
+              <button type="button" className="ghost" onClick={skipQuestion}>
+                Skip
+              </button>
+            </div>
+            <p className="hint">Then you try to land. A right answer raises the chance by a tenth of itself and pays 15 credits; a wrong one halves it. Skip to leave it as it is.</p>
           </section>
           </AtPlanet>
         ) : null}
@@ -2981,7 +3003,7 @@ function Game() {
           <AtPlanet id={snap.here}>
           <section className="panel">
             <p className="eyebrow">{snap.here}</p>
-            <h1>{snap.landing.correct ? "Right answer." : snap.landing.timedOut ? "Time's up." : "Wrong answer."} How will you land?</h1>
+            <h1>{snap.landing.correct ? "Right answer." : snap.landing.skipped ? "Skipped." : snap.landing.timedOut ? "Time's up." : "Wrong answer."} How will you land?</h1>
             {!snap.landing.correct && snap.landing.answer ? (
               <p className="answer-reveal">
                 The answer was <b>{snap.landing.answer}</b>.
