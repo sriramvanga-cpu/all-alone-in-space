@@ -65,20 +65,22 @@ The sun's type (yellow star, red giant, black hole, and so on) is only for looks
 
 ## Fuel stops (planets with a drop)
 
-Landing at a fuel stop starts a **fuel minute**: one minute of a quick game that earns credits. There are eight games, and each pilot gets them in their own shuffled order.
+Landing at a fuel stop starts a **fuel minute**: one minute of a quick game that earns credits. There are ten games, and each pilot gets them in their own shuffled order. Every right answer pays 1 credit.
 
-| Game | What you do | Credits |
-|---|---|---|
-| Pressure valve | Tap Vent while the needle on the round gauge is in the green zone | 1 for every 2 |
-| Reactor tap | Four coloured cells light up one by one, each with its own note. Tap them back in the same order (or press 1 to 4). A wrong tap is a miss, and the cell that was due gets a white ring | 1 for each order |
-| Colour clash | Pick the colour of the ink, not the word | 1 for every 2 |
-| Asteroid tap | Tap or drag across the asteroids (or press Space) | 1 for every 4 |
-| Fullest tank | Pick the fullest tank | 1 for every 2 |
-| Flight path | Which way does the middle arrow point? | 1 for every 3 |
-| Element check | Name the element from its symbol | 1 each |
-| Planet order | Going out from the Sun, pick the planet that fills the gap ("Mars → ?"). A row shows the Sun and a slot for each planet, with one planet pictured and the gap glowing | 1 for every 2 |
+| Game | What you do |
+|---|---|
+| Quick maths | Pick the answer to a sum, difference or product |
+| Pressure valve | Tap Vent while the needle on the round gauge is in the green zone |
+| Reactor tap | Four coloured cells light up one by one, each with its own note. Tap them back in the same order (or press 1 to 4). A wrong tap is a miss, and the cell that was due gets a white ring. 1 credit per order |
+| Colour clash | Pick the colour of the ink, not the word |
+| Asteroid tap | Tap or drag across the asteroids (or press Space). Bombs drift between them: touching one counts as a wrong answer |
+| Fullest tank | Pick the fullest tank |
+| Flight path | Which way does the middle arrow point? |
+| Element check | Name the element from its symbol |
+| Satellite repair | A broken wire shows a colour and a number of holes. Pick the connector that matches both |
+| Planet order | Going out from the Sun, pick the planet that fills the gap ("Mars → ?"). A row shows the Sun and a slot for each planet, with one planet pictured and the gap glowing |
 
-Every **5 right in a row** earns a bonus credit. If more than 1 in 10 of your answers are wrong, fuel usually gets more expensive. Colour clash has a "Swap round" button for anyone who can't tell colours apart. It shows until your first answer (skipping doesn't count), so skip a card if the colours all look alike.
+Every **5 right in a row** earns a bonus credit. If more than 1 in 10 of your answers are wrong, fuel usually gets more expensive. Colour clash and Satellite repair have a "Swap round" button for anyone who can't tell colours apart. It shows until your first answer (skipping doesn't count), so skip a card if the colours all look alike.
 
 After the minute comes the **shop**. Buy as many packs as you can pay for, then leave:
 
