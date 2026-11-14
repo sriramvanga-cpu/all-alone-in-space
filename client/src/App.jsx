@@ -27,7 +27,7 @@ import {
   MAP_SCAN_POWER,
   hopPower,
 } from "./game/rules.js";
-import { FUEL_ROUNDS, PLANET_ORDER } from "./game/fuelRounds.js";
+import { FUEL_ROUNDS, PLANET_ORDER, WIRE_COLOURS } from "./game/fuelRounds.js";
 import { EVENT_CHANCE, FLIGHT_EVENTS, canTake } from "./game/events.js";
 import { engine, sfx, isMuted, setMuted } from "./sound.js";
 import {
@@ -1677,6 +1677,44 @@ function World({ name, art }) {
   );
 }
 
+// Satellite repair's holes, spaced evenly across a w-wide plug starting at x.
+function Holes({ n, x, w, y, r, ring }) {
+  return Array.from({ length: n }, (_, i) => (
+    <circle key={i} cx={x + (w / (n + 1)) * (i + 1)} cy={y} r={r} fill="#0b1226" stroke={ring} strokeWidth={ring ? 2 : 0} />
+  ));
+}
+
+// The broken wire: both ends in colour, a dashed gap with the holes a connector must fill, and sparks either side.
+function WireGap({ wire }) {
+  const [name, colour] = WIRE_COLOURS[wire.c];
+  return (
+    <svg className="wire-gap" viewBox="0 0 400 110" role="img" aria-label={`Broken ${name} wire, ${wire.p} holes`}>
+      <rect x="8" y="22" width="40" height="66" rx="8" fill="#2b3a6b" />
+      <rect x="352" y="22" width="40" height="66" rx="8" fill="#2b3a6b" />
+      <circle cx="28" cy="55" r="6" fill="#ff6b7a" />
+      <circle cx="372" cy="55" r="6" fill="#ff6b7a" />
+      <line x1="48" y1="55" x2="128" y2="55" stroke={colour} strokeWidth="9" strokeLinecap="round" />
+      <line x1="272" y1="55" x2="352" y2="55" stroke={colour} strokeWidth="9" strokeLinecap="round" />
+      <rect x="150" y="25" width="100" height="60" rx="10" fill="none" stroke={colour} strokeWidth="3" strokeDasharray="7 6" />
+      <Holes n={wire.p} x={150} w={100} y={55} r={6} ring={colour} />
+      <path className="wire-spark" d="M132 42 L142 54 L130 58 L144 72" />
+      <path className="wire-spark" d="M268 70 L258 56 L270 52 L256 38" />
+    </svg>
+  );
+}
+
+// One connector to choose: its colour and its holes. `choice` is "colour-holes".
+function Connector({ choice }) {
+  const [c, p] = choice.split("-").map(Number);
+  const [name, colour] = WIRE_COLOURS[c];
+  return (
+    <svg className="connector" viewBox="0 0 130 70" role="img" aria-label={`${name}, ${p} holes`}>
+      <rect x="8" y="8" width="114" height="54" rx="10" fill={colour} />
+      <Holes n={p} x={8} w={114} y={35} r={5} />
+    </svg>
+  );
+}
+
 // The Planet order card as a row: the Sun, then a slot for each planet going out from it. The shown planet is
 // pictured and named in its slot and the gap glows with a "?"; the other slots stay empty, so the row can't be
 // solved by elimination.
@@ -2061,6 +2099,8 @@ function AsteroidTap({ onMark }) {
 }
 
 const FUEL_GAMES = { valve: Valve, reactor: ReactorTap, rocks: AsteroidTap };
+// Fuel rounds a player who can't tell colours apart may swap out.
+const COLOUR_ROUNDS = new Set(["ink", "wire"]);
 
 const DOMAIN_ICONS = { general: GlobeIcon, mental: BrainIcon, technology: ChipIcon };
 
@@ -2473,16 +2513,16 @@ function Game() {
     });
   }
 
-  // Colour clash needs colour vision, so a player can trade it for the next round in their order. Only before their
-  // first answer (skips don't count): the minute's credits come from its right answers at the round's rate, so a later
-  // swap would re-price the answers already given.
+  // Colour clash and Satellite repair need colour vision, so a player can trade either for the next round in their
+  // order that doesn't. Only before their first answer (skips don't count): the minute's credits come from its right
+  // answers at the round's rate, so a later swap would re-price the answers already given.
   function swapFuelRound() {
     const g = game.current;
-    if (g.phase !== "fuel" || g.fuelRound?.id !== "ink" || answeredFuel(g)) return;
-    const others = g.fuelOrder.filter((r) => r.id !== "ink");
+    if (g.phase !== "fuel" || !COLOUR_ROUNDS.has(g.fuelRound?.id) || answeredFuel(g)) return;
+    const others = g.fuelOrder.filter((r) => !COLOUR_ROUNDS.has(r.id));
     if (!others.length) return;
     const at = g.fuelOrder.indexOf(g.fuelRound);
-    const next = g.fuelOrder.slice(at + 1).concat(g.fuelOrder.slice(0, at)).find((r) => r.id !== "ink") ?? others[0];
+    const next = g.fuelOrder.slice(at + 1).concat(g.fuelOrder.slice(0, at)).find((r) => !COLOUR_ROUNDS.has(r.id)) ?? others[0];
     const card = drawFuelCard(next, g.fuelSeen);
     commit({
       fuelRound: next,
@@ -3075,6 +3115,8 @@ function Game() {
               <>
                 {pictured && fuelCard.row ? (
                   <OrderRow row={fuelCard.row} art={art} />
+                ) : fuelCard.wire ? (
+                  <WireGap wire={fuelCard.wire} />
                 ) : fuelCard.prompt ? (
                   <p className="prompt" style={fuelCard.ink ? { color: fuelCard.ink } : undefined}>
                     {fuelCard.prompt}
@@ -3083,13 +3125,15 @@ function Game() {
                 <ChoiceButtons
                   choices={fuelCard.choices}
                   answer={snap.cheat && snap.admin.answers ? fuelCard.answer : undefined}
-                  pictures={pictured}
+                  pictures={pictured || Boolean(fuelCard.wire)}
                   render={
                     pictured
                       ? (name) => <World name={name} art={art} />
                       : fuelCard.gauge
                         ? (level) => <span className="gauge"><i style={{ width: `${level}%` }} /></span>
-                        : undefined
+                        : fuelCard.wire
+                          ? (choice) => <Connector choice={choice} />
+                          : undefined
                   }
                   onPick={(choice) => markFuel(choice === fuelCard.answer ? "right" : "wrong")}
                 />
@@ -3097,7 +3141,7 @@ function Game() {
                   <button type="button" className="ghost" onClick={() => markFuel("skip")}>
                     Skip
                   </button>
-                  {snap.fuelRound.id === "ink" && !answeredFuel(snap) ? (
+                  {COLOUR_ROUNDS.has(snap.fuelRound.id) && !answeredFuel(snap) ? (
                     <button type="button" className="ghost" onClick={swapFuelRound}>
                       Can't tell colours apart? Swap round
                     </button>

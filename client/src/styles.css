@@ -1127,6 +1127,13 @@ button.ghost.admin-toggle {
 .gauge { flex: 1; height: 0.9rem; overflow: hidden; background: rgba(255, 255, 255, 0.08); border-radius: var(--radius-pill); }
 .gauge i { display: block; height: 100%; background: linear-gradient(90deg, #4a7cff, #7be0ff); }
 
+/* Satellite repair: the broken wire over the choices, and a connector in each choice */
+.wire-gap { display: block; width: 100%; max-width: 26rem; height: auto; margin: 0.7rem auto 0.2rem; }
+.wire-spark { fill: none; stroke: #ffe066; stroke-width: 3; animation: wire-spark 0.5s steps(2) infinite; }
+@keyframes wire-spark { 50% { opacity: 0.15; } }
+.connector { width: 100%; max-width: 7rem; height: auto; }
+@media (prefers-reduced-motion: reduce) { .wire-spark { animation: none; } }
+
 /* The pressure gauge: a dark arc, a green zone slid along it, and a needle turning on a hub. */
 .valve-gauge { display: block; width: min(100%, 21rem); height: auto; margin: 0.6rem auto 0.3rem; overflow: visible; }
 .valve-rim, .valve-arc, .valve-band { fill: none; }

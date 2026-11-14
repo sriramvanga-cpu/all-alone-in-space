@@ -1,5 +1,5 @@
 // Fuel-stop challenges. Each player gets them in a shuffled order (App.jsx), so none repeats until
-// all nine have been played. `per` is how many right answers earn one credit; it is 1 in every
+// all ten have been played. `per` is how many right answers earn one credit; it is 1 in every
 // game now. Rounds without `make` are interactive games drawn in App.jsx.
 import { rollInt, shuffleWith } from "./rules.js";
 
@@ -76,6 +76,23 @@ function makeTankCard(rng = Math.random) {
   return { gauge: true, choices: shuffleWith([top, ...gaps.map((g) => top - g)], rng).map(String), answer: String(top) };
 }
 
+// Satellite repair: a broken wire shows its colour and how many holes its connector needs. One choice matches both;
+// one shares only the colour and one only the holes, so a glance at one of them isn't enough. A choice is "colour-holes".
+export const WIRE_COLOURS = [
+  ["blue", "#35d0ff"],
+  ["orange", "#ffb347"],
+  ["pink", "#ff6fb5"],
+  ["green", "#9be564"],
+];
+
+function makeWireCard(rng = Math.random) {
+  const c = rollInt(rng, 0, 3);
+  const p = rollInt(rng, 2, 4);
+  const choices = new Set([`${c}-${p}`, `${c}-${2 + ((p - 2 + rollInt(rng, 1, 2)) % 3)}`, `${(c + rollInt(rng, 1, 3)) % 4}-${p}`]);
+  while (choices.size < 4) choices.add(`${rollInt(rng, 0, 3)}-${rollInt(rng, 2, 4)}`);
+  return { wire: { c, p }, choices: shuffleWith([...choices], rng), answer: `${c}-${p}` };
+}
+
 const ARROWS = ["←", "→", "↑", "↓"];
 
 function makeArrowCard(rng = Math.random) {
@@ -116,6 +133,7 @@ export const FUEL_ROUNDS = Object.freeze(
     { id: "tank", title: "Fullest tank", how: "Pick the fullest tank.", per: 1, make: makeTankCard },
     { id: "arrows", title: "Flight path", how: "Which way does the middle arrow point?", per: 1, make: makeArrowCard },
     { id: "element", title: "Element check", how: "Name the element from its symbol.", per: 1, make: makeElementCard },
+    { id: "wire", title: "Satellite repair", how: "Pick the connector with the wire's colour and number of holes.", per: 1, make: makeWireCard },
     { id: "order", title: "Planet order", how: "Going out from the Sun, which planet fills the gap?", per: 1, make: makeOrderCard },
   ].map(Object.freeze),
 );

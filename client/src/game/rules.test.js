@@ -370,10 +370,20 @@ test("a hop is cheapest when two planets line up across the oval and dearest on 
   assert.equal(hopPower(100), 1.7);
 });
 
-test("nine different fuel rounds, and every card has one right answer among four", async () => {
+test("ten different fuel rounds, and every card has one right answer among four", async () => {
   const { FUEL_ROUNDS, PLANET_ORDER } = await import("./fuelRounds.js");
-  assert.equal(new Set(FUEL_ROUNDS.map((r) => r.id)).size, 9);
+  assert.equal(new Set(FUEL_ROUNDS.map((r) => r.id)).size, 10);
   const checks = {
+    wire: (c) => {
+      const parts = c.choices.map((x) => x.split("-").map(Number));
+      const fits = parts.filter(([col, holes]) => col === c.wire.c && holes === c.wire.p);
+      assert.equal(fits.length, 1);
+      assert.equal(c.answer, `${c.wire.c}-${c.wire.p}`);
+      // A same-colour decoy and a same-holes decoy, so neither alone gives it away.
+      assert.ok(parts.some(([col, holes]) => col === c.wire.c && holes !== c.wire.p));
+      assert.ok(parts.some(([col, holes]) => col !== c.wire.c && holes === c.wire.p));
+      assert.ok(parts.every(([col, holes]) => col >= 0 && col <= 3 && holes >= 2 && holes <= 4));
+    },
     maths: (c) => {
       const [left, op, right] = c.prompt.split(" ");
       const [a, b] = [Number(left), Number(right)];
