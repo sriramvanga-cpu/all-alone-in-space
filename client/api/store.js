@@ -52,6 +52,52 @@ export async function db() {
   return query;
 }
 
+// Pilots mid-run, for the board's "Playing now" panel. A heartbeat every few seconds keeps a row fresh, and a row
+// nobody has refreshed for LIVE_FRESH_S seconds isn't shown, so a closed tab drops off by itself. It has its own
+// table and its own setup, so a problem here can never hold up the scores.
+export const LIVE_FRESH_S = 20;
+let liveReady;
+
+export async function liveDb() {
+  const query = getSql();
+  liveReady ??= query`CREATE TABLE IF NOT EXISTS live_runs (
+    live_id text PRIMARY KEY,
+    name text NOT NULL,
+    time_left integer NOT NULL,
+    fuel double precision NOT NULL,
+    worlds integer NOT NULL,
+    started_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`.catch((err) => {
+    liveReady = undefined;
+    throw err;
+  });
+  await liveReady;
+  return query;
+}
+
+/** A heartbeat { liveId, name, timeLeft, fuel, worlds }, or { liveId, done: true } when the run ends. */
+export function parseLive(body) {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return { error: "body must be a JSON object" };
+  }
+  const { liveId, name } = body;
+  if (typeof liveId !== "string" || liveId.length === 0 || liveId.length > 64) {
+    return { error: "liveId must be a short string" };
+  }
+  if (body.done === true) return { liveId, done: true };
+  if (typeof name !== "string" || name.trim() === "") return { error: "name must be a non-empty string" };
+  if (name.trim().length > 40) return { error: "name must be at most 40 characters" };
+  const whole = (n, max) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= max;
+  if (!whole(body.timeLeft, 24 * 60 * 60) || !whole(body.worlds, 55)) {
+    return { error: "timeLeft and worlds must be whole numbers" };
+  }
+  if (typeof body.fuel !== "number" || !Number.isFinite(body.fuel) || Math.abs(body.fuel) > 1e6) {
+    return { error: "fuel must be a finite number" };
+  }
+  return { liveId, name: name.trim(), timeLeft: body.timeLeft, fuel: body.fuel, worlds: body.worlds };
+}
+
 function identity(body) {
   const sent = body.roll != null || body.phone != null;
   if (!sent) return { roll: null, phone: null };

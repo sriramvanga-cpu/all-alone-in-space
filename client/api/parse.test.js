@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseScore, toJson } from "./store.js";
+import { parseLive, parseScore, toJson } from "./store.js";
 
 const when = "2026-10-16T13:16:00.000Z";
 
@@ -105,4 +105,26 @@ test("a leaderboard row carries its rank and whether it is yours", () => {
   assert.equal(json.total, 230);
   assert.equal(json.mine, true);
   assert.equal("rank" in toJson({ id: 1, name: "Spock", fuel: 0, settled: false, time_left: 0, worlds: 0, finished_at: when }), false);
+});
+
+test("a heartbeat keeps the name, time left, fuel and worlds, and nothing else", () => {
+  const parsed = parseLive({ liveId: "a1", name: " Kirk ", timeLeft: 540, fuel: 7.5, worlds: 2, phone: "5550100100" });
+  assert.deepEqual(parsed, { liveId: "a1", name: "Kirk", timeLeft: 540, fuel: 7.5, worlds: 2 });
+});
+
+test("a run that ends is just its id and done", () => {
+  assert.deepEqual(parseLive({ liveId: "a1", done: true }), { liveId: "a1", done: true });
+});
+
+test("a heartbeat with a bad id, name or number is refused", () => {
+  const ok = { liveId: "a1", name: "Kirk", timeLeft: 10, fuel: 1, worlds: 1 };
+  assert.equal(parseLive(null).error, "body must be a JSON object");
+  assert.equal(parseLive({ ...ok, liveId: "" }).error, "liveId must be a short string");
+  assert.equal(parseLive({ ...ok, liveId: "x".repeat(65) }).error, "liveId must be a short string");
+  assert.equal(parseLive({ ...ok, name: "  " }).error, "name must be a non-empty string");
+  assert.equal(parseLive({ ...ok, name: "k".repeat(41) }).error, "name must be at most 40 characters");
+  assert.equal(parseLive({ ...ok, timeLeft: 1.5 }).error, "timeLeft and worlds must be whole numbers");
+  assert.equal(parseLive({ ...ok, worlds: 56 }).error, "timeLeft and worlds must be whole numbers");
+  assert.equal(parseLive({ ...ok, fuel: NaN }).error, "fuel must be a finite number");
+  assert.equal(parseLive({ ...ok, fuel: 1e9 }).error, "fuel must be a finite number");
 });

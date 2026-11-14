@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import scores from "./api/scores.js";
 import leaderboard from "./api/leaderboard.js";
+import live from "./api/live.js";
 
 function leaderboardApi() {
   return {
@@ -9,7 +10,7 @@ function leaderboardApi() {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = (req.url || "").split("?")[0];
-        const handle = url === "/api/scores" ? scores : url === "/api/leaderboard" ? leaderboard : null;
+        const handle = url === "/api/scores" ? scores : url === "/api/leaderboard" ? leaderboard : url === "/api/live" ? live : null;
         if (!handle) return next();
         try {
           await handle(req, res);
