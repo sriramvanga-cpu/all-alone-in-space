@@ -67,7 +67,7 @@ Pick one of the five flight events, or **By chance** for the normal random event
 
 Every fuel stop in an admin run opens with a **fuel game picker** above the game:
 
-- **Pick any of the eight games** to start a fresh minute of it. Picking the game that's already playing restarts it.
+- **Pick any of the ten games** to start a fresh minute of it. Picking the game that's already playing restarts it.
 - **Leave fuel stop** goes straight back to the system map, skipping the rest of the minute and the shop.
 
 ## After a habitable landing
