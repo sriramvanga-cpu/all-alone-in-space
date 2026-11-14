@@ -127,7 +127,7 @@ Each fuel stop can only be visited once.
 
 ## The display board
 
-Finished runs appear on the display board (`/board`) within a few seconds. Every win ranks above every loss. Wins rank by points. Losses rank by more worlds visited (fuel stops count), then more fuel left, then who lasted longer.
+Finished runs appear on the display board (`/board`) within a few seconds. On a wide screen, a **Playing now** column beside the scores lists the pilots mid-run (admin runs excluded) with their time left, worlds visited and fuel; under the scores on a narrower one. Every win ranks above every loss. Wins rank by points. Losses rank by more worlds visited (fuel stops count), then more fuel left, then who lasted longer.
 
 ## Controls and accessibility
 

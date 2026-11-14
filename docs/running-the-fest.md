@@ -29,7 +29,7 @@ A run takes at most 15 minutes of play, plus about a minute for registration, th
 
 - Open `/board` and make it fullscreen (F11 on most laptops).
 - Keep the board's tab in front. Browsers slow down background tabs, so a hidden board updates late.
-- The board checks for new scores every 3 seconds. It shows the top three on a podium and the rest of the top 10 in a table. Before anyone has finished a run, it shows an invitation to play instead.
+- The board checks for new scores every 3 seconds. It shows the top three on a podium and the rest of the top 10 in a table. Before anyone has finished a run, it shows an invitation to play instead. A **Playing now** column beside the scores (under them on a narrow screen) lists the pilots mid-run with their time left, worlds and fuel. It updates every 3 seconds, and a pilot drops off about 20 seconds after their device stops reporting.
 
 ## During the fest
 
@@ -57,6 +57,7 @@ The end screen says whether the score reached the board:
 | What you see | What to do |
 |---|---|
 | The board says **Offline**, or "Can't reach the leaderboard. Retrying." | The board can't reach the scores database. It keeps the last scores on screen and retries every 3 seconds by itself. Check the internet connection. The first request after a quiet spell can take a few seconds while the database wakes up. |
+| **Playing now** is empty, or a pilot is missing | It lists only real runs, so an admin run never shows. Each player's device reports every 5 seconds, so a pilot appears a few seconds after the run's clock starts and disappears about 20 seconds after their tab closes or loses its connection. The scores on the board aren't affected. |
 | An end screen says "Couldn't reach the board" | The score is queued on that device and sends itself once the connection is back. Keep that browser open, or at least don't clear its data. |
 | "Preparing launch…" stays on screen | The 3D film is loading its textures. After 9 seconds it switches to the 2D film by itself. **Skip** works at any time. |
 | The maps show flat drawings instead of realistic planets | WebGL is off or still rendering the art. The game is fully playable as it is. |

@@ -15,14 +15,16 @@ flowchart LR
   end
   board["Display board<br/>/board"]
   api["Scores API<br/>client/api"]
-  db[("Neon Postgres<br/>scores table")]
+  db[("Neon Postgres<br/>scores and live_runs tables")]
   game -- "POST /api/scores" --> api
   game -- "GET /api/leaderboard" --> api
   board -- "GET /api/leaderboard, every 3 s" --> api
+  game -- "POST /api/live, every 5 s" --> api
+  board -- "GET /api/live, every 3 s" --> api
   api --> db
 ```
 
-The game is a single-page React app built with Vite. The scores API is two small handlers in `client/api`: Vite serves them during development, and Vercel runs them as serverless functions in production. Scores are stored in Neon Postgres. Nothing else runs on a server.
+The game is a single-page React app built with Vite. The scores API is three small handlers in `client/api`: Vite serves them during development, and Vercel runs them as serverless functions in production. Scores are stored in Neon Postgres. Nothing else runs on a server.
 
 **Stack:** React 19, Vite 8, three.js, the Neon serverless driver, and the Orbitron and Space Grotesk fonts from Fontsource. There's no router or state library; one component file holds the game.
 
@@ -43,7 +45,7 @@ The game is a single-page React app built with Vite. The scores API is two small
 | `client/src/three/` | three.js: `sprites.js` renders the map art (and builds planets for the live views), `artStore.js` hands it to React, `PlanetView.jsx` is the live planet with the ship circling it and the landing film, `models.js` builds the ships and station, and `planetMaterial.js`, `glsl.js`, `particles.js`, `post.js` and `assets.js` support the renders and the films. |
 | `client/src/art/` | Vector art: stars, planets, the ship, the station, icons, the space backdrop and the warp tunnel. `sky.js` holds the seeded maths for a system's asteroid belt, moons and comets (with a test), and `rng.js` the seeded random numbers. |
 | `client/src/sound.js` | Every sound effect and the engine hum, synthesized with Web Audio. |
-| `client/api/` | The scores API: `scores.js` (save a run), `leaderboard.js` (read the board) and `store.js` (database connection, table setup, input checks). |
+| `client/api/` | The scores API: `scores.js` (save a run), `leaderboard.js` (read the board), `live.js` (who is playing now) and `store.js` (database connection, table setup, input checks). |
 | `client/public/textures/` | Planet textures and the sky panorama. |
 
 ## A run's state
@@ -170,6 +172,16 @@ It answers 201 with the saved row, 200 with `{ "duplicate": true }` for a repeat
 
 **`GET /api/leaderboard`** returns the top 10, ranked like the board. With `?run=<runId>`, it adds that run's row, with its `rank`, the `total` number of runs, and `mine: true`. Phone numbers are never returned.
 
+**`POST /api/live`** is a pilot's heartbeat, sent every 5 seconds while a real run is on (never for an admin run):
+
+```json
+{ "liveId": "9b1e…", "name": "Ananya", "timeLeft": 540, "fuel": 7.5, "worlds": 2 }
+```
+
+`liveId` is a random id made when the run starts, apart from the score's `runId`. When the run ends the game sends `{ "liveId": "9b1e…", "done": true }` to take the row off at once. It answers 200 with `{ "ok": true }`, 400 for bad input, 503 when no database is set, and 500 if the database fails.
+
+**`GET /api/live`** returns the pilots whose heartbeat is under 20 seconds old, oldest first, up to 12: `key` (a short hash, for the screen), `name`, `timeLeft`, `age` (seconds since the heartbeat), `fuel` and `worlds`. A closed tab drops off by itself. Phone numbers are never sent to this API.
+
 ### Database
 
 The `scores` table is created, and updated with any new columns, on the first request:
@@ -186,6 +198,16 @@ The `scores` table is created, and updated with any new columns, on the first re
 | `fuel` | double | Fuel left at the end. |
 | `finished_at` | timestamptz | When the run ended. |
 | `score`, `roll_no` | | Left over from earlier versions. New runs don't write them. |
+
+The `live_runs` table is created on the first live request, separately from `scores`, so it can never hold up the scores. It holds one row per run in progress:
+
+| Column | Type | Meaning |
+|---|---|---|
+| `live_id` | text, primary key | The run's live id. |
+| `name` | text | Pilot's name. |
+| `time_left`, `worlds` | integer | From the last heartbeat. |
+| `fuel` | double | From the last heartbeat. |
+| `started_at`, `updated_at` | timestamptz | First and latest heartbeat. Rows untouched for an hour are swept out. |
 
 Where the database is depends on `DATABASE_URL`:
 
