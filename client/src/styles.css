@@ -1727,6 +1727,23 @@ button.ghost.reactor-cell.miss { animation: cell-shake 0.32s ease-in-out; }
 .board .lb th { font-size: clamp(0.6rem, 1vw, 0.8rem); }
 .board .rank { width: 2.4rem; height: 2.4rem; font-size: var(--text-lg); }
 
+/* Pilots mid-run: under the scores, or in a column beside them on a wide screen. The empty note only shows
+   in the column, so a narrow screen doesn't carry a line saying nobody is playing. */
+.playing { margin-top: 2.4rem; }
+.playing.empty { display: none; }
+@media (min-width: 1400px) {
+  .board { max-width: 108rem; }
+  .board-body { display: grid; grid-template-columns: minmax(0, 1fr) 21rem; align-items: start; gap: 2.4rem; }
+  .playing.empty { display: block; }
+  .playing ul { grid-template-columns: 1fr; }
+}
+.playing h2 { display: flex; align-items: center; gap: 0.7rem; margin: 0 0 0.8rem; font: 700 var(--text-sm) var(--font-body); letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
+.playing h2 span { padding: 0.1rem 0.7rem; letter-spacing: 0.05em; color: var(--ok); border: 1px solid rgba(125, 222, 192, 0.45); border-radius: var(--radius-pill); background: rgba(125, 222, 192, 0.08); }
+.playing ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 0.7rem; margin: 0; padding: 0; list-style: none; }
+.playing li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 1.1rem; padding: 0.75rem 1rem; border: 1px solid rgba(160, 190, 255, 0.14); border-radius: var(--radius-md); background: rgba(10, 16, 34, 0.55); font-variant-numeric: tabular-nums; animation: rise 0.5s var(--ease) both; }
+.playing .who { flex: 1 0 100%; font: 800 clamp(1.05rem, 1.9vw, 1.5rem) var(--font-display); letter-spacing: 0.04em; overflow-wrap: anywhere; }
+.playing li span { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--dim); font-size: clamp(0.95rem, 1.5vw, 1.2rem); }
+
 .live {
   display: inline-flex;
   align-items: center;

@@ -537,6 +537,70 @@ function useBoard(run) {
   return { rows, err };
 }
 
+// A pilot's heartbeat for the board's "Playing now" panel. Best effort: if it fails, the next one will do.
+function postLive(body) {
+  fetch(`${API}/api/live`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), keepalive: true }).catch(() => {});
+}
+
+// Who is mid-run, checked every 3 seconds like the scores. If the check fails the panel empties rather than show
+// pilots who may have finished; the scores above it keep their own Live/Offline badge.
+function useLive() {
+  const [pilots, setPilots] = useState([]);
+  useEffect(() => {
+    let stop = false;
+    async function pull() {
+      try {
+        const res = await fetch(`${API}/api/live`, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        if (!stop) setPilots(Array.isArray(data) ? data.map((p) => ({ ...p, at: Date.now() })) : []);
+      } catch {
+        if (!stop) setPilots([]);
+      }
+    }
+    pull();
+    const id = setInterval(pull, 3000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, []);
+  return pilots;
+}
+
+// The pilots mid-run. Time left counts down from the heartbeat's moment: its age when we got it, plus the time since.
+function PlayingNow({ pilots }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <section className={pilots.length ? "playing" : "playing empty"} aria-label="Playing now">
+      <h2>
+        Playing now <span>{pilots.length}</span>
+      </h2>
+      {pilots.length === 0 ? <p className="hint">Nobody is playing right now.</p> : null}
+      <ul>
+        {pilots.map((p) => (
+          <li key={p.key}>
+            <b className="who">{p.name}</b>
+            <span>
+              <ClockIcon /> {formatClock(Math.max(0, (p.timeLeft - p.age) * 1000 - (now - p.at)))}
+            </span>
+            <span>
+              <GlobeIcon /> {p.worlds}
+            </span>
+            <span>
+              <FuelIcon /> {fmtScore(p.fuel)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 const byRank = (rows) => [...rows].sort(compareRuns);
 
 function RankBadge({ n }) {
@@ -658,6 +722,7 @@ function BoardEmpty() {
 
 function Board() {
   const { rows, err } = useBoard();
+  const pilots = useLive();
   return (
     <main className="board">
       <header className="board-head">
@@ -671,14 +736,19 @@ function Board() {
         Wins rank above every loss. Wins rank by points: 1 per fuel left and 1 per 10 seconds left.
         Losses rank by more worlds, then more fuel left, then who lasted longer.
       </p>
-      {err === false && rows.length === 0 ? (
-        <BoardEmpty />
-      ) : (
-        <>
-          <Podium rows={rows} />
-          <BoardTable rows={rows} err={err} start={Math.min(3, rows.length)} />
-        </>
-      )}
+      <div className="board-body">
+        <div>
+          {err === false && rows.length === 0 ? (
+            <BoardEmpty />
+          ) : (
+            <>
+              <Podium rows={rows} />
+              <BoardTable rows={rows} err={err} start={Math.min(3, rows.length)} />
+            </>
+          )}
+        </div>
+        <PlayingNow pilots={pilots} />
+      </div>
     </main>
   );
 }
