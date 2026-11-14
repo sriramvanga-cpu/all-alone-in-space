@@ -2836,6 +2836,32 @@ function Game() {
     return () => clearInterval(id);
   }, []);
 
+  // While a real run is on, tell the board who is playing: a heartbeat every 5 s, and a goodbye when the run ends.
+  // The id is only for this panel, apart from the score's own run id. A cheat run is a test, so it stays off too.
+  const liveId = useRef(null);
+  useEffect(() => {
+    function beat() {
+      const g = game.current;
+      if (g.cheat || !g.deadline || !LIVE_PHASES.has(g.phase)) return;
+      liveId.current ??= crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      postLive({
+        liveId: liveId.current,
+        name: g.name,
+        timeLeft: Math.max(0, Math.round((g.deadline - clock()) / 1000)),
+        fuel: g.fuel,
+        worlds: g.visited.length,
+      });
+    }
+    beat();
+    const id = setInterval(beat, 5000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => {
+    if (snap.phase !== "end" || !liveId.current) return;
+    postLive({ liveId: liveId.current, done: true });
+    liveId.current = null;
+  }, [snap.phase]);
+
   if (snap.phase === "name") {
     return <NameScreen onStart={(who) => commit({ ...who, phase: "intro" })} />;
   }
