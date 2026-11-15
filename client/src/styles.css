@@ -1745,6 +1745,7 @@ button.ghost.reactor-cell.miss { animation: cell-shake 0.32s ease-in-out; }
 .playing li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 1.1rem; padding: 0.75rem 1rem; border: 1px solid rgba(160, 190, 255, 0.14); border-radius: var(--radius-md); background: rgba(10, 16, 34, 0.55); font-variant-numeric: tabular-nums; animation: rise 0.5s var(--ease) both; }
 .playing .who { flex: 1 0 100%; font: 800 clamp(1.05rem, 1.9vw, 1.5rem) var(--font-display); letter-spacing: 0.04em; overflow-wrap: anywhere; }
 .playing li span { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--dim); font-size: clamp(0.95rem, 1.5vw, 1.2rem); }
+.playing li .icon { width: 1.1em; height: 1.1em; flex: none; }
 
 .live {
   display: inline-flex;
