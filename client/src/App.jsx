@@ -601,6 +601,30 @@ function PlayingNow({ pilots }) {
   );
 }
 
+// Runs that joined the board after it first loaded, kept FRESH_MS so their row or card can play its entry. The first
+// answer only records what is there, so a board opened mid-event doesn't flash every row.
+const FRESH_MS = 8000;
+function useFresh(rows, ready) {
+  const seen = useRef(null);
+  const timers = useRef([]);
+  const [fresh, setFresh] = useState(() => new Set());
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  useEffect(() => {
+    if (!ready) return;
+    const ids = rows.map((row) => row.id);
+    if (!seen.current) {
+      seen.current = new Set(ids);
+      return;
+    }
+    const added = ids.filter((id) => !seen.current.has(id));
+    if (!added.length) return;
+    added.forEach((id) => seen.current.add(id));
+    setFresh((old) => new Set([...old, ...added]));
+    timers.current.push(setTimeout(() => setFresh((old) => new Set([...old].filter((id) => !added.includes(id)))), FRESH_MS));
+  }, [rows, ready]);
+  return fresh;
+}
+
 const byRank = (rows) => [...rows].sort(compareRuns);
 
 function RankBadge({ n }) {
@@ -609,7 +633,7 @@ function RankBadge({ n }) {
 
 // The top 10 only; `start` skips rows already shown elsewhere (the podium) but keeps their numbering.
 // The player's own row, when it is outside the top 10, follows a gap with its real rank.
-function BoardTable({ rows, err, start = 0 }) {
+function BoardTable({ rows, err, start = 0, fresh }) {
   const ranked = byRank(rows);
   const list = ranked.slice(start, 10);
   const mine = ranked.find((row) => row.mine && row.rank > 10);
@@ -639,7 +663,7 @@ function BoardTable({ rows, err, start = 0 }) {
               ) : (
               <tr
                 key={row.id ?? start + i}
-                className={[start + i < 3 && row !== mine ? `top top${start + i + 1}` : "", row.mine ? "me" : ""].join(" ").trim() || undefined}
+                className={[start + i < 3 && row !== mine ? `top top${start + i + 1}` : "", row.mine ? "me" : "", fresh?.has(row.id) ? "fresh" : ""].join(" ").trim() || undefined}
               >
                 <td>
                   <RankBadge n={row === mine ? row.rank : start + i + 1} />
@@ -662,7 +686,7 @@ function BoardTable({ rows, err, start = 0 }) {
   );
 }
 
-function Podium({ rows }) {
+function Podium({ rows, fresh }) {
   const top = byRank(rows).slice(0, 3);
   if (top.length === 0) return null;
   return (
@@ -671,7 +695,7 @@ function Podium({ rows }) {
         const fuel = Number.isFinite(row.fuel) ? row.fuel : Number(row.score) || 0;
         const worlds = row.worlds ?? 0;
         return (
-          <article key={row.id ?? i} className={`pod p${i + 1}`}>
+          <article key={row.id ?? i} className={fresh?.has(row.id) ? `pod p${i + 1} fresh` : `pod p${i + 1}`}>
             <RankBadge n={i + 1} />
             <p className="pod-name">{row.name}</p>
             <p className={row.settled ? "pod-result yes" : "pod-result"}>{row.settled ? "Settled" : "Not settled"}</p>
@@ -722,6 +746,7 @@ function BoardEmpty() {
 
 function Board() {
   const { rows, err } = useBoard();
+  const fresh = useFresh(rows, err === false);
   const pilots = useLive();
   return (
     <main className="board">
@@ -742,8 +767,8 @@ function Board() {
             <BoardEmpty />
           ) : (
             <>
-              <Podium rows={rows} />
-              <BoardTable rows={rows} err={err} start={Math.min(3, rows.length)} />
+              <Podium rows={rows} fresh={fresh} />
+              <BoardTable rows={rows} err={err} start={Math.min(3, rows.length)} fresh={fresh} />
             </>
           )}
         </div>

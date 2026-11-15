@@ -29,7 +29,7 @@ A run takes at most 15 minutes of play, plus about a minute for registration, th
 
 - Open `/board` and make it fullscreen (F11 on most laptops).
 - Keep the board's tab in front. Browsers slow down background tabs, so a hidden board updates late.
-- The board checks for new scores every 3 seconds. It shows the top three on a podium and the rest of the top 10 in a table. Before anyone has finished a run, it shows an invitation to play instead. A **Playing now** column beside the scores (under them on a narrow screen) lists the pilots mid-run with their time left, worlds and fuel. It updates every 3 seconds, and a pilot drops off about 20 seconds after their device stops reporting.
+- The board checks for new scores every 3 seconds. It shows the top three on a podium and the rest of the top 10 in a table. A run that joins the top 10 while the board is open plays an entrance: a table row slides in glowing, a podium card drops in with a ring pulsing out (gold for a new leader), and both wear a **New** tag for about 8 seconds. The runs already there when the board opens don't play it. Before anyone has finished a run, it shows an invitation to play instead. A **Playing now** column beside the scores (under them on a narrow screen) lists the pilots mid-run with their time left, worlds and fuel. It updates every 3 seconds, and a pilot drops off about 20 seconds after their device stops reporting.
 
 ## During the fest
 
