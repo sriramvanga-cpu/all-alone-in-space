@@ -244,6 +244,8 @@ The `client` folder is linked to the Vercel project (`client/.vercel`). Vercel b
 
 Day-to-day work happens on the `experimental` branch. `main` is kept as the last known-good version to roll back to.
 
+Deploys go only through the CLI from `client`. The Vercel project is also connected to the GitHub repository, but a build from a push would start at the repository root, which has no build script, so it would fail and mark the commit with a red X. The `vercel.json` at the repository root turns those push deploys off (`git.deploymentEnabled: false`). It isn't part of a CLI deploy, which only uploads `client`.
+
 ## Conventions
 
 - **Numbers belong in `rules.js`**, with a test. The How to play reel reads its numbers from the rules, but its captions and scenes are written by hand, so check them after changing a rule.
