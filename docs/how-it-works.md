@@ -46,7 +46,7 @@ The game is a single-page React app built with Vite. The scores API is three sma
 | `client/src/art/` | Vector art: stars, planets, the ship, the station, icons, the space backdrop and the warp tunnel. `sky.js` holds the seeded maths for a system's asteroid belt, moons and comets (with a test), and `rng.js` the seeded random numbers. |
 | `client/src/sound.js` | Every sound effect and the engine hum, synthesized with Web Audio. |
 | `client/api/` | The scores API: `scores.js` (save a run), `leaderboard.js` (read the board), `live.js` (who is playing now) and `store.js` (database connection, table setup, input checks). |
-| `client/public/textures/` | Planet textures and the sky panorama. |
+| `client/public/textures/` | Planet textures and the sky panorama. `phone/` holds lighter copies for phones (see [Phones](#phones)). |
 
 ## A run's state
 
@@ -131,11 +131,20 @@ The admin panel's switches live in `g.admin`, and each is read in one place:
 
 ## Rendered art
 
-When the page loads, if WebGL is available, `renderMapArt()` in `three/sprites.js` renders every planet, each kind of star, the black hole, the asteroids, the ship and the station once with three.js, and turns them into images. `artStore.js` publishes the images, and components read them with `useArt()`. Until they're ready, or without WebGL, the maps use the vector art in `client/src/art/`.
+When the game page loads, if WebGL is available, `renderMapArt()` in `three/sprites.js` renders every planet, each kind of star, the black hole, the asteroids, the ship and the station once with three.js, and turns them into images. `artStore.js` publishes the images, and components read them with `useArt()`. Until they're ready, or without WebGL, the maps use the vector art in `client/src/art/`.
 
 Some screens also run a live three.js view (`three/PlanetView.jsx`), in a transparent canvas over the still picture, which stays under it until the first frame: the screens at a world show the planet turning with the ship circling it, and the landing film (`mode="landing"`) is a full-screen layer behind the Scan and win screens. The film follows the game clock from `scan.at`, so it needs no state from the screens over it, and its sky, haze and scan ring follow the verdict's time. Phones keep the still pictures for the world screens, and nothing live runs under reduced motion or without WebGL. Planet order cards use `art.worlds`, pictures of the eight planets rendered by `renderWorlds()` in `sprites.js`.
 
 The 3D intro film is a live three.js scene in one continuous camera move. Its timeline constants and captions are at the top of `Intro3D.jsx`. If WebGL is missing or the textures take more than 9 seconds, it falls back to the 2D film. Under reduced motion, both are skipped.
+
+## Phones
+
+A few things keep phones light:
+
+- **The board page** (`/board`) skips the rendered art entirely, so it never downloads three.js or a texture. Opening it costs about the size of the page's own code and fonts.
+- **Smaller textures.** A device whose screen's short side is 600px or less loads `textures/phone/vulcan.jpg`, a 2048-wide copy of the 4096-wide Vulcan map (`PHONE_COPIES` in `three/assets.js`). The sky panorama stays full size, because the intro shows it across the whole screen. Up to 560px wide, the background is `textures/phone/backdrop.jpg`, the middle third of the picture, which is all a phone in portrait shows. If you replace `vulcan.jpg` or `backdrop.jpg`, remake the copies, for example on a Mac: `sips -Z 2048 -s formatOptions 60 vulcan.jpg --out phone/vulcan.jpg` and `sips -c 1440 810 -s formatOptions 60 backdrop.jpg --out phone/backdrop.jpg`.
+- **A still sky and solid panels.** Up to 560px wide, the background stars and sky don't drift, and the panels and top bar are solid instead of blurred glass, so the screen isn't redrawn every frame.
+- **Cheap board updates.** The leaderboard answers with an `ETag`. The browser sends it back, and an unchanged board comes back as an empty `304`, so a phone on the board moves a few hundred bytes every 3 seconds instead of the whole list. The board also skips redrawing when nothing changed, and stops asking while its tab is hidden.
 
 ## Sound
 
@@ -170,7 +179,7 @@ The server ignores a `runId` it has already saved, so retries never save a run t
 
 It answers 201 with the saved row, 200 with `{ "duplicate": true }` for a repeated `runId`, 400 for bad input (the error says which field), 503 when no database is set, and 500 if the database fails.
 
-**`GET /api/leaderboard`** returns the top 10, ranked like the board. With `?all=1` (what the display board uses) it returns every run. With `?run=<runId>`, it adds that run's row, with its `rank`, the `total` number of runs, and `mine: true`. Phone numbers are never returned.
+**`GET /api/leaderboard`** returns the top 10, ranked like the board. With `?all=1` (what the display board uses) it returns every run. With `?run=<runId>`, it adds that run's row, with its `rank`, the `total` number of runs, and `mine: true`. Phone numbers are never returned. Each answer carries an `ETag`; a request whose `If-None-Match` matches it gets an empty `304`.
 
 **`POST /api/live`** is a pilot's heartbeat, sent every 5 seconds while a real run is on (never for an admin run):
 
