@@ -170,7 +170,7 @@ The server ignores a `runId` it has already saved, so retries never save a run t
 
 It answers 201 with the saved row, 200 with `{ "duplicate": true }` for a repeated `runId`, 400 for bad input (the error says which field), 503 when no database is set, and 500 if the database fails.
 
-**`GET /api/leaderboard`** returns the top 10, ranked like the board. With `?run=<runId>`, it adds that run's row, with its `rank`, the `total` number of runs, and `mine: true`. Phone numbers are never returned.
+**`GET /api/leaderboard`** returns the top 10, ranked like the board. With `?all=1` (what the display board uses) it returns every run. With `?run=<runId>`, it adds that run's row, with its `rank`, the `total` number of runs, and `mine: true`. Phone numbers are never returned.
 
 **`POST /api/live`** is a pilot's heartbeat, sent every 5 seconds while a real run is on (never for an admin run):
 
