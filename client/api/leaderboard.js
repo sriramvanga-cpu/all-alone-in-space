@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { db, send, toJson } from "./store.js";
 
 // Points: fuel / 2 + time_left / 6, the same as runPoints in src/game/rules.js.
@@ -27,7 +28,14 @@ export default async function handler(req, res) {
       WHERE ${all} OR rank <= 10 OR mine
       ORDER BY rank
     `;
-    return send(res, 200, rows.map(toJson));
+    const list = rows.map(toJson);
+    // Boards ask every 3 seconds and the answer rarely changes. With a hash of it as the ETag, the browser asks
+    // "still this?" and an unchanged board comes back as an empty 304 (a proxy that compresses may mark it W/).
+    const etag = `"${createHash("sha1").update(JSON.stringify(list)).digest("base64url")}"`;
+    res.setHeader("ETag", etag);
+    res.setHeader("Cache-Control", "no-cache");
+    if ((req.headers["if-none-match"] || "").replace(/^W\//, "") === etag) return send(res, 304);
+    return send(res, 200, list);
   } catch (err) {
     const missing = err?.code === "NO_DATABASE";
     return send(res, missing ? 503 : 500, { error: missing ? "DATABASE_URL is not set" : "database" });

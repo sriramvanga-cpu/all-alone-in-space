@@ -516,16 +516,23 @@ function useBoard(run, all = false) {
   const [err, setErr] = useState(null);
   useEffect(() => {
     let stop = false;
+    let last = null;
     async function pull() {
+      // A hidden page (a phone in a pocket, another app in front) skips its turns; the next one after it shows asks.
+      if (document.hidden) return;
       try {
         const query = run ? `?run=${encodeURIComponent(run)}` : all ? "?all=1" : "";
         const res = await fetch(`${API}/api/leaderboard${query}`, { signal: AbortSignal.timeout(8000) });
         if (!res.ok) throw new Error(String(res.status));
-        const data = await res.json();
-        if (!stop) {
+        const text = await res.text();
+        if (stop) return;
+        // Most answers repeat the last one: then every row stays as it is instead of being drawn again.
+        if (text !== last) {
+          const data = JSON.parse(text);
+          last = text;
           setRows(Array.isArray(data) ? data : []);
-          setErr(false);
         }
+        setErr(false);
       } catch {
         if (!stop) setErr(true);
       }
@@ -552,6 +559,7 @@ function useLive() {
   useEffect(() => {
     let stop = false;
     async function pull() {
+      if (document.hidden) return;
       try {
         const res = await fetch(`${API}/api/live`, { signal: AbortSignal.timeout(8000) });
         if (!res.ok) throw new Error(String(res.status));
