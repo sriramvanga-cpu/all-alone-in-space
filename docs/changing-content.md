@@ -72,7 +72,7 @@ The flight events are listed in `FLIGHT_EVENTS` in `client/src/game/events.js`:
 
 - Each event has exactly **two options**. An option can change `fuel`, `credits` and `time` (in seconds; negative costs time).
 - An option that would take fuel or credits below zero can't be picked, so **one option must always be open**. "Fly on", or an option that only costs time, does that.
-- 1 fuel and 10 seconds are worth the same on the board, which helps keep the two options balanced.
+- On the board, 1 fuel is worth about 3 seconds (1 point per 2 fuel, 1 point per 6 s), and fuel also pays for lanes. Weigh each option on both.
 - `EVENT_CHANCE` (one in three) sets how often a lane flight brings an event.
 
 The tests check the two-option and always-open rules. The admin panel lists the events by itself. Update the events table in [Playing Nova Grid](playing.md) to match.

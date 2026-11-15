@@ -10,9 +10,9 @@ Vulcan's core collapsed, and the planet broke apart. You captain the last starsh
 
 **Land on a habitable world before the 15-minute clock runs out.** You win when a landing settles, which is when its readings come back habitable. Your score is:
 
-> **Points = fuel left + 1 point for every 10 seconds left**
+> **Points = 1 point for every 2 fuel left + 1 point for every 6 seconds left**
 
-So a pilot who lands with 10 fuel and 4:10 on the clock scores 10 + 25 = **35 points**. The clock stops the moment you press Land, so the landing film and the readings that follow cost no points.
+So a pilot who lands with 10 fuel and 4:10 on the clock scores 5 + 41.7 = **46.7 points**. A minute of air is worth 10 points, the same as 20 fuel. The clock stops the moment you press Land, so the landing film and the readings that follow cost no points.
 
 You lose if the clock runs out, or if you're **stranded**: you can't afford any lane out, and there's no planet left to try where you are.
 
@@ -119,7 +119,7 @@ Each fuel stop can only be visited once.
 ## Strategy
 
 - **Early landings are long shots.** The chance starts at 0%, so the first minutes are for scouting, refuelling and getting into position.
-- **But time is points.** Every 10 seconds left is a point, so waiting for better odds costs score. That's the game's main trade-off.
+- **But time is points.** Every 6 seconds left is a point, so waiting for better odds costs score: a minute is worth as much as 20 fuel. That's the game's main trade-off.
 - **Outer systems ask easier questions** (more right answers, so a tenth more instead of halving), but their lanes cost the most fuel.
 - **Hop when planets line up.** The same hop can cost much less a few seconds later.
 - **Keep enough fuel to leave.** Being stranded ends the run.

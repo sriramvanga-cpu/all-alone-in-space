@@ -71,10 +71,10 @@ Scores live in Neon Postgres, on the `production` branch of the project. To list
 
 ```sql
 SELECT name, phone, settled, fuel, time_left, worlds, finished_at,
-  CASE WHEN settled THEN ROUND((fuel + time_left / 10.0)::numeric, 2) END AS points
+  CASE WHEN settled THEN ROUND((fuel / 2.0 + time_left / 6.0)::numeric, 2) END AS points
 FROM scores
 ORDER BY settled DESC,
-  CASE WHEN settled THEN ROUND((fuel + time_left / 10.0)::numeric, 2) ELSE 0 END DESC,
+  CASE WHEN settled THEN ROUND((fuel / 2.0 + time_left / 6.0)::numeric, 2) ELSE 0 END DESC,
   worlds DESC, fuel DESC,
   CASE WHEN settled THEN time_left ELSE -time_left END DESC,
   id ASC
