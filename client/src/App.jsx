@@ -124,9 +124,12 @@ const QUESTION_MS = 60_000;
 const FUEL_WORLDS = new Set(PLANETS.filter((p) => p.shell === "fuel").map((p) => p.id));
 const FACES = new Map(PLANETS.map((p) => [p.id, faceOf(p)]));
 const MOONS = new Map(PLANETS.map((p) => [p.id, moonsOf(p.id, FACES.get(p.id).radius, FACES.get(p.id).ring)]));
-// Realistic map art renders in the background; the map shows vector art until it lands.
+// The page this load shows. The board is reached by a plain link, so it is a page load of its own.
+const PAGE = window.location.pathname.replace(/\/+$/, "") || "/";
+// Realistic map art renders in the background; the map shows vector art until it lands. The board shows none of it,
+// so it skips three.js, the textures and the renders (megabytes, and seconds of a phone's graphics chip).
 const WEBGL = webglAvailable();
-if (WEBGL) {
+if (WEBGL && PAGE !== "/board") {
   // While the realistic ship renders, show no ship rather than flash the old vector one.
   publishArt({ loading: true });
   import("./three/sprites.js")
@@ -3734,7 +3737,6 @@ function SoundToggle() {
 }
 
 export default function App() {
-  const route = window.location.pathname.replace(/\/+$/, "") || "/";
   // Every button ticks when pressed; the game's own sounds play on top.
   useEffect(() => {
     const onClick = (e) => {
@@ -3746,7 +3748,7 @@ export default function App() {
   return (
     <>
       <SpaceBackdrop />
-      {route === "/board" ? (
+      {PAGE === "/board" ? (
         <Board />
       ) : (
         <>
