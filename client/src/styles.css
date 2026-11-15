@@ -2142,6 +2142,14 @@ button.ghost.reactor-cell.miss { animation: cell-shake 0.32s ease-in-out; }
   .board { overflow-x: clip; }
   .playing ul { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 0.3rem; }
   .playing li { flex: 0 0 min(15rem, 80%); scroll-snap-align: start; }
+  /* Lighter for phones: the cut of the sky a phone actually shows (a third of the picture), held still, and solid
+     panels instead of blurred glass. Drifting stars under blurred glass make the graphics chip redraw the whole
+     screen every frame, even on a screen where nothing else moves. */
+  .backdrop .sky { background-image: url("/textures/phone/backdrop.jpg"); }
+  .backdrop .sky, .backdrop .stars, .backdrop .stars.near { animation: none; will-change: auto; }
+  .panel, .hud { backdrop-filter: none; }
+  .panel { background: linear-gradient(160deg, rgba(26, 40, 76, 0.9), rgba(9, 15, 32, 0.93)); }
+  .hud { background: linear-gradient(180deg, rgba(22, 33, 62, 0.93), rgba(9, 14, 30, 0.93)); }
   .title-big { font-size: 2.1rem; }
   .howto-head button { min-height: 36px; padding: 0.3rem 0.8rem; }
   .reel-stage { max-height: none; }
