@@ -21,6 +21,12 @@ const FILES = {
   ring: "saturn_ring.png",
 };
 
+// Phones get a half-size copy of the 4096-wide Vulcan map (client/public/textures/phone): a third of the download
+// and a quarter of the graphics memory, still sharper than a phone shows it. The sky stays full size: the intro
+// shows it across the whole screen.
+const PHONE = Math.min(screen.width, screen.height) <= 600;
+const PHONE_COPIES = new Set(["vulcan"]);
+
 let pending = null;
 
 // Loads every texture once and caches the promise. Starts at app load, so the
@@ -30,7 +36,7 @@ export function loadTextures() {
   const loader = new THREE.TextureLoader();
   pending = Promise.all(
     Object.entries(FILES).map(([key, file]) =>
-      loader.loadAsync(`/textures/${file}`).then((tex) => {
+      loader.loadAsync(`/textures/${PHONE && PHONE_COPIES.has(key) ? "phone/" : ""}${file}`).then((tex) => {
         tex.colorSpace = key === "ring" ? THREE.NoColorSpace : THREE.SRGBColorSpace;
         tex.anisotropy = 8;
         // Planet maps are also tiled small as close-up ground detail.
