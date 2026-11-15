@@ -75,12 +75,16 @@ export function score(path) {
   return Math.round(raw * 1e10) / 1e10;
 }
 
-/** A win's points: 1 per fuel left, 1 per 10 seconds left. A loss scores 0. No per-world points: they made a slow tour outrank a fast win. */
+/** Fuel and seconds left are worth points at these rates. api/leaderboard.js repeats them in SQL, so change both. */
+export const FUEL_PER_POINT = 2;
+export const SECONDS_PER_POINT = 6;
+
+/** A win's points: 1 per 2 fuel left, 1 per 6 seconds left. A loss scores 0. No per-world points: they made a slow tour outrank a fast win. */
 export function runPoints(run) {
   if (!run.settled) return 0;
   const fuel = Number.isFinite(run.fuel) ? run.fuel : Number(run.score) || 0;
   const time = Number.isFinite(run.timeLeft) ? run.timeLeft : 0;
-  return Math.round((fuel + time / 10) * 100) / 100;
+  return Math.round((fuel / FUEL_PER_POINT + time / SECONDS_PER_POINT) * 100) / 100;
 }
 
 /** Settled first. Wins then rank by points. Ties, and all losses: more worlds, then more fuel left, then time left for wins or time lasted for losses. */

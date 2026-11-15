@@ -1,5 +1,6 @@
 import { db, send, toJson } from "./store.js";
 
+// Points: fuel / 2 + time_left / 6, the same as runPoints in src/game/rules.js.
 // Top 10, plus the asking player's own row (by ?run=<runId>) with its rank, so they needn't scroll.
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") return send(res, 204, {});
@@ -13,7 +14,7 @@ export default async function handler(req, res) {
         SELECT id, name, fuel, settled, time_left, worlds, finished_at, run_id = ${run} AS mine,
           ROW_NUMBER() OVER (
             ORDER BY settled DESC,
-              CASE WHEN settled THEN ROUND((fuel + time_left / 10.0)::numeric, 2) ELSE 0 END DESC,
+              CASE WHEN settled THEN ROUND((fuel / 2.0 + time_left / 6.0)::numeric, 2) ELSE 0 END DESC,
               worlds DESC, fuel DESC,
               CASE WHEN settled THEN time_left ELSE -time_left END DESC,
               id ASC

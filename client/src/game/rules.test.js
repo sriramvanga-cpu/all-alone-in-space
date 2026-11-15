@@ -86,18 +86,18 @@ test("settled runs rank above losses; wins rank by points, losses by worlds, fue
   assert.ok(compareRuns(win, luckyLoss) < 0);
   assert.equal(runPoints(luckyLoss), 0);
 
-  // 1 per fuel, 1 per 10 s left, nothing per world: a fast win beats a slow tour.
+  // 1 per 2 fuel, 1 per 6 s left, nothing per world: a fast win beats a slow tour.
   const explorer = { settled: true, timeLeft: 100, fuel: 1, worlds: 12, id: 3 };
   const sprinter = { settled: true, timeLeft: 800, fuel: 5, worlds: 1, id: 4 };
-  assert.equal(runPoints(explorer), 11);
-  assert.equal(runPoints(sprinter), 85);
+  assert.equal(runPoints(explorer), 17.17);
+  assert.equal(runPoints(sprinter), 135.83);
   assert.ok(compareRuns(sprinter, explorer) < 0);
 
   const rich = { settled: true, timeLeft: 100, fuel: 13.4, worlds: 2, id: 5 };
-  assert.equal(runPoints(rich), 23.4);
+  assert.equal(runPoints(rich), 23.37);
 
-  const wide = { settled: true, timeLeft: 100, fuel: 10, worlds: 2, id: 5 };
-  const deep = { settled: true, timeLeft: 50, fuel: 15, worlds: 1, id: 6 };
+  const wide = { settled: true, timeLeft: 120, fuel: 10, worlds: 2, id: 5 };
+  const deep = { settled: true, timeLeft: 60, fuel: 30, worlds: 1, id: 6 };
   assert.equal(runPoints(wide), runPoints(deep));
   assert.ok(compareRuns(wide, deep) < 0);
 
