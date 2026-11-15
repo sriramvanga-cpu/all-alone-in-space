@@ -1,6 +1,6 @@
 // Something happens on about a third of flights, and the player picks one of two options.
-// Each option trades fuel, seconds on the clock or credits; fuel and seconds are worth
-// about the same on the board (1 point per fuel, 1 point per 10 s).
+// Each option trades fuel, seconds on the clock or credits. On the board 1 fuel is worth 3 s
+// (1 point per 2 fuel, 1 point per 6 s), and fuel also pays for lanes.
 export const EVENT_CHANCE = 1 / 3;
 
 export const FLIGHT_EVENTS = Object.freeze([

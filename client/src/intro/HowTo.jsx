@@ -23,6 +23,8 @@ import {
   landingChance,
   runPoints,
   timeChance,
+  FUEL_PER_POINT,
+  SECONDS_PER_POINT,
 } from "../game/rules.js";
 
 const ROUND_S = 15 * 60;
@@ -512,7 +514,7 @@ function drawLand(t) {
         {num(POINTS)} points
       </Label>
       <Label x={317} y={220} tone="dim" show={smooth(5.3, 5.6, t)}>
-        {num(AT_LAND.fuel)} fuel + {num(HOME_AT / 10)} for {clockText(HOME_AT)} left
+        {num(AT_LAND.fuel / FUEL_PER_POINT)} for fuel + {num(HOME_AT / SECONDS_PER_POINT)} for {clockText(HOME_AT)} left
       </Label>
     </>
   );

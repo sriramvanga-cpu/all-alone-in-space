@@ -758,7 +758,7 @@ function Board() {
         <span className={err ? "live off" : "live"}>{err ? "Offline" : "Live"}</span>
       </header>
       <p className="hint rules">
-        Wins rank above every loss. Wins rank by points: 1 per fuel left and 1 per 10 seconds left.
+        Wins rank above every loss. Wins rank by points: 1 per 2 fuel left and 1 per 6 seconds left.
         Losses rank by more worlds, then more fuel left, then who lasted longer.
       </p>
       <div className="board-body">
@@ -3000,7 +3000,7 @@ function Game() {
             </div>
             <Delta value={(snap.deadline - snap.pausedMs) / 1000} />
           </div>
-          <div className="meter points" title="Points if you land now: 1 per fuel left + 1 per 10 s left">
+          <div className="meter points" title="Points if you land now: 1 per 2 fuel left + 1 per 6 s left">
             <StarIcon />
             <div className="m-text">
               <small>
