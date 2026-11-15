@@ -651,38 +651,59 @@ function BoardTable({ rows, err, start = 0, limit = 10, query = "", fresh }) {
             <tr>
               <th>#</th>
               <th>Name</th>
-              <th>Settled</th>
-              <th className="num">Time left</th>
-              <th className="num">Worlds</th>
-              <th className="num">Fuel left</th>
+              <th className="col-extra">Settled</th>
+              <th className="num col-extra">Time left</th>
+              <th className="num col-extra">Worlds</th>
+              <th className="num col-extra">Fuel left</th>
               <th className="num">Points</th>
             </tr>
           </thead>
           <tbody>
-            {[...list, ...(mine ? [null, mine] : [])].map((row, i) =>
-              row === null ? (
-                <tr key="gap" className="gap" aria-hidden="true">
-                  <td colSpan={7}>⋯</td>
+            {[...list, ...(mine ? [null, mine] : [])].map((row, i) => {
+              if (row === null) {
+                return (
+                  <tr key="gap" className="gap" aria-hidden="true">
+                    <td colSpan={7}>⋯</td>
+                  </tr>
+                );
+              }
+              const clock = formatClock((row.timeLeft ?? 0) * 1000);
+              const worlds = row.worlds ?? 0;
+              const fuel = fmtScore(Number.isFinite(row.fuel) ? row.fuel : Number(row.score) || 0);
+              return (
+                <tr
+                  key={row.id ?? i}
+                  className={[place(row) <= 3 && row !== mine ? `top top${place(row)}` : "", row.mine ? "me" : "", fresh?.has(row.id) ? "fresh" : ""].join(" ").trim() || undefined}
+                >
+                  <td>
+                    <RankBadge n={row === mine ? row.rank : place(row)} />
+                  </td>
+                  <td className="who">
+                    {row.name}
+                    {/* On a phone the four middle columns are hidden and their facts sit under the name instead. */}
+                    <span className="row-stats">
+                      <span className={row.settled ? "yes" : undefined}>{row.settled ? "Settled" : "Not settled"}</span>
+                      <span>
+                        <ClockIcon /> {clock} left
+                      </span>
+                      <span>
+                        <GlobeIcon /> {worlds} {worlds === 1 ? "world" : "worlds"}
+                      </span>
+                      <span>
+                        <FuelIcon /> {fuel} fuel
+                      </span>
+                    </span>
+                  </td>
+                  <td className="col-extra">
+                    <span className={row.settled ? "pill yes" : "pill no"}>{row.settled ? "Yes" : "No"}</span>
+                  </td>
+                  <td className="num col-extra">{clock}</td>
+                  <td className="num col-extra">{worlds}</td>
+                  <td className="num col-extra">{fuel}</td>
+                  <td className="num">{row.settled ? fmtScore(runPoints(row)) : "—"}</td>
                 </tr>
-              ) : (
-              <tr
-                key={row.id ?? i}
-                className={[place(row) <= 3 && row !== mine ? `top top${place(row)}` : "", row.mine ? "me" : "", fresh?.has(row.id) ? "fresh" : ""].join(" ").trim() || undefined}
-              >
-                <td>
-                  <RankBadge n={row === mine ? row.rank : place(row)} />
-                </td>
-                <td className="who">{row.name}</td>
-                <td>
-                  <span className={row.settled ? "pill yes" : "pill no"}>{row.settled ? "Yes" : "No"}</span>
-                </td>
-                <td className="num">{formatClock((row.timeLeft ?? 0) * 1000)}</td>
-                <td className="num">{row.worlds ?? 0}</td>
-                <td className="num">{fmtScore(Number.isFinite(row.fuel) ? row.fuel : Number(row.score) || 0)}</td>
-                <td className="num">{row.settled ? fmtScore(runPoints(row)) : "—"}</td>
-              </tr>
-              ),
-            )}
+              );
+            })}
           </tbody>
         </table>
       ) : null}

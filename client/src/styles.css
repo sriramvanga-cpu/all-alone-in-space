@@ -1672,12 +1672,22 @@ button.ghost.reactor-cell.miss { animation: cell-shake 0.32s ease-in-out; }
 }
 .lb td:first-child { border-left: 1px solid rgba(160, 190, 255, 0.1); border-radius: var(--radius-md) 0 0 var(--radius-md); }
 .lb td:last-child { border-right: 1px solid rgba(160, 190, 255, 0.1); border-radius: 0 var(--radius-md) var(--radius-md) 0; }
-.lb .who { font-weight: 700; }
+.lb .who { font-weight: 700; overflow-wrap: anywhere; }
 .lb tr.top1 td { background: rgba(60, 48, 20, 0.62); border-color: rgba(255, 200, 60, 0.28); }
 .lb tr.top2 td { background: rgba(34, 42, 62, 0.62); border-color: rgba(200, 215, 240, 0.22); }
 .lb tr.top3 td { background: rgba(52, 34, 22, 0.62); border-color: rgba(220, 140, 70, 0.26); }
 .lb tr.me td { background: rgba(20, 60, 80, 0.7); border-color: var(--accent); box-shadow: 0 0 14px rgba(90, 209, 255, 0.25); }
 .lb tr.gap td { padding: 0; text-align: center; color: var(--dim); background: none; border: 0; }
+/* Up to 720px wide (phones, either way up) the table keeps rank, name and points; the other facts move under the name. */
+.lb .row-stats { display: none; }
+@media (max-width: 720px) {
+  .lb .col-extra { display: none; }
+  .lb th, .lb td, .board .lb td { padding-left: 0.55rem; padding-right: 0.55rem; }
+  .lb .row-stats { display: flex; flex-wrap: wrap; gap: 0.15rem 0.75rem; margin-top: 0.3rem; font: 500 var(--text-sm) var(--font-body); letter-spacing: 0; color: var(--dim); }
+  .lb .row-stats > span { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+  .lb .row-stats .yes { color: var(--ok); }
+  .lb .row-stats .icon { width: 1.05em; height: 1.05em; flex: none; }
+}
 .rank-stat dd { color: var(--accent); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 
