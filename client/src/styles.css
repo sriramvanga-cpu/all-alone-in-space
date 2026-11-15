@@ -1737,11 +1737,16 @@ button.ghost.reactor-cell.miss { animation: cell-shake 0.32s ease-in-out; }
 .board .lb th { font-size: clamp(0.6rem, 1vw, 0.8rem); }
 .board .rank { width: 2.4rem; height: 2.4rem; font-size: var(--text-lg); }
 
-/* Pilots mid-run: under the scores, or in a column beside them on a wide screen. The empty note only shows
+/* Pilots mid-run: above the scores, or in a column beside them on a wide screen. The empty note only shows
    in the column, so a narrow screen doesn't carry a line saying nobody is playing. */
 .board-search { display: block; width: 100%; max-width: 28rem; margin: 0 0 1.4rem; }
 .playing { margin-top: 2.4rem; }
 .playing.empty { display: none; }
+/* Without the side column the full list would bury it, so it goes above the scores. */
+@media (max-width: 1399px) {
+  .board-body { display: flex; flex-direction: column; }
+  .playing { order: -1; margin: 1.4rem 0; }
+}
 @media (min-width: 1400px) {
   .board { max-width: 108rem; }
   .board-body { display: grid; grid-template-columns: minmax(0, 1fr) 21rem; align-items: start; gap: 2.4rem; }
@@ -2131,6 +2136,12 @@ button.ghost.reactor-cell.miss { animation: cell-shake 0.32s ease-in-out; }
   .board-empty-art { width: min(15rem, 70vw); margin: 0 auto; }
   .podium { gap: 0.4rem; }
   .pod { padding: 1.6rem 0.4rem 0.9rem; }
+  .pod-points strong { font-size: clamp(1.1rem, 6vw, 2rem); }
+  .pod-stats { gap: 0.2rem 0.6rem; font-size: var(--text-sm); }
+  /* A rare overlong figure on a tiny screen is cut off at the edge, never scrolls the page sideways. */
+  .board { overflow-x: clip; }
+  .playing ul { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 0.3rem; }
+  .playing li { flex: 0 0 min(15rem, 80%); scroll-snap-align: start; }
   .title-big { font-size: 2.1rem; }
   .howto-head button { min-height: 36px; padding: 0.3rem 0.8rem; }
   .reel-stage { max-height: none; }
