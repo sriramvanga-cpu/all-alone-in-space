@@ -1735,6 +1735,7 @@ button.ghost.reactor-cell.miss { animation: cell-shake 0.32s ease-in-out; }
   .board { max-width: 108rem; }
   .board-body { display: grid; grid-template-columns: minmax(0, 1fr) 21rem; align-items: start; gap: 2.4rem; }
   .playing.empty { display: block; }
+  .playing { position: sticky; top: 1.2rem; }
   .playing ul { grid-template-columns: 1fr; }
 }
 .playing h2 { display: flex; align-items: center; gap: 0.7rem; margin: 0 0 0.8rem; font: 700 var(--text-sm) var(--font-body); letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }

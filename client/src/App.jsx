@@ -507,7 +507,7 @@ function Ring({ ms, total }) {
 }
 
 // `run` asks the server to add that run's own row and rank to the top 10.
-function useBoard(run) {
+function useBoard(run, all = false) {
   const [rows, setRows] = useState([]);
   // null until the first answer, so a board still loading isn't taken for an empty one.
   const [err, setErr] = useState(null);
@@ -515,7 +515,7 @@ function useBoard(run) {
     let stop = false;
     async function pull() {
       try {
-        const query = run ? `?run=${encodeURIComponent(run)}` : "";
+        const query = run ? `?run=${encodeURIComponent(run)}` : all ? "?all=1" : "";
         const res = await fetch(`${API}/api/leaderboard${query}`, { signal: AbortSignal.timeout(8000) });
         if (!res.ok) throw new Error(String(res.status));
         const data = await res.json();
@@ -533,7 +533,7 @@ function useBoard(run) {
       stop = true;
       clearInterval(id);
     };
-  }, [run]);
+  }, [run, all]);
   return { rows, err };
 }
 
@@ -631,11 +631,11 @@ function RankBadge({ n }) {
   return <span className={n <= 3 ? `rank r${n}` : "rank"}>{n}</span>;
 }
 
-// The top 10 only; `start` skips rows already shown elsewhere (the podium) but keeps their numbering.
-// The player's own row, when it is outside the top 10, follows a gap with its real rank.
-function BoardTable({ rows, err, start = 0, fresh }) {
+// The top 10 by default, or `limit` rows; `start` skips rows already shown elsewhere (the podium) but keeps their
+// numbering. The player's own row, when it is outside the top 10, follows a gap with its real rank.
+function BoardTable({ rows, err, start = 0, limit = 10, fresh }) {
   const ranked = byRank(rows);
-  const list = ranked.slice(start, 10);
+  const list = ranked.slice(start, limit);
   const mine = ranked.find((row) => row.mine && row.rank > 10);
   return (
     <>
@@ -745,7 +745,7 @@ function BoardEmpty() {
 }
 
 function Board() {
-  const { rows, err } = useBoard();
+  const { rows, err } = useBoard(undefined, true);
   const fresh = useFresh(rows, err === false);
   const pilots = useLive();
   return (
@@ -768,7 +768,7 @@ function Board() {
           ) : (
             <>
               <Podium rows={rows} fresh={fresh} />
-              <BoardTable rows={rows} err={err} start={Math.min(3, rows.length)} fresh={fresh} />
+              <BoardTable rows={rows} err={err} start={Math.min(3, rows.length)} limit={Infinity} fresh={fresh} />
             </>
           )}
         </div>
