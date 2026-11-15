@@ -1729,6 +1729,7 @@ button.ghost.reactor-cell.miss { animation: cell-shake 0.32s ease-in-out; }
 
 /* Pilots mid-run: under the scores, or in a column beside them on a wide screen. The empty note only shows
    in the column, so a narrow screen doesn't carry a line saying nobody is playing. */
+.board-search { display: block; width: 100%; max-width: 28rem; margin: 0 0 1.4rem; }
 .playing { margin-top: 2.4rem; }
 .playing.empty { display: none; }
 @media (min-width: 1400px) {

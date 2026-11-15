@@ -633,14 +633,18 @@ function RankBadge({ n }) {
 
 // The top 10 by default, or `limit` rows; `start` skips rows already shown elsewhere (the podium) but keeps their
 // numbering. The player's own row, when it is outside the top 10, follows a gap with its real rank.
-function BoardTable({ rows, err, start = 0, limit = 10, fresh }) {
+function BoardTable({ rows, err, start = 0, limit = 10, query = "", fresh }) {
   const ranked = byRank(rows);
-  const list = ranked.slice(start, limit);
-  const mine = ranked.find((row) => row.mine && row.rank > 10);
+  // A search lists every match with its real place; otherwise the top rows.
+  const needle = query.trim().toLowerCase();
+  const list = needle ? ranked.filter((row) => row.name.toLowerCase().includes(needle)) : ranked.slice(start, limit);
+  const mine = needle ? undefined : ranked.find((row) => row.mine && row.rank > 10);
+  const place = (row) => ranked.indexOf(row) + 1;
   return (
     <>
       {err ? <p className="error">Can't reach the leaderboard. Retrying.</p> : null}
       {!err && rows.length === 0 ? <p className="hint">No scores yet.</p> : null}
+      {needle && rows.length > 0 && list.length === 0 ? <p className="hint">No pilot matches “{query.trim()}”.</p> : null}
       {list.length > 0 ? (
         <table className="lb">
           <thead>
@@ -662,11 +666,11 @@ function BoardTable({ rows, err, start = 0, limit = 10, fresh }) {
                 </tr>
               ) : (
               <tr
-                key={row.id ?? start + i}
-                className={[start + i < 3 && row !== mine ? `top top${start + i + 1}` : "", row.mine ? "me" : "", fresh?.has(row.id) ? "fresh" : ""].join(" ").trim() || undefined}
+                key={row.id ?? i}
+                className={[place(row) <= 3 && row !== mine ? `top top${place(row)}` : "", row.mine ? "me" : "", fresh?.has(row.id) ? "fresh" : ""].join(" ").trim() || undefined}
               >
                 <td>
-                  <RankBadge n={row === mine ? row.rank : start + i + 1} />
+                  <RankBadge n={row === mine ? row.rank : place(row)} />
                 </td>
                 <td className="who">{row.name}</td>
                 <td>
@@ -748,6 +752,7 @@ function Board() {
   const { rows, err } = useBoard(undefined, true);
   const fresh = useFresh(rows, err === false);
   const pilots = useLive();
+  const [query, setQuery] = useState("");
   return (
     <main className="board">
       <header className="board-head">
@@ -767,8 +772,16 @@ function Board() {
             <BoardEmpty />
           ) : (
             <>
-              <Podium rows={rows} fresh={fresh} />
-              <BoardTable rows={rows} err={err} start={Math.min(3, rows.length)} limit={Infinity} fresh={fresh} />
+              <input
+                type="search"
+                className="board-search"
+                placeholder="Search a pilot"
+                aria-label="Search pilots by name"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              {query.trim() ? null : <Podium rows={rows} fresh={fresh} />}
+              <BoardTable rows={rows} err={err} start={Math.min(3, rows.length)} limit={Infinity} query={query} fresh={fresh} />
             </>
           )}
         </div>
